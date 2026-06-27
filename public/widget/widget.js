@@ -133,8 +133,12 @@
   var P = 'aiba-';
   function injectStyles() {
     var css = [
+      // Single source of truth for the brand color. Every accent below reads
+      // var(--aiba-color); applyWidgetAppearance() updates this one property on the
+      // root so a config-loaded color repaints the whole widget (not just header).
+      '.' + P + 'root{--aiba-color:' + cfg.color + '}',
       '.' + P + 'root,.' + P + 'root *{box-sizing:border-box;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif}',
-      '.' + P + 'launcher{position:fixed;bottom:20px;z-index:2147483000;width:60px;height:60px;border-radius:50%;border:none;cursor:pointer;box-shadow:0 12px 34px rgba(17,24,39,.22);background:' + cfg.color + ';color:#fff;display:flex;align-items:center;justify-content:center;transition:transform .15s ease,box-shadow .15s ease}',
+      '.' + P + 'launcher{position:fixed;bottom:20px;z-index:2147483000;width:60px;height:60px;border-radius:50%;border:none;cursor:pointer;box-shadow:0 12px 34px rgba(17,24,39,.22);background:var(--aiba-color);color:#fff;display:flex;align-items:center;justify-content:center;transition:transform .15s ease,box-shadow .15s ease}',
       '.' + P + 'root.' + P + 'open .' + P + 'launcher{display:none}',
       '.' + P + 'launcher{overflow:visible}',
       '.' + P + 'launcher.' + P + 'pill{width:auto;min-width:64px;padding:0 16px;border-radius:999px;gap:8px;font-size:14px;font-weight:600}',
@@ -150,7 +154,7 @@
       '.' + P + 'pos-left{left:20px}',
       '.' + P + 'window{position:fixed;bottom:90px;z-index:2147483000;width:396px;height:640px;max-height:calc(100vh - 110px);background:#fff;border-radius:22px;box-shadow:0 22px 70px rgba(15,23,42,.28);display:none;flex-direction:column;overflow:hidden;border:1px solid rgba(15,23,42,.08)}',
       '.' + P + 'window.' + P + 'show{display:flex}',
-      '.' + P + 'header{background:' + cfg.color + ';color:#fff;padding:16px 18px;display:flex;align-items:center;justify-content:space-between;gap:12px;flex:0 0 auto;min-height:76px}',
+      '.' + P + 'header{background:var(--aiba-color);color:#fff;padding:16px 18px;display:flex;align-items:center;justify-content:space-between;gap:12px;flex:0 0 auto;min-height:76px}',
       '.' + P + 'head-left{display:flex;align-items:center;gap:12px;min-width:0}',
       '.' + P + 'head-avatar{width:42px;height:42px;border-radius:50%;background:rgba(255,255,255,.18);border:1px solid rgba(255,255,255,.28);color:#fff;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:800;letter-spacing:.2px;overflow:hidden;flex:0 0 auto;box-shadow:inset 0 1px 0 rgba(255,255,255,.2)}',
       '.' + P + 'head-avatar img{width:100%;height:100%;object-fit:cover}',
@@ -167,12 +171,12 @@
       '.' + P + 'row.' + P + 'me{justify-content:flex-end}',
       '.' + P + 'row.' + P + 'them{justify-content:flex-start}',
       '.' + P + 'row.' + P + 'sys{justify-content:center}',
-      '.' + P + 'avatar{width:28px;height:28px;border-radius:50%;background:' + cfg.color + ';color:#fff;display:none;align-items:center;justify-content:center;font-size:10px;font-weight:800;margin-right:8px;align-self:flex-start;overflow:hidden;flex:0 0 auto;box-shadow:0 3px 10px rgba(15,23,42,.12);letter-spacing:.1px}',
+      '.' + P + 'avatar{width:28px;height:28px;border-radius:50%;background:var(--aiba-color);color:#fff;display:none;align-items:center;justify-content:center;font-size:10px;font-weight:800;margin-right:8px;align-self:flex-start;overflow:hidden;flex:0 0 auto;box-shadow:0 3px 10px rgba(15,23,42,.12);letter-spacing:.1px}',
       '.' + P + 'avatar img{width:100%;height:100%;object-fit:cover}',
       '.' + P + 'avatar svg{width:18px;height:18px;fill:currentColor}',
       '.' + P + 'them .' + P + 'avatar{display:flex}',
       '.' + P + 'bubble{max-width:86%;padding:14px 15px;border-radius:14px;font-size:15px;line-height:1.48;white-space:pre-wrap;word-wrap:break-word;overflow-wrap:anywhere;box-shadow:0 1px 2px rgba(15,23,42,.08)}',
-      '.' + P + 'me .' + P + 'bubble{background:' + cfg.color + ';color:#fff;border-bottom-right-radius:5px}',
+      '.' + P + 'me .' + P + 'bubble{background:var(--aiba-color);color:#fff;border-bottom-right-radius:5px}',
       '.' + P + 'them .' + P + 'bubble{background:#fff;color:#172033;border:1px solid #e6edf5;border-bottom-left-radius:5px;white-space:normal}',
       '.' + P + 'sys .' + P + 'bubble{background:transparent;color:#888;font-size:12px;text-align:center;max-width:100%}',
       '.' + P + 'bubble p{margin:0 0 10px}',
@@ -190,8 +194,8 @@
       '.' + P + 'table th,.' + P + 'table td{border:1px solid rgba(0,0,0,.12);padding:4px 8px;text-align:left;white-space:nowrap}',
       '.' + P + 'table th{background:rgba(0,0,0,.04);font-weight:600}',
       '.' + P + 'actions{flex:0 0 auto;display:flex;gap:8px;flex-wrap:wrap;padding:14px 16px 12px;border-top:1px solid #e9eef6;background:#f3f6fb;max-height:128px;overflow-y:auto}',
-      '.' + P + 'action{border:1px solid #cfe0f5;background:#fff;color:' + cfg.color + ';border-radius:999px;padding:9px 13px;font-size:14px;font-weight:700;line-height:1.2;cursor:pointer;max-width:100%;white-space:nowrap;text-align:center;transition:border-color .15s,color .15s,background .15s,box-shadow .15s}',
-      '.' + P + 'action:hover{border-color:' + cfg.color + ';color:' + cfg.color + ';background:#f8fbff;box-shadow:0 3px 10px rgba(37,99,235,.12)}',
+      '.' + P + 'action{border:1px solid #cfe0f5;background:#fff;color:var(--aiba-color);border-radius:999px;padding:9px 13px;font-size:14px;font-weight:700;line-height:1.2;cursor:pointer;max-width:100%;white-space:nowrap;text-align:center;transition:border-color .15s,color .15s,background .15s,box-shadow .15s}',
+      '.' + P + 'action:hover{border-color:var(--aiba-color);color:var(--aiba-color);background:#f8fbff;box-shadow:0 3px 10px rgba(37,99,235,.12)}',
       '.' + P + 'form{flex:0 0 auto;border-top:1px solid #eee;background:#fff;padding:16px;display:none;gap:12px;flex-direction:column;max-height:78%;overflow-y:auto}',
       '.' + P + 'form.' + P + 'show{display:flex}',
       '.' + P + 'window.' + P + 'form-open .' + P + 'msgs,.' + P + 'window.' + P + 'form-open .' + P + 'actions,.' + P + 'window.' + P + 'form-open .' + P + 'footer,.' + P + 'window.' + P + 'form-open .' + P + 'brand{display:none}',
@@ -201,17 +205,17 @@
       '.' + P + 'field{display:flex;flex-direction:column;gap:5px}',
       '.' + P + 'field label{font-size:12px;font-weight:500;color:#374151}',
       '.' + P + 'field input,.' + P + 'field textarea,.' + P + 'field select{width:100%;border:1px solid #d6d9de;border-radius:8px;padding:10px 12px;font-size:14px;outline:none}',
-      '.' + P + 'field input:focus,.' + P + 'field textarea:focus,.' + P + 'field select:focus{border-color:' + cfg.color + '}',
+      '.' + P + 'field input:focus,.' + P + 'field textarea:focus,.' + P + 'field select:focus{border-color:var(--aiba-color)}',
       '.' + P + 'field textarea{min-height:64px;resize:vertical}',
       '.' + P + 'form-row{display:flex;gap:8px;margin-top:2px}',
-      '.' + P + 'form-submit{flex:1;border:none;background:' + cfg.color + ';color:#fff;border-radius:8px;padding:11px 14px;font-size:14px;font-weight:600;cursor:pointer}',
+      '.' + P + 'form-submit{flex:1;border:none;background:var(--aiba-color);color:#fff;border-radius:8px;padding:11px 14px;font-size:14px;font-weight:600;cursor:pointer}',
       '.' + P + 'form-submit:disabled{opacity:.6;cursor:not-allowed}',
       '.' + P + 'form-cancel{border:1px solid #d6d9de;background:#fff;color:#4b5563;border-radius:8px;padding:11px 16px;font-size:14px;cursor:pointer}',
       '.' + P + 'footer{flex:0 0 auto;display:flex;gap:10px;padding:12px 12px 8px;border-top:1px solid #e9eef6;background:#fff;align-items:center}',
       '.' + P + 'input{flex:1 1 auto;border:1px solid #d7e2ef;border-radius:14px;padding:13px 14px;font-size:15px;outline:none;resize:none;min-width:0;color:#172033}',
       '.' + P + 'input::placeholder{color:#9aa8bb}',
-      '.' + P + 'input:focus{border-color:' + cfg.color + ';box-shadow:0 0 0 2px rgba(37,99,235,.12)}',
-      '.' + P + 'send{flex:0 0 auto;border:none;background:' + cfg.color + ';color:#fff;width:48px;height:48px;border-radius:14px;cursor:pointer;display:flex;align-items:center;justify-content:center;box-shadow:0 8px 18px rgba(37,99,235,.24)}',
+      '.' + P + 'input:focus{border-color:var(--aiba-color);box-shadow:0 0 0 2px rgba(37,99,235,.12)}',
+      '.' + P + 'send{flex:0 0 auto;border:none;background:var(--aiba-color);color:#fff;width:48px;height:48px;border-radius:14px;cursor:pointer;display:flex;align-items:center;justify-content:center;box-shadow:0 8px 18px rgba(37,99,235,.24)}',
       '.' + P + 'send:disabled{opacity:.5;cursor:not-allowed}',
       '.' + P + 'send svg{width:22px;height:22px;fill:#fff}',
       '.' + P + 'send svg path{fill:#fff}',
@@ -225,7 +229,7 @@
       '.' + P + 'inline-form{max-width:92%;width:100%;background:#fff;border:1px solid #e3e6ea;border-radius:14px;border-bottom-left-radius:4px;padding:12px;display:flex;flex-direction:column;gap:10px}',
       '.' + P + 'inline-form .' + P + 'form-title{font-size:14px}',
       '.' + P + 'chips{display:flex;flex-wrap:wrap;gap:6px;width:100%;max-width:92%}',
-      '.' + P + 'chip{border:1px solid ' + cfg.color + ';color:' + cfg.color + ';background:#fff;border-radius:999px;padding:7px 12px;font-size:13px;font-weight:500;cursor:pointer;line-height:1.25;max-width:100%;white-space:normal;text-align:left}',
+      '.' + P + 'chip{border:1px solid var(--aiba-color);color:var(--aiba-color);background:#fff;border-radius:999px;padding:7px 12px;font-size:13px;font-weight:500;cursor:pointer;line-height:1.25;max-width:100%;white-space:normal;text-align:left}',
       '.' + P + 'chip:hover{background:#f4f7ff}',
       '.' + P + 'cards{display:flex;flex-direction:column;gap:8px;width:100%;max-width:92%}',
       '.' + P + 'card{border:1px solid #e3e6ea;border-radius:12px;background:#fff;padding:10px 12px;display:flex;flex-direction:column;gap:4px}',
@@ -239,12 +243,12 @@
       '.' + P + 'stk-unk{background:#eef0f3;color:#6b7280}',
       '.' + P + 'card-actions{display:flex;gap:6px;margin-top:6px;flex-wrap:wrap}',
       '.' + P + 'card-btn{border:1px solid #d9dce1;background:#fff;color:#374151;border-radius:8px;padding:6px 10px;font-size:12px;font-weight:500;cursor:pointer}',
-      '.' + P + 'card-btn:hover{border-color:' + cfg.color + ';color:' + cfg.color + '}',
+      '.' + P + 'card-btn:hover{border-color:var(--aiba-color);color:var(--aiba-color)}',
       '.' + P + 'cta{max-width:92%;width:100%;background:#fff;border:1px solid #e3e6ea;border-radius:12px;padding:10px 12px;display:flex;flex-direction:column;gap:8px}',
       '.' + P + 'cta-msg{font-size:13px;color:#374151;line-height:1.4}',
       '.' + P + 'cta-row{display:flex;gap:6px;flex-wrap:wrap}',
-      '.' + P + 'cta-btn{border:none;background:' + cfg.color + ';color:#fff;border-radius:8px;padding:7px 12px;font-size:13px;font-weight:600;cursor:pointer}',
-      '.' + P + 'cta-btn.' + P + 'ghost{background:#fff;color:' + cfg.color + ';border:1px solid ' + cfg.color + '}',
+      '.' + P + 'cta-btn{border:none;background:var(--aiba-color);color:#fff;border-radius:8px;padding:7px 12px;font-size:13px;font-weight:600;cursor:pointer}',
+      '.' + P + 'cta-btn.' + P + 'ghost{background:#fff;color:var(--aiba-color);border:1px solid var(--aiba-color)}',
       '@keyframes ' + P + 'blink{0%,80%,100%{opacity:.3}40%{opacity:1}}',
       '.' + P + 'window[dir="rtl"] .' + P + 'me .' + P + 'bubble{border-bottom-right-radius:14px;border-bottom-left-radius:4px}',
       '.' + P + 'window[dir="rtl"] .' + P + 'them .' + P + 'bubble{border-bottom-left-radius:14px;border-bottom-right-radius:4px}',
@@ -335,7 +339,12 @@
 
     root.appendChild(launcher);
     root.appendChild(win);
-    document.body.appendChild(root);
+    // Mount on <html>, not <body>. A `transform`/`filter`/`perspective` on the
+    // host page's <body> (common with page builders, animation libs, RTL themes)
+    // turns `position:fixed` into `position:absolute` relative to that ancestor -
+    // which drops the launcher into the page flow near the footer instead of
+    // pinning it to the viewport. <html> is almost never transformed.
+    (document.documentElement || document.body).appendChild(root);
 
     els = { root: root, launcher: launcher, win: win, header: header, msgs: msgs, actions: actions, form: form, brand: brand, input: input, send: send, title: h3, status: status, headAvatar: headAvatar };
     applyWidgetAppearance();
@@ -910,6 +919,11 @@
     els.launcher.style.zIndex = z;
     els.win.style.zIndex = z;
 
+    // Push the (possibly config-loaded) brand color into the single CSS variable
+    // so every accent - bubbles, send button, quick actions, chips, CTAs - repaints,
+    // not just the launcher/header that get explicit inline colors below.
+    els.root.style.setProperty('--aiba-color', cfg.color);
+
     var bottom = Number(state.bottomOffset || 20);
     var side = Number(state.sideOffset || 20);
     els.launcher.style.bottom = 'calc(' + bottom + 'px + env(safe-area-inset-bottom))';
@@ -964,8 +978,11 @@
     } else {
       els.win.classList.remove(P + 'mobile-sheet');
       els.win.style.top = '';
-      els.win.style.width = ws.w + 'px';
-      els.win.style.height = ws.h + 'px';
+      // Never let the box exceed the viewport on small laptops / narrow tablets
+      // (between the phone breakpoint and full desktop). Falls back to the
+      // configured size when there is room.
+      els.win.style.width = 'min(' + ws.w + 'px, calc(100vw - ' + (side * 2) + 'px))';
+      els.win.style.height = 'min(' + ws.h + 'px, calc(100vh - ' + (bottom + 90) + 'px))';
       els.win.style.bottom = 'calc(' + (bottom + 70) + 'px + env(safe-area-inset-bottom))';
       els.win.style.right = state.position === 'left' ? 'auto' : 'calc(' + side + 'px + env(safe-area-inset-right))';
       els.win.style.left = state.position === 'left' ? 'calc(' + side + 'px + env(safe-area-inset-left))' : 'auto';

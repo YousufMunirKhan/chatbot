@@ -291,9 +291,27 @@ export async function updateBotAction(_prev: ActionState, formData: FormData): P
   if ('error' in fields) return { error: fields.error };
   const sb = createSupabaseServiceClient();
 
+  // Widget design (colors, launcher, labels, layout) is owned by the Design Studio
+  // (/company/widget). This Configuration form no longer edits those, so we must NOT
+  // overwrite them here — preserve the existing appearance and only patch the audience
+  // (the one appearance field this form still controls). Form defaults fill any gaps
+  // for legacy bots that never had a full appearance saved.
+  const { data: existing } = await sb
+    .from('bots')
+    .select('appearance_json')
+    .eq('company_id', companyId)
+    .eq('id', meta.data.botId)
+    .maybeSingle();
+  const prevAppearance = (existing?.appearance_json as Record<string, unknown> | null) ?? {};
+  const mergedAppearance = {
+    ...fields.value.appearance_json,
+    ...prevAppearance,
+    assistantAudience: fields.value.appearance_json.assistantAudience,
+  };
+
   const { error } = await sb
     .from('bots')
-    .update({ ...fields.value, ai_enabled: formData.get('aiEnabled') === 'on' })
+    .update({ ...fields.value, appearance_json: mergedAppearance, ai_enabled: formData.get('aiEnabled') === 'on' })
     .eq('company_id', companyId) // scope guard
     .eq('id', meta.data.botId);
   if (error) return { error: error.message };

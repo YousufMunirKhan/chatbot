@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import Link from 'next/link';
 import { useFormState, useFormStatus } from 'react-dom';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -108,7 +109,6 @@ const INTERNAL_CAPABILITIES = [
   },
 ] as const;
 
-const COLOR_PRESETS = ['#2563eb', '#16a34a', '#0891b2', '#7c3aed', '#dc2626', '#111827'];
 const DEFAULT_CUSTOMER_CAPABILITIES = new Set([
   'sales_agent',
   'appointment_booking',
@@ -116,51 +116,6 @@ const DEFAULT_CUSTOMER_CAPABILITIES = new Set([
   'help_desk',
   'human_agent_takeover',
 ]);
-
-const CUSTOMER_DEFAULTS = {
-  name: 'Website Assistant',
-  title: 'Website Assistant',
-  welcomeMessage:
-    'Hi, I can help with services, pricing, appointments, orders, and support. What would you like to sort out today?',
-  agentLabel: 'Team',
-  onlineLabel: 'Team is replying - live',
-  offlineLabel: 'Replying soon',
-  typingLabel: 'Team is typing',
-  footerBranding:
-    'AI assistant may be inaccurate. We may use messages and contact details to respond to your enquiry.',
-  proactiveMessage: 'Need help choosing the right option? I can guide you in under a minute.',
-  primaryColor: '#045fff',
-};
-
-const INTERNAL_DEFAULTS = {
-  name: 'Internal Help Desk Assistant',
-  title: 'Internal Help Desk',
-  welcomeMessage:
-    'Hi, I can guide your team through project notes, stock, orders, customers, and safe updates.',
-  agentLabel: 'Help Desk',
-  onlineLabel: 'Ready for staff questions',
-  offlineLabel: 'Available when your team needs help',
-  typingLabel: 'Checking internal knowledge',
-  footerBranding: 'Internal assistant. Check important actions before applying changes.',
-  proactiveMessage: 'Ask me how this project works or where to update something.',
-  primaryColor: '#2563eb',
-};
-
-function readString(value: unknown, fallback = ''): string {
-  return typeof value === 'string' ? value : fallback;
-}
-
-function readNonEmptyString(value: unknown, fallback: string): string {
-  return typeof value === 'string' && value.trim() ? value : fallback;
-}
-
-function readNumber(value: unknown, fallback: number): number {
-  return typeof value === 'number' && Number.isFinite(value) ? value : fallback;
-}
-
-function safeColor(value: unknown): string {
-  return typeof value === 'string' && /^#[0-9a-f]{6}$/i.test(value) ? value : '#2563eb';
-}
 
 type ActionFn = (prev: ActionState, formData: FormData) => Promise<ActionState>;
 
@@ -190,20 +145,12 @@ export function BotForm({
   const [assistantAudience, setAssistantAudience] = useState<'customer' | 'internal'>(
     initialAudience,
   );
-  const copyDefaults = assistantAudience === 'internal' ? INTERNAL_DEFAULTS : CUSTOMER_DEFAULTS;
   const assistantNameFallback =
     assistantAudience === 'internal'
       ? `${companyName ?? 'Internal'} Help Desk`
       : `${companyName ?? 'Website'} Assistant`;
   const capabilityOptions =
     assistantAudience === 'internal' ? INTERNAL_CAPABILITIES : CUSTOMER_CAPABILITIES;
-  const [primaryColor, setPrimaryColor] = useState(
-    safeColor(readNonEmptyString(appearance.primaryColor, copyDefaults.primaryColor)),
-  );
-  const autoOpenDelay = readNumber(appearance.autoOpenDelaySeconds, 3);
-  const bottomOffset = readNumber(appearance.bottomOffset, 20);
-  const sideOffset = readNumber(appearance.sideOffset, 20);
-  const zIndex = readNumber(appearance.zIndex, 2147483000);
 
   return (
     <form action={formAction} className="space-y-8">
@@ -334,393 +281,37 @@ export function BotForm({
 
       <section className="space-y-4">
         <h2 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground">
-          Widget appearance
+          Website domains
         </h2>
-        <div className="grid gap-4 sm:grid-cols-2">
-          <div className="space-y-1.5">
-            <Label htmlFor="title">Widget title</Label>
-            <Input
-              id="title"
-              name="title"
-              defaultValue={readNonEmptyString(appearance.title, bot?.name ?? assistantNameFallback)}
-              placeholder={assistantNameFallback}
-            />
-          </div>
-          <div className="space-y-1.5">
-            <Label htmlFor="welcomeMessage">Welcome message</Label>
-            <Input
-              id="welcomeMessage"
-              name="welcomeMessage"
-              defaultValue={readNonEmptyString(appearance.welcomeMessage, copyDefaults.welcomeMessage)}
-              placeholder={copyDefaults.welcomeMessage}
-            />
-          </div>
-          <div className="space-y-1.5">
-            <Label htmlFor="agentLabel">Agent label</Label>
-            <Input
-              id="agentLabel"
-              name="agentLabel"
-              defaultValue={readNonEmptyString(appearance.agentLabel, copyDefaults.agentLabel)}
-              placeholder={copyDefaults.agentLabel}
-            />
-          </div>
-          <div className="space-y-1.5">
-            <Label htmlFor="agentAvatarUrl">Agent avatar image</Label>
-            <Input
-              id="agentAvatarUrl"
-              name="agentAvatarUrl"
-              type="url"
-              defaultValue={readString(appearance.agentAvatarUrl)}
-              placeholder="Optional image URL. If blank, the widget uses initials."
-            />
-            <p className="text-xs text-muted-foreground">
-              Optional. Leave blank to show a clean initials avatar.
-            </p>
-          </div>
-          <div className="space-y-1.5">
-            <Label htmlFor="avatarMode">Default avatar style</Label>
-            <select
-              id="avatarMode"
-              name="avatarMode"
-              className={selectCls}
-              defaultValue={(appearance.avatarMode as string) ?? 'initials'}
-            >
-              <option value="initials">Initials</option>
-              <option value="headset">Headset</option>
-              <option value="chat">Chat bubble</option>
-              <option value="spark">Spark</option>
-              <option value="image">Use avatar image</option>
-            </select>
-          </div>
-          <div className="space-y-1.5">
-            <Label htmlFor="launcherIcon">Launcher icon</Label>
-            <select
-              id="launcherIcon"
-              name="launcherIcon"
-              className={selectCls}
-              defaultValue={(appearance.launcherIcon as string) ?? 'chat'}
-            >
-              <option value="chat">Chat</option>
-              <option value="headset">Headset</option>
-              <option value="spark">Spark</option>
-              <option value="help">Help</option>
-              <option value="question">Question</option>
-              <option value="initials">Initials</option>
-              <option value="custom">Custom image</option>
-            </select>
-          </div>
-          <div className="space-y-1.5">
-            <Label htmlFor="launcherLabel">Launcher label</Label>
-            <Input
-              id="launcherLabel"
-              name="launcherLabel"
-              defaultValue={readString(appearance.launcherLabel)}
-              placeholder="Chat with us"
-            />
-          </div>
-          <div className="space-y-1.5">
-            <Label htmlFor="launcherImageUrl">Launcher image URL</Label>
-            <Input
-              id="launcherImageUrl"
-              name="launcherImageUrl"
-              type="url"
-              defaultValue={readString(appearance.launcherImageUrl)}
-              placeholder="Optional image URL for custom launcher icon"
-            />
-          </div>
-          <div className="space-y-1.5">
-            <Label htmlFor="launcherDotMode">Launcher alert dot</Label>
-            <select
-              id="launcherDotMode"
-              name="launcherDotMode"
-              className={selectCls}
-              defaultValue={(appearance.launcherDotMode as string) ?? 'unread'}
-            >
-              <option value="unread">Show by default</option>
-              <option value="always">Always show</option>
-              <option value="hidden">Hide</option>
-            </select>
-          </div>
-          <div className="space-y-1.5">
-            <Label htmlFor="onlineLabel">Online label</Label>
-            <Input
-              id="onlineLabel"
-              name="onlineLabel"
-              defaultValue={readNonEmptyString(appearance.onlineLabel, copyDefaults.onlineLabel)}
-              placeholder={copyDefaults.onlineLabel}
-            />
-          </div>
-          <div className="space-y-1.5">
-            <Label htmlFor="offlineLabel">Offline label</Label>
-            <Input
-              id="offlineLabel"
-              name="offlineLabel"
-              defaultValue={readNonEmptyString(appearance.offlineLabel, copyDefaults.offlineLabel)}
-              placeholder={copyDefaults.offlineLabel}
-            />
-          </div>
-          <div className="space-y-1.5">
-            <Label htmlFor="typingLabel">Typing label</Label>
-            <Input
-              id="typingLabel"
-              name="typingLabel"
-              defaultValue={readNonEmptyString(appearance.typingLabel, copyDefaults.typingLabel)}
-              placeholder={copyDefaults.typingLabel}
-            />
-          </div>
-          <div className="space-y-1.5">
-            <Label htmlFor="footerBranding">Footer branding</Label>
-            <Input
-              id="footerBranding"
-              name="footerBranding"
-              defaultValue={readNonEmptyString(appearance.footerBranding, copyDefaults.footerBranding)}
-              placeholder={copyDefaults.footerBranding}
-            />
-          </div>
-          <div className="space-y-1.5">
-            <Label htmlFor="primaryColor">Primary color</Label>
-            <div className="flex items-center gap-3 rounded-md border p-2">
-              <input
-                id="primaryColor"
-                name="primaryColor"
-                type="color"
-                value={primaryColor}
-                onChange={(event) => setPrimaryColor(event.target.value)}
-                className="h-9 w-12 cursor-pointer rounded border bg-transparent p-1"
-                aria-label="Primary color"
-              />
-              <Input
-                value={primaryColor}
-                readOnly
-                aria-label="Selected primary color"
-                className="font-mono"
-              />
-            </div>
-            <div className="flex flex-wrap gap-2">
-              {COLOR_PRESETS.map((color) => (
-                <button
-                  key={color}
-                  type="button"
-                  onClick={() => setPrimaryColor(color)}
-                  className="h-7 w-7 rounded-full border"
-                  style={{ backgroundColor: color }}
-                  aria-label={`Use ${color}`}
-                  title={color}
-                />
-              ))}
-            </div>
-          </div>
-          <div className="space-y-1.5">
-            <Label htmlFor="headerTextColor">Header text color</Label>
-            <Input
-              id="headerTextColor"
-              name="headerTextColor"
-              type="color"
-              defaultValue={safeColor(appearance.headerTextColor || '#ffffff')}
-              className="h-10 w-16 cursor-pointer p-1"
-            />
-          </div>
-          <div className="space-y-1.5">
-            <Label htmlFor="launcherDotColor">Alert dot color</Label>
-            <Input
-              id="launcherDotColor"
-              name="launcherDotColor"
-              type="color"
-              defaultValue={safeColor(appearance.launcherDotColor || '#ef4444')}
-              className="h-10 w-16 cursor-pointer p-1"
-            />
-          </div>
-          <div className="space-y-1.5">
-            <Label htmlFor="headerStyle">Header style</Label>
-            <select
-              id="headerStyle"
-              name="headerStyle"
-              className={selectCls}
-              defaultValue={(appearance.headerStyle as string) ?? 'solid'}
-            >
-              <option value="solid">Solid</option>
-              <option value="gradient">Soft gradient</option>
-            </select>
-          </div>
-          <div className="space-y-1.5">
-            <Label htmlFor="launcherStyle">Launcher style</Label>
-            <select
-              id="launcherStyle"
-              name="launcherStyle"
-              className={selectCls}
-              defaultValue={(appearance.launcherStyle as string) ?? 'pill'}
-            >
-              <option value="circle">Circle</option>
-              <option value="pill">Pill with label</option>
-            </select>
-          </div>
-          <div className="space-y-1.5">
-            <Label htmlFor="launcherSize">Launcher size</Label>
-            <select
-              id="launcherSize"
-              name="launcherSize"
-              className={selectCls}
-              defaultValue={(appearance.launcherSize as string) ?? 'default'}
-            >
-              <option value="compact">Compact</option>
-              <option value="default">Default</option>
-              <option value="large">Large</option>
-            </select>
-          </div>
-          <div className="space-y-1.5">
-            <Label htmlFor="windowSize">Window size</Label>
-            <select
-              id="windowSize"
-              name="windowSize"
-              className={selectCls}
-              defaultValue={(appearance.windowSize as string) ?? 'default'}
-            >
-              <option value="compact">Compact</option>
-              <option value="default">Default</option>
-              <option value="large">Large</option>
-            </select>
-          </div>
-          <div className="space-y-1.5">
-            <Label htmlFor="mobileMode">Mobile mode</Label>
-            <select
-              id="mobileMode"
-              name="mobileMode"
-              className={selectCls}
-              defaultValue={(appearance.mobileMode as string) ?? 'fullscreen'}
-            >
-              <option value="fullscreen">Fullscreen</option>
-              <option value="bottom_sheet">Bottom sheet</option>
-            </select>
-          </div>
-          <div className="space-y-1.5">
-            <Label htmlFor="position">Position</Label>
-            <select
-              id="position"
-              name="position"
-              className={selectCls}
-              defaultValue={(appearance.position as string) ?? 'right'}
-            >
-              <option value="right">Bottom right</option>
-              <option value="left">Bottom left</option>
-            </select>
-          </div>
-          <div className="space-y-1.5">
-            <Label htmlFor="domainAllowlist">Allowed website domains</Label>
-            <Textarea
-              id="domainAllowlist"
-              name="domainAllowlist"
-              defaultValue={(bot?.domainAllowlist ?? []).join('\n')}
-              placeholder={'acme.com\nwww.acme.com'}
-              rows={3}
-            />
-            <p className="text-xs text-muted-foreground">One website domain per line.</p>
-          </div>
+        <div className="space-y-1.5">
+          <Label htmlFor="domainAllowlist">Allowed website domains</Label>
+          <Textarea
+            id="domainAllowlist"
+            name="domainAllowlist"
+            defaultValue={(bot?.domainAllowlist ?? []).join('\n')}
+            placeholder={'acme.com\nwww.acme.com'}
+            rows={3}
+          />
+          <p className="text-xs text-muted-foreground">
+            One website domain per line. The widget only loads on these domains.
+          </p>
         </div>
-      </section>
-
-      <section className="space-y-4">
-        <h2 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground">
-          Widget behavior
-        </h2>
-        <div className="grid gap-4 sm:grid-cols-2">
-          <div className="space-y-1.5">
-            <Label htmlFor="proactiveMessage">Proactive message</Label>
-            <Input
-              id="proactiveMessage"
-              name="proactiveMessage"
-              defaultValue={readNonEmptyString(appearance.proactiveMessage, copyDefaults.proactiveMessage)}
-              placeholder={copyDefaults.proactiveMessage}
-            />
-          </div>
-          <div className="space-y-1.5">
-            <Label htmlFor="autoOpenDelaySeconds">Auto-open delay seconds</Label>
-            <Input
-              id="autoOpenDelaySeconds"
-              name="autoOpenDelaySeconds"
-              type="number"
-              min={0}
-              max={120}
-              defaultValue={String(autoOpenDelay)}
-            />
-          </div>
+        <div className="rounded-md border bg-muted/30 p-3 text-sm text-muted-foreground">
+          <p className="font-medium text-foreground">Widget look &amp; feel lives in the Design Studio</p>
+          <p className="mt-1">
+            Colors, launcher, avatar, labels, sizing, and placement are designed with a live preview
+            on the{' '}
+            {bot ? (
+              <Link href="/company/widget" className="text-primary hover:underline">
+                Website Widget page
+              </Link>
+            ) : (
+              <span className="font-medium text-foreground">Website Widget page</span>
+            )}
+            {bot ? '.' : ' (available once this assistant is created).'} Saving here never changes
+            that design.
+          </p>
         </div>
-        <div className="grid gap-2 sm:grid-cols-2">
-          <label className="flex items-center gap-2 rounded-md border p-2.5 text-sm">
-            <input
-              type="checkbox"
-              name="autoOpen"
-              defaultChecked={Boolean(appearance.autoOpen)}
-              className="h-4 w-4"
-            />
-            Auto-open chat
-          </label>
-          <label className="flex items-center gap-2 rounded-md border p-2.5 text-sm">
-            <input
-              type="checkbox"
-              name="autoOpenOnce"
-              defaultChecked={appearance.autoOpenOnce !== false}
-              className="h-4 w-4"
-            />
-            Auto-open only once per visitor
-          </label>
-          <label className="flex items-center gap-2 rounded-md border p-2.5 text-sm">
-            <input
-              type="checkbox"
-              name="showOnMobile"
-              defaultChecked={appearance.showOnMobile !== false}
-              className="h-4 w-4"
-            />
-            Show on mobile
-          </label>
-          <label className="flex items-center gap-2 rounded-md border p-2.5 text-sm">
-            <input
-              type="checkbox"
-              name="showOnDesktop"
-              defaultChecked={appearance.showOnDesktop !== false}
-              className="h-4 w-4"
-            />
-            Show on desktop
-          </label>
-        </div>
-        <details className="rounded-md border p-3">
-          <summary className="cursor-pointer text-sm font-medium">
-            Advanced placement settings
-          </summary>
-          <div className="mt-4 grid gap-4 sm:grid-cols-3">
-            <div className="space-y-1.5">
-              <Label htmlFor="bottomOffset">Bottom spacing</Label>
-              <Input
-                id="bottomOffset"
-                name="bottomOffset"
-                type="number"
-                min={0}
-                max={120}
-                defaultValue={String(bottomOffset)}
-              />
-            </div>
-            <div className="space-y-1.5">
-              <Label htmlFor="sideOffset">Side spacing</Label>
-              <Input
-                id="sideOffset"
-                name="sideOffset"
-                type="number"
-                min={0}
-                max={120}
-                defaultValue={String(sideOffset)}
-              />
-            </div>
-            <div className="space-y-1.5">
-              <Label htmlFor="zIndex">Page layer</Label>
-              <Input
-                id="zIndex"
-                name="zIndex"
-                type="number"
-                min={1000}
-                defaultValue={String(zIndex)}
-              />
-            </div>
-          </div>
-        </details>
       </section>
 
       {bot ? (
