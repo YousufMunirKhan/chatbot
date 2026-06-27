@@ -131,15 +131,20 @@
 
   // ---- Styles ---------------------------------------------------------------
   var P = 'aiba-';
-  function injectStyles() {
+  function buildStyleEl() {
     var css = [
+      // Belt-and-braces: even though the widget lives inside a Shadow DOM (host
+      // page CSS can't reach in), pin the launcher/window to the viewport with
+      // !important so nothing - not even a stray inherited rule - can drop them
+      // into page flow (the classic "button shows up in the footer" bug).
+      ':host{all:initial}',
       // Single source of truth for the brand color. Every accent below reads
       // var(--aiba-color); applyWidgetAppearance() updates this one property on the
       // root so a config-loaded color repaints the whole widget (not just header).
       '.' + P + 'root{--aiba-color:' + cfg.color + '}',
       '.' + P + 'root,.' + P + 'root *{box-sizing:border-box;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif}',
-      '.' + P + 'launcher{position:fixed;bottom:20px;z-index:2147483000;width:60px;height:60px;border-radius:50%;border:none;cursor:pointer;box-shadow:0 12px 34px rgba(17,24,39,.22);background:var(--aiba-color);color:#fff;display:flex;align-items:center;justify-content:center;transition:transform .15s ease,box-shadow .15s ease}',
-      '.' + P + 'root.' + P + 'open .' + P + 'launcher{display:none}',
+      '.' + P + 'launcher{position:fixed!important;bottom:20px;z-index:2147483000;width:60px;height:60px;border-radius:50%;border:none;cursor:pointer;box-shadow:0 12px 34px rgba(17,24,39,.22);background:var(--aiba-color);color:#fff;display:flex;align-items:center;justify-content:center;transition:transform .15s ease,box-shadow .15s ease;margin:0}',
+      '.' + P + 'root.' + P + 'open .' + P + 'launcher{display:none!important}',
       '.' + P + 'launcher{overflow:visible}',
       '.' + P + 'launcher.' + P + 'pill{width:auto;min-width:64px;padding:0 16px;border-radius:999px;gap:8px;font-size:14px;font-weight:600}',
       '.' + P + 'launcher-label{display:none}',
@@ -152,7 +157,7 @@
       '.' + P + 'launcher svg{width:28px;height:28px;fill:#fff}',
       '.' + P + 'pos-right{right:20px}',
       '.' + P + 'pos-left{left:20px}',
-      '.' + P + 'window{position:fixed;bottom:90px;z-index:2147483000;width:396px;height:640px;max-height:calc(100vh - 110px);background:#fff;border-radius:22px;box-shadow:0 22px 70px rgba(15,23,42,.28);display:none;flex-direction:column;overflow:hidden;border:1px solid rgba(15,23,42,.08)}',
+      '.' + P + 'window{position:fixed!important;bottom:90px;z-index:2147483000;width:396px;height:640px;max-height:calc(100vh - 110px);background:#fff;border-radius:22px;box-shadow:0 22px 70px rgba(15,23,42,.28);display:none;flex-direction:column;overflow:hidden;border:1px solid rgba(15,23,42,.08)}',
       '.' + P + 'window.' + P + 'show{display:flex}',
       '.' + P + 'header{background:var(--aiba-color);color:#fff;padding:16px 18px;display:flex;align-items:center;justify-content:space-between;gap:12px;flex:0 0 auto;min-height:76px}',
       '.' + P + 'head-left{display:flex;align-items:center;gap:12px;min-width:0}',
@@ -257,11 +262,13 @@
     var style = document.createElement('style');
     style.setAttribute('data-aiba-widget', cfg.botId);
     style.textContent = css;
-    document.head.appendChild(style);
+    return style;
   }
 
   // ---- DOM build ------------------------------------------------------------
   var els = {};
+  var host = null; // the Shadow DOM host element mounted on <html>
+  var shadow = null;
   function buildDom() {
     var root = document.createElement('div');
     root.className = P + 'root';
@@ -339,12 +346,27 @@
 
     root.appendChild(launcher);
     root.appendChild(win);
+
+    // ---- Shadow DOM isolation -----------------------------------------------
+    // Everything lives inside a closed-off Shadow DOM so the host website's CSS
+    // (e.g. `button{position:static!important}`, theme `button{background:…}`,
+    // `display:none` resets) physically cannot reach the launcher/window. This
+    // is what fixes: launcher landing in the footer, launcher staying visible
+    // while the chat is open, and the brand color being overridden by the site.
+    host = document.createElement('div');
+    host.setAttribute('data-aiba-host', cfg.botId);
+    // Reset the host element itself and keep it out of page flow; the fixed
+    // children inside the shadow root escape to the viewport regardless.
+    host.style.cssText = 'all:initial';
+    shadow = host.attachShadow({ mode: 'open' });
+    shadow.appendChild(buildStyleEl());
+    shadow.appendChild(root);
     // Mount on <html>, not <body>. A `transform`/`filter`/`perspective` on the
     // host page's <body> (common with page builders, animation libs, RTL themes)
     // turns `position:fixed` into `position:absolute` relative to that ancestor -
     // which drops the launcher into the page flow near the footer instead of
     // pinning it to the viewport. <html> is almost never transformed.
-    (document.documentElement || document.body).appendChild(root);
+    (document.documentElement || document.body).appendChild(host);
 
     els = { root: root, launcher: launcher, win: win, header: header, msgs: msgs, actions: actions, form: form, brand: brand, input: input, send: send, title: h3, status: status, headAvatar: headAvatar };
     applyWidgetAppearance();
@@ -480,7 +502,15 @@
           state.bottomOffset = Number(data.bot.bottomOffset || 20);
           state.sideOffset = Number(data.bot.sideOffset || 20);
           state.zIndex = Number(data.bot.zIndex || 2147483000);
-          if (els.launcher) els.launcher.innerHTML = launcherMarkup();
+          if (els.launcher) {
+            // loadWidgetConfig runs after every answer; only touch the DOM when
+            // the launcher actually changed so it never visibly flickers.
+            var markup = launcherMarkup();
+            if (markup !== state._launcherMarkup) {
+              els.launcher.innerHTML = markup;
+              state._launcherMarkup = markup;
+            }
+          }
           if (els.status) els.status.textContent = state.onlineLabel;
           if (els.headAvatar) renderHeaderAvatar();
           if (els.brand) {
@@ -1001,7 +1031,11 @@
       return;
     }
     var vv = window.visualViewport;
-    var h = vv ? vv.height : window.innerHeight;
+    // Some mobile browsers report visualViewport.height as 0 mid-rotation /
+    // before first paint. Falling back to innerHeight here keeps the opened
+    // chat from collapsing to a 0px (invisible) box on phones.
+    var h = (vv && vv.height) ? vv.height : (window.innerHeight || document.documentElement.clientHeight || 0);
+    if (!h) h = 640; // last-ditch: never render a zero-height window
     var top = vv ? vv.offsetTop : 0;
     els.win.style.height = Math.round(h) + 'px';
     els.win.style.top = Math.round(top) + 'px';
@@ -1521,11 +1555,27 @@
   }
 
   // ---- Boot -----------------------------------------------------------------
+  // Watch the document for our host being removed and re-attach it. A
+  // MutationObserver fires only on real DOM changes, so this is idle-cheap.
+  function keepMounted() {
+    if (!host || !window.MutationObserver) return;
+    var mount = document.documentElement || document.body;
+    var obs = new MutationObserver(function () {
+      if (host && !host.isConnected) {
+        try { (document.documentElement || document.body).appendChild(host); } catch (e) {}
+      }
+    });
+    try { obs.observe(mount, { childList: true }); } catch (e) {}
+  }
+
   function init() {
-    injectStyles();
     buildDom();
     els.form.addEventListener('submit', onActionFormSubmit);
     window.addEventListener('resize', applyWidgetAppearance);
+    // Self-heal: some SPA / page-builder navigations wipe nodes they don't own.
+    // If our host gets detached, put it back so the launcher never disappears
+    // for good ("comes and goes"). Cheap: only acts when host is disconnected.
+    keepMounted();
     // Track the on-screen keyboard / viewport changes on mobile so the input
     // never ends up hidden behind the keyboard.
     if (window.visualViewport) {
