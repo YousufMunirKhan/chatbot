@@ -1,0 +1,39 @@
+
+> ai-business-assistant@0.1.0 dev
+> next dev
+
+  ▲ Next.js 14.2.35
+  - Local:        http://localhost:3000
+  - Environments: .env.local
+  - Experiments (use with caution):
+    · staleTimes
+
+ ✓ Starting...
+ ✓ Ready in 1654ms
+ ○ Compiling /src/middleware ...
+ ✓ Compiled /src/middleware in 614ms (125 modules)
+ ○ Compiling /login ...
+ ✓ Compiled /login in 3.8s (818 modules)
+ GET /login?next=%2Fsuper-admin%2Fcompanies%2Fnew 200 in 3989ms
+ ✓ Compiled in 347ms (336 modules)
+ ✓ Compiled in 132ms (336 modules)
+ ✓ Compiled in 128ms (336 modules)
+ ✓ Compiled in 116ms (336 modules)
+ ✓ Compiled in 123ms (336 modules)
+ ✓ Compiled in 134ms (336 modules)
+ ✓ Compiled in 142ms (336 modules)
+ ✓ Compiled in 149ms (336 modules)
+ ✓ Compiled in 138ms (336 modules)
+ ✓ Compiled in 83ms (447 modules)
+ ✓ Compiled in 115ms (336 modules)
+ ✓ Compiled in 110ms (336 modules)
+ ✓ Compiled in 154ms (336 modules)
+ ✓ Compiled in 155ms (336 modules)
+ ✓ Compiled in 136ms (336 modules)
+ ✓ Compiled in 144ms (336 modules)
+ ✓ Compiled in 124ms (336 modules)
+ ✓ Compiled in 143ms (336 modules)
+ ✓ Compiled in 163ms (336 modules)
+ ✓ Compiled in 135ms (336 modules)
+ ✓ Compiled in 255ms (336 modules)
+[?25h

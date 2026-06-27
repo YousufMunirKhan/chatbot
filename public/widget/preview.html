@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Assistant preview</title>
+  <style>
+    body { margin: 0; font-family: system-ui, "Segoe UI", Roboto, sans-serif; background: #f8fafc; color: #334155; }
+    .bar { height: 46px; background: #fff; border-bottom: 1px solid #e2e8f0; display: flex; align-items: center; padding: 0 16px; font-weight: 600; color: #0f172a; font-size: 14px; }
+    .dot { width: 10px; height: 10px; border-radius: 50%; background: #cbd5e1; margin-right: 6px; }
+    .body { padding: 22px; max-width: 560px; }
+    .skel { height: 12px; background: #e2e8f0; border-radius: 6px; margin: 10px 0; }
+    .w1 { width: 80%; } .w2 { width: 55%; } .w3 { width: 68%; } .w4 { width: 40%; }
+    .hint { margin-top: 18px; font-size: 13px; color: #64748b; }
+  </style>
+</head>
+<body>
+  <div class="bar"><span class="dot"></span><span class="dot"></span><span class="dot"></span>&nbsp;Your website (preview)</div>
+  <div class="body">
+    <div class="skel w1"></div>
+    <div class="skel w3"></div>
+    <div class="skel w2"></div>
+    <div class="skel w4"></div>
+    <p class="hint">👉 Click the chat bubble in the corner to test your assistant. Try “What can you help me with?”</p>
+  </div>
+  <script>
+    (function () {
+      var bot = new URLSearchParams(location.search).get('bot');
+      if (!bot) {
+        document.querySelector('.body').innerHTML = '<p style="color:#b91c1c">Missing bot id (?bot=...)</p>';
+        return;
+      }
+      var s = document.createElement('script');
+      s.src = location.origin + '/widget/widget.js';
+      s.setAttribute('data-bot-id', bot);
+      s.setAttribute('data-title', 'Assistant');
+      s.setAttribute('data-welcome', 'Hi! Ask me anything to test me.');
+      s.setAttribute('data-api', location.origin);
+      document.body.appendChild(s);
+    })();
+  </script>
+</body>
+</html>
