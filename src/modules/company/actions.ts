@@ -30,6 +30,41 @@ function clamp(value: number | undefined, fallback: number, min: number, max: nu
   return Math.min(max, Math.max(min, value));
 }
 
+function textOr(value: string | undefined, fallback: string): string {
+  return value?.trim() ? value : fallback;
+}
+
+function appearanceDefaults(audience: 'customer' | 'internal', botName: string) {
+  if (audience === 'internal') {
+    return {
+      title: botName || 'Internal Help Desk',
+      welcomeMessage:
+        'Hi, I can guide your team through project notes, stock, orders, customers, and safe updates.',
+      agentLabel: 'Help Desk',
+      onlineLabel: 'Ready for staff questions',
+      offlineLabel: 'Available when your team needs help',
+      typingLabel: 'Checking internal knowledge',
+      footerBranding: 'Internal assistant. Check important actions before applying changes.',
+      proactiveMessage: 'Ask me how this project works or where to update something.',
+      primaryColor: '#2563eb',
+    };
+  }
+
+  return {
+    title: botName || 'Switch & Save Assistant',
+    welcomeMessage:
+      'Hi, I can help with EPOS systems, card machines, pricing, demos, and support. What would you like to sort out today?',
+    agentLabel: 'Julie',
+    onlineLabel: 'Julie is replying - live',
+    offlineLabel: 'Replying soon',
+    typingLabel: 'Julie is typing',
+    footerBranding:
+      'AI assistant may be inaccurate. We may use messages and contact details to respond to your enquiry.',
+    proactiveMessage: 'Need help choosing the right EPOS or card machine? I can guide you in under a minute.',
+    primaryColor: '#045fff',
+  };
+}
+
 function domainListToArray(v: FormDataEntryValue | null): string[] {
   if (typeof v !== 'string' || !v.trim()) return [];
   const domains = v
@@ -128,6 +163,7 @@ function readBotFields(formData: FormData) {
     .filter((c) => (BOT_CAPABILITIES as readonly string[]).includes(c));
   const domainAllowlist = domainListToArray(formData.get('domainAllowlist'));
   const v = parsed.data;
+  const defaults = appearanceDefaults(v.assistantAudience, v.name);
   return {
     value: {
       name: v.name,
@@ -137,16 +173,16 @@ function readBotFields(formData: FormData) {
       domain_allowlist: domainAllowlist,
       appearance_json: {
         assistantAudience: v.assistantAudience,
-        title: v.title ?? null,
-        welcomeMessage: v.welcomeMessage ?? null,
-        agentLabel: v.agentLabel ?? null,
+        title: textOr(v.title, defaults.title),
+        welcomeMessage: textOr(v.welcomeMessage, defaults.welcomeMessage),
+        agentLabel: textOr(v.agentLabel, defaults.agentLabel),
         agentAvatarUrl: v.agentAvatarUrl ?? null,
         launcherIcon: v.launcherIcon,
-        onlineLabel: v.onlineLabel ?? null,
-        offlineLabel: v.offlineLabel ?? null,
-        typingLabel: v.typingLabel ?? null,
-        footerBranding: v.footerBranding ?? null,
-        proactiveMessage: v.proactiveMessage ?? null,
+        onlineLabel: textOr(v.onlineLabel, defaults.onlineLabel),
+        offlineLabel: textOr(v.offlineLabel, defaults.offlineLabel),
+        typingLabel: textOr(v.typingLabel, defaults.typingLabel),
+        footerBranding: textOr(v.footerBranding, defaults.footerBranding),
+        proactiveMessage: textOr(v.proactiveMessage, defaults.proactiveMessage),
         autoOpen: v.autoOpen,
         autoOpenOnce: v.autoOpenOnce,
         autoOpenDelaySeconds: clamp(v.autoOpenDelaySeconds, 3, 0, 120),
@@ -159,7 +195,7 @@ function readBotFields(formData: FormData) {
         bottomOffset: clamp(v.bottomOffset, 20, 0, 120),
         sideOffset: clamp(v.sideOffset, 20, 0, 120),
         zIndex: clamp(v.zIndex, 2147483000, 1000, 2147483000),
-        primaryColor: v.primaryColor ?? null,
+        primaryColor: v.primaryColor ?? defaults.primaryColor,
         position: v.position,
       },
     },

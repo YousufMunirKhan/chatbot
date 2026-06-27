@@ -1,9 +1,10 @@
-import { requireUser } from '@/lib/auth';
+import { requireUser, type SessionUser } from '@/lib/auth';
 import { ROLES } from '@/lib/constants';
 import { SignOutButton } from '@/components/sign-out-button';
 import { Button } from '@/components/ui/button';
 import { DesktopSidebar, MobileNav } from '@/components/dashboard-nav';
 import { endImpersonationAction } from '@/modules/super-admin/impersonation-actions';
+import { createSupabaseServiceClient } from '@/lib/db/server';
 
 /**
  * Protected dashboard shell (Module 1 shell + Module 3 auth). Requires a signed-in
@@ -23,19 +24,17 @@ const PLATFORM_NAV: NavSection = {
   ],
 };
 
-const COMPANY_ADMIN_NAV: NavSection = {
-  group: 'Company',
-  items: [
-    { href: '/company', label: 'Home' },
-    { href: '/company/setup', label: 'Setup' },
-    { href: '/company/inbox', label: 'Inbox' },
-    { href: '/company/help-desk', label: 'Help Desk' },
-    { href: '/company/customers', label: 'Customers' },
-    { href: '/company/business-data', label: 'Business Data' },
-    { href: '/company/webhooks', label: 'Webhooks' },
-    { href: '/company/settings', label: 'Team & Settings' },
-  ],
-};
+const COMPANY_ADMIN_NAV_ITEMS: NavSection['items'] = [
+  { href: '/company', label: 'Home' },
+  { href: '/company/setup', label: 'Setup' },
+  { href: '/company/widget', label: 'Website Widget' },
+  { href: '/company/inbox', label: 'Inbox' },
+  { href: '/company/customers', label: 'Customers' },
+  { href: '/company/business-data', label: 'Business Data' },
+  { href: '/company/quick-actions', label: 'Quick Actions' },
+  { href: '/company/webhooks', label: 'Webhooks' },
+  { href: '/company/settings', label: 'Team & Settings' },
+];
 
 const AGENT_NAV: NavSection = {
   group: 'Workspace',
@@ -45,16 +44,52 @@ const AGENT_NAV: NavSection = {
   ],
 };
 
+async function companyHasInternalWorkspace(user: SessionUser): Promise<boolean> {
+  if (!user.companyId) return false;
+  const sb = createSupabaseServiceClient();
+  const [{ data: internalBot }, { data: connector }] = await Promise.all([
+    sb
+      .from('bots')
+      .select('id')
+      .eq('company_id', user.companyId)
+      .or('bot_type.eq.help_desk,appearance_json->>assistantAudience.eq.internal')
+      .limit(1)
+      .maybeSingle(),
+    sb
+      .from('helpdesk_connectors')
+      .select('id')
+      .eq('company_id', user.companyId)
+      .eq('status', 'active')
+      .limit(1)
+      .maybeSingle(),
+  ]);
+
+  return Boolean(internalBot || connector);
+}
+
+async function companyAdminNavFor(user: SessionUser): Promise<NavSection> {
+  const showInternalHelpDesk = await companyHasInternalWorkspace(user).catch(() => false);
+  const items = showInternalHelpDesk
+    ? [
+        ...COMPANY_ADMIN_NAV_ITEMS.slice(0, 4),
+        { href: '/company/help-desk', label: 'Internal Help Desk' },
+        ...COMPANY_ADMIN_NAV_ITEMS.slice(4),
+      ]
+    : COMPANY_ADMIN_NAV_ITEMS;
+  return { group: 'Company', items };
+}
+
 export default async function DashboardLayout({ children }: { children: React.ReactNode }) {
   const user = await requireUser();
+  const companyNav = await companyAdminNavFor(user);
 
   const sections: NavSection[] = user.impersonation
-    ? [COMPANY_ADMIN_NAV]
+    ? [companyNav]
     : user.isSuperAdmin
       ? [PLATFORM_NAV]
       : user.role === ROLES.AGENT
       ? [AGENT_NAV]
-      : [COMPANY_ADMIN_NAV];
+      : [companyNav];
 
   const roleLabel = user.impersonation
     ? `Impersonating ${user.impersonation.companyName ?? 'company'}`

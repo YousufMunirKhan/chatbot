@@ -27,28 +27,28 @@ export const DEFAULT_QUICK_ACTIONS: DefaultQuickAction[] = [
   {
     defaultKey: 'lead_form',
     enabledBy: ['lead_capture', 'sales_agent'],
-    label: 'Get a quote',
-    description: 'Leave your details and our team will get back to you.',
+    label: 'Get EPOS pricing',
+    description: 'Tell us what you need and our team will send the right quote.',
     actionType: 'lead_form',
     formSchema: [
       { name: 'name', label: 'Name', type: 'text', required: true },
       { name: 'phone', label: 'Phone', type: 'tel', required: true },
       { name: 'email', label: 'Email', type: 'email' },
-      { name: 'service', label: 'Service / product of interest', type: 'text' },
-      { name: 'message', label: 'Message', type: 'textarea' },
+      { name: 'service', label: 'What do you need?', type: 'text' },
+      { name: 'message', label: 'Anything else we should know?', type: 'textarea' },
     ],
   },
   {
     defaultKey: 'appointment_form',
     enabledBy: ['appointment_booking'],
-    label: 'Book appointment',
+    label: 'Book a free demo',
     description: 'Request a date and time — we will confirm with you.',
     actionType: 'appointment_form',
     formSchema: [
       { name: 'name', label: 'Name', type: 'text', required: true },
       { name: 'phone', label: 'Phone', type: 'tel', required: true },
       { name: 'email', label: 'Email', type: 'email' },
-      { name: 'service', label: 'Service', type: 'text' },
+      { name: 'service', label: 'What would you like to discuss?', type: 'text' },
       { name: 'date', label: 'Preferred date', type: 'date' },
       { name: 'time', label: 'Preferred time', type: 'time' },
       { name: 'notes', label: 'Notes', type: 'textarea' },
@@ -57,8 +57,8 @@ export const DEFAULT_QUICK_ACTIONS: DefaultQuickAction[] = [
   {
     defaultKey: 'human_handoff',
     enabledBy: ['human_agent_takeover', 'live_chat'],
-    label: 'Talk to a human',
-    description: 'Share how to reach you and our team will take over.',
+    label: 'Talk to the team',
+    description: 'Share the best way to reach you and our team will take over.',
     actionType: 'request_human',
     formSchema: [
       { name: 'name', label: 'Name', type: 'text', required: true },
@@ -67,6 +67,12 @@ export const DEFAULT_QUICK_ACTIONS: DefaultQuickAction[] = [
     ],
   },
 ];
+
+const LEGACY_DEFAULT_LABELS: Record<string, string[]> = {
+  lead_form: ['Get a quote'],
+  appointment_form: ['Book appointment'],
+  human_handoff: ['Talk to a human'],
+};
 
 type ServiceClient = ReturnType<typeof createSupabaseServiceClient>;
 
@@ -93,17 +99,42 @@ export async function seedDefaultQuickActions(
 
     const { data: existing } = await sb
       .from('bot_quick_actions')
-      .select('action_config_json')
+      .select('id,label,action_config_json')
       .eq('company_id', companyId)
       .eq('bot_id', botId);
 
-    const existingKeys = new Set(
-      (existing ?? [])
-        .map((r) => {
-          const cfg = (r as { action_config_json?: { defaultKey?: unknown } }).action_config_json;
-          return typeof cfg?.defaultKey === 'string' ? cfg.defaultKey : null;
-        })
-        .filter((k): k is string => Boolean(k)),
+    const existingDefaults = new Map<
+      string,
+      { id: string; label: string; action_config_json?: { seeded?: unknown; defaultKey?: unknown } }
+    >();
+    for (const row of existing ?? []) {
+      const r = row as {
+        id?: string;
+        label?: string;
+        action_config_json?: { seeded?: unknown; defaultKey?: unknown };
+      };
+      const key = typeof r.action_config_json?.defaultKey === 'string' ? r.action_config_json.defaultKey : null;
+      if (r.id && key) existingDefaults.set(key, { id: r.id, label: r.label ?? '', action_config_json: r.action_config_json });
+    }
+    const existingKeys = new Set(existingDefaults.keys());
+
+    await Promise.all(
+      wanted.map(async (d) => {
+        const current = existingDefaults.get(d.defaultKey);
+        const legacyLabels = LEGACY_DEFAULT_LABELS[d.defaultKey] ?? [];
+        if (!current || current.action_config_json?.seeded !== true || !legacyLabels.includes(current.label)) return;
+        await sb
+          .from('bot_quick_actions')
+          .update({
+            label: d.label,
+            description: d.description,
+            action_type: d.actionType,
+            form_schema_json: d.formSchema,
+          })
+          .eq('company_id', companyId)
+          .eq('bot_id', botId)
+          .eq('id', current.id);
+      }),
     );
 
     const rows = wanted

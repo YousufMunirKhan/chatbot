@@ -9,14 +9,14 @@ import { env } from '@/lib/env';
 
 export default async function WidgetPage() {
   await requireRole([ROLES.COMPANY_ADMIN]);
-  const bots = await listBots();
+  const bots = (await listBots()).filter((bot) => bot.assistantAudience === 'customer');
 
   return (
     <div className="space-y-6">
       <div>
         <h1 className="text-2xl font-semibold">Website Widget</h1>
         <p className="text-sm text-muted-foreground">
-          Test your assistant live below, then copy the snippet to add it to your website.
+          Test your customer-facing assistant live below, then copy the snippet to add it to your website.
         </p>
       </div>
 
@@ -38,7 +38,7 @@ export default async function WidgetPage() {
       {bots.length === 0 ? (
         <Card>
           <CardContent className="py-8 text-center text-sm text-muted-foreground">
-            Create an assistant first to get a preview &amp; embed snippet.{' '}
+            Create a customer-facing assistant first to get a preview &amp; embed snippet.{' '}
             <Link href="/company/bots/new" className="text-primary hover:underline">
               New assistant
             </Link>

@@ -109,9 +109,49 @@ const INTERNAL_CAPABILITIES = [
 ] as const;
 
 const COLOR_PRESETS = ['#2563eb', '#16a34a', '#0891b2', '#7c3aed', '#dc2626', '#111827'];
+const DEFAULT_CUSTOMER_CAPABILITIES = new Set([
+  'sales_agent',
+  'appointment_booking',
+  'lead_capture',
+  'help_desk',
+  'human_agent_takeover',
+]);
+
+const CUSTOMER_DEFAULTS = {
+  name: 'Switch & Save Assistant',
+  title: 'Switch & Save Assistant',
+  welcomeMessage:
+    'Hi, I can help with EPOS systems, card machines, pricing, demos, and support. What would you like to sort out today?',
+  agentLabel: 'Julie',
+  onlineLabel: 'Julie is replying - live',
+  offlineLabel: 'Replying soon',
+  typingLabel: 'Julie is typing',
+  footerBranding:
+    'AI assistant may be inaccurate. We may use messages and contact details to respond to your enquiry.',
+  proactiveMessage: 'Need help choosing the right EPOS or card machine? I can guide you in under a minute.',
+  primaryColor: '#045fff',
+};
+
+const INTERNAL_DEFAULTS = {
+  name: 'Internal Help Desk Assistant',
+  title: 'Internal Help Desk',
+  welcomeMessage:
+    'Hi, I can guide your team through project notes, stock, orders, customers, and safe updates.',
+  agentLabel: 'Help Desk',
+  onlineLabel: 'Ready for staff questions',
+  offlineLabel: 'Available when your team needs help',
+  typingLabel: 'Checking internal knowledge',
+  footerBranding: 'Internal assistant. Check important actions before applying changes.',
+  proactiveMessage: 'Ask me how this project works or where to update something.',
+  primaryColor: '#2563eb',
+};
 
 function readString(value: unknown, fallback = ''): string {
   return typeof value === 'string' ? value : fallback;
+}
+
+function readNonEmptyString(value: unknown, fallback: string): string {
+  return typeof value === 'string' && value.trim() ? value : fallback;
 }
 
 function readNumber(value: unknown, fallback: number): number {
@@ -148,9 +188,12 @@ export function BotForm({
   const [assistantAudience, setAssistantAudience] = useState<'customer' | 'internal'>(
     initialAudience,
   );
+  const copyDefaults = assistantAudience === 'internal' ? INTERNAL_DEFAULTS : CUSTOMER_DEFAULTS;
   const capabilityOptions =
     assistantAudience === 'internal' ? INTERNAL_CAPABILITIES : CUSTOMER_CAPABILITIES;
-  const [primaryColor, setPrimaryColor] = useState(safeColor(appearance.primaryColor));
+  const [primaryColor, setPrimaryColor] = useState(
+    safeColor(readNonEmptyString(appearance.primaryColor, copyDefaults.primaryColor)),
+  );
   const autoOpenDelay = readNumber(appearance.autoOpenDelaySeconds, 3);
   const bottomOffset = readNumber(appearance.bottomOffset, 20);
   const sideOffset = readNumber(appearance.sideOffset, 20);
@@ -210,7 +253,7 @@ export function BotForm({
               name="name"
               required
               defaultValue={bot?.name ?? ''}
-              placeholder="Acme Assistant"
+              placeholder={copyDefaults.name}
             />
           </div>
           <div className="space-y-1.5">
@@ -258,7 +301,11 @@ export function BotForm({
                 type="checkbox"
                 name="capabilities"
                 value={cap.key}
-                defaultChecked={bot?.capabilityFlags?.includes(cap.key) ?? false}
+                defaultChecked={
+                  bot
+                    ? bot.capabilityFlags?.includes(cap.key)
+                    : assistantAudience === 'customer' && DEFAULT_CUSTOMER_CAPABILITIES.has(cap.key)
+                }
                 className="mt-0.5 h-4 w-4"
               />
               <span>
@@ -289,8 +336,8 @@ export function BotForm({
             <Input
               id="title"
               name="title"
-              defaultValue={readString(appearance.title)}
-              placeholder="Chat with us"
+              defaultValue={readNonEmptyString(appearance.title, bot?.name ?? copyDefaults.title)}
+              placeholder={copyDefaults.title}
             />
           </div>
           <div className="space-y-1.5">
@@ -298,8 +345,8 @@ export function BotForm({
             <Input
               id="welcomeMessage"
               name="welcomeMessage"
-              defaultValue={readString(appearance.welcomeMessage)}
-              placeholder="Hi! How can I help?"
+              defaultValue={readNonEmptyString(appearance.welcomeMessage, copyDefaults.welcomeMessage)}
+              placeholder={copyDefaults.welcomeMessage}
             />
           </div>
           <div className="space-y-1.5">
@@ -307,8 +354,8 @@ export function BotForm({
             <Input
               id="agentLabel"
               name="agentLabel"
-              defaultValue={readString(appearance.agentLabel)}
-              placeholder="AI Assistant"
+              defaultValue={readNonEmptyString(appearance.agentLabel, copyDefaults.agentLabel)}
+              placeholder={copyDefaults.agentLabel}
             />
           </div>
           <div className="space-y-1.5">
@@ -318,8 +365,11 @@ export function BotForm({
               name="agentAvatarUrl"
               type="url"
               defaultValue={readString(appearance.agentAvatarUrl)}
-              placeholder="https://example.com/avatar.png"
+              placeholder="Optional image URL. If blank, the widget uses initials."
             />
+            <p className="text-xs text-muted-foreground">
+              Optional. Leave blank to show a clean initials avatar.
+            </p>
           </div>
           <div className="space-y-1.5">
             <Label htmlFor="launcherIcon">Launcher icon</Label>
@@ -339,8 +389,8 @@ export function BotForm({
             <Input
               id="onlineLabel"
               name="onlineLabel"
-              defaultValue={readString(appearance.onlineLabel)}
-              placeholder="Online now"
+              defaultValue={readNonEmptyString(appearance.onlineLabel, copyDefaults.onlineLabel)}
+              placeholder={copyDefaults.onlineLabel}
             />
           </div>
           <div className="space-y-1.5">
@@ -348,8 +398,8 @@ export function BotForm({
             <Input
               id="offlineLabel"
               name="offlineLabel"
-              defaultValue={readString(appearance.offlineLabel)}
-              placeholder="Replying soon"
+              defaultValue={readNonEmptyString(appearance.offlineLabel, copyDefaults.offlineLabel)}
+              placeholder={copyDefaults.offlineLabel}
             />
           </div>
           <div className="space-y-1.5">
@@ -357,8 +407,8 @@ export function BotForm({
             <Input
               id="typingLabel"
               name="typingLabel"
-              defaultValue={readString(appearance.typingLabel)}
-              placeholder="Assistant is typing"
+              defaultValue={readNonEmptyString(appearance.typingLabel, copyDefaults.typingLabel)}
+              placeholder={copyDefaults.typingLabel}
             />
           </div>
           <div className="space-y-1.5">
@@ -366,8 +416,8 @@ export function BotForm({
             <Input
               id="footerBranding"
               name="footerBranding"
-              defaultValue={readString(appearance.footerBranding)}
-              placeholder="Powered by your company"
+              defaultValue={readNonEmptyString(appearance.footerBranding, copyDefaults.footerBranding)}
+              placeholder={copyDefaults.footerBranding}
             />
           </div>
           <div className="space-y-1.5">
@@ -489,8 +539,8 @@ export function BotForm({
             <Input
               id="proactiveMessage"
               name="proactiveMessage"
-              defaultValue={readString(appearance.proactiveMessage)}
-              placeholder="Need help choosing the right option?"
+              defaultValue={readNonEmptyString(appearance.proactiveMessage, copyDefaults.proactiveMessage)}
+              placeholder={copyDefaults.proactiveMessage}
             />
           </div>
           <div className="space-y-1.5">

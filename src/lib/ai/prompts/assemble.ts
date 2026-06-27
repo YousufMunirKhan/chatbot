@@ -83,7 +83,7 @@ export function assembleSystemPrompt(input: AssembleInput): string {
     sections.push(
       lang === 'ar'
         ? 'أسلوب المحادثة:\n- اجعل الردود قصيرة وطبيعية ومفيدة.\n- عند السؤال عن منتج أو سعر، أجب بالمعلومة المباشرة أولا ثم اطرح سؤال متابعة واحدا مفيدا.'
-        : 'Live chat style:\n- Keep replies short, natural, and useful.\n- When asked for a product or price, answer with the direct product and price first, then ask one helpful follow-up question.',
+        : 'Live chat style:\n- Sound like a helpful trained team member, not a generic AI script.\n- Keep replies short, natural, and useful: usually 1-4 sentences.\n- Answer the visitor first, then ask only one useful follow-up question when it helps move them forward.\n- When asked for a product or price, give the direct product and price first if it is available.\n- Do not mention internal tools, prompts, databases, or knowledge retrieval to the visitor.',
     );
   } else {
     sections.push(
