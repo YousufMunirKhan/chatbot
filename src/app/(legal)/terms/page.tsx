@@ -1,8 +1,14 @@
 import { getLegalDocument } from '@/lib/legal';
 
+const fallback = `By using Switch & Save AI Assistant, you agree to use the platform lawfully and only with data you are authorised to process.
+
+AI-generated responses are provided for assistance and may require human review. You remain responsible for your business decisions, customer communications, uploaded knowledge, connected systems, and connector permissions.
+
+You must not misuse the service, attempt unauthorised access, expose connector tokens publicly, or upload prohibited or unnecessary sensitive information.`;
+
 export default async function TermsPage() {
   const doc = await getLegalDocument('terms');
-  return <Legal title={doc?.title ?? 'Terms of Service'} content={doc?.content ?? ''} />;
+  return <Legal title={doc?.title ?? 'Terms of Service'} content={doc?.content ?? fallback} />;
 }
 
 function Legal({ title, content }: { title: string; content: string }) {

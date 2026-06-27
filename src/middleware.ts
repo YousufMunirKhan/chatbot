@@ -1,63 +1,33 @@
 import { NextResponse, type NextRequest } from 'next/server';
-import { createServerClient, type CookieOptions } from '@supabase/ssr';
-
-type CookieToSet = { name: string; value: string; options?: CookieOptions };
 
 /**
  * Auth middleware (Module 3).
- *  - Refreshes the Supabase auth session cookie on every request.
- *  - Blocks unauthenticated access to dashboard areas (redirect to /login).
- *  - Sends already-signed-in users away from /login.
+ *  - Blocks requests with no Supabase session cookie from dashboard areas.
  *
- * Role enforcement (super-admin vs company vs agent) happens in the route
- * layouts via requireRole(); middleware only checks "is there a session".
+ * Middleware runs on the Edge runtime, so keep it free of Supabase SDK imports.
+ * Real auth, session refresh, two-factor checks, and role enforcement happen in
+ * server layouts/actions via requireUser()/requireRole().
  */
 const PROTECTED_PREFIXES = ['/dashboard', '/super-admin', '/company'];
 
-export async function middleware(request: NextRequest) {
-  let response = NextResponse.next({ request });
+function hasSupabaseSessionCookie(request: NextRequest): boolean {
+  return request.cookies
+    .getAll()
+    .some((cookie) => /^sb-.+-auth-token(?:\.\d+)?$/.test(cookie.name));
+}
 
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
-  if (!url || !key) return response;
-
-  const supabase = createServerClient(url, key, {
-    cookies: {
-      getAll() {
-        return request.cookies.getAll();
-      },
-      setAll(cookiesToSet: CookieToSet[]) {
-        cookiesToSet.forEach(({ name, value }) => request.cookies.set(name, value));
-        response = NextResponse.next({ request });
-        cookiesToSet.forEach(({ name, value, options }) =>
-          response.cookies.set(name, value, options),
-        );
-      },
-    },
-  });
-
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
+export function middleware(request: NextRequest) {
   const path = request.nextUrl.pathname;
   const isProtected = PROTECTED_PREFIXES.some((p) => path === p || path.startsWith(p + '/'));
 
-  if (isProtected && !user) {
+  if (isProtected && !hasSupabaseSessionCookie(request)) {
     const redirectUrl = request.nextUrl.clone();
     redirectUrl.pathname = '/login';
     redirectUrl.searchParams.set('next', path);
     return NextResponse.redirect(redirectUrl);
   }
 
-  if (user && path === '/login') {
-    const redirectUrl = request.nextUrl.clone();
-    redirectUrl.pathname = '/dashboard';
-    redirectUrl.search = '';
-    return NextResponse.redirect(redirectUrl);
-  }
-
-  return response;
+  return NextResponse.next();
 }
 
 export const config = {
