@@ -1,8 +1,7 @@
 import Image from 'next/image';
 import Link from 'next/link';
-import { LoginForm } from './login-form';
 
-export function BrandedLogin() {
+export function BrandedLogin({ form }: { form: React.ReactNode }) {
   return (
     <main className="grid min-h-screen bg-[#eef3fb] text-slate-950 lg:grid-cols-[1.05fr_1fr]">
       <section className="relative flex min-h-[42rem] flex-col overflow-hidden bg-brand-sidebar px-6 py-8 text-white sm:px-10 lg:min-h-screen lg:px-14">
@@ -50,7 +49,7 @@ export function BrandedLogin() {
             <h2 className="text-2xl font-extrabold tracking-tight">Welcome back</h2>
             <p className="text-sm text-slate-500">Sign in to manage your AI assistant dashboard.</p>
           </div>
-          <LoginForm />
+          {form}
           <div className="mt-5 flex items-center justify-between text-sm">
             <Link href="/forgot-password" className="font-medium text-primary hover:underline">
               Forgot password?

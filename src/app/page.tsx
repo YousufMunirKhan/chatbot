@@ -1,5 +1,5 @@
-import { BrandedLogin } from './(auth)/login/branded-login';
+import { redirect } from 'next/navigation';
 
 export default function HomePage() {
-  return <BrandedLogin />;
+  redirect('/login');
 }
