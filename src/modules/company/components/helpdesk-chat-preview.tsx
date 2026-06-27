@@ -33,8 +33,8 @@ function AskButton() {
       disabled={pending}
       size="icon"
       className="h-10 w-10 rounded-full bg-[#5b3ff4] text-white hover:bg-[#4930d8]"
-      aria-label="Ask Switch&Save"
-      title="Ask Switch&Save"
+      aria-label="Ask assistant"
+      title="Ask assistant"
     >
       {pending ? <Sparkles className="h-4 w-4 animate-pulse" /> : <ArrowRight className="h-4 w-4" />}
     </Button>
@@ -84,7 +84,7 @@ export function HelpdeskChatPreview() {
             <h2 className="mt-5 text-2xl font-semibold tracking-tight text-slate-950">
               Hello Aamir
             </h2>
-            <p className="mt-2 text-base text-slate-600">How can Switch&amp;Save help you today?</p>
+            <p className="mt-2 text-base text-slate-600">How can the assistant help you today?</p>
           </div>
 
           <div className="space-y-1">
@@ -122,7 +122,7 @@ export function HelpdeskChatPreview() {
               name="question"
               rows={3}
               className="w-full resize-none border-0 bg-transparent text-sm outline-none placeholder:text-slate-400"
-              placeholder="Ask Switch&Save anything..."
+              placeholder="Ask the assistant anything..."
               defaultValue={state.question ?? ''}
             />
             <div className="mt-2 flex items-center justify-between">
@@ -139,7 +139,7 @@ export function HelpdeskChatPreview() {
           </form>
 
           <p className="mt-3 text-center text-xs text-slate-500">
-            Switch&amp;Save can make mistakes. Double-check live software actions.
+            The assistant can make mistakes. Double-check live software actions.
           </p>
         </div>
       </div>
@@ -151,7 +151,7 @@ export function HelpdeskChatPreview() {
               <Sparkles className="h-5 w-5" />
             </div>
             <div>
-              <h2 className="text-lg font-semibold text-slate-950">Switch&amp;Save helpdesk brain</h2>
+              <h2 className="text-lg font-semibold text-slate-950">Internal helpdesk brain</h2>
               <p className="text-sm text-slate-600">
                 Built for staff inside your software, not as a public website bubble.
               </p>
@@ -197,7 +197,7 @@ export function HelpdeskChatPreview() {
         {state.answer ? (
           <div className="rounded-lg border bg-white p-5 shadow-sm">
             <p className="text-xs font-semibold uppercase tracking-wider text-slate-500">
-              Switch&amp;Save answered
+              Assistant answered
             </p>
             <p className="mt-3 whitespace-pre-wrap text-sm leading-6 text-slate-700">{state.answer}</p>
           </div>

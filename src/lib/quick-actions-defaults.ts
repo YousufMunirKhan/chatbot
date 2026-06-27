@@ -27,7 +27,7 @@ export const DEFAULT_QUICK_ACTIONS: DefaultQuickAction[] = [
   {
     defaultKey: 'lead_form',
     enabledBy: ['lead_capture', 'sales_agent'],
-    label: 'Get EPOS pricing',
+    label: 'Get pricing',
     description: 'Tell us what you need and our team will send the right quote.',
     actionType: 'lead_form',
     formSchema: [
@@ -69,7 +69,7 @@ export const DEFAULT_QUICK_ACTIONS: DefaultQuickAction[] = [
 ];
 
 const LEGACY_DEFAULT_LABELS: Record<string, string[]> = {
-  lead_form: ['Get a quote'],
+  lead_form: ['Get a quote', 'Get EPOS pricing'],
   appointment_form: ['Book appointment'],
   human_handoff: ['Talk to a human'],
 };

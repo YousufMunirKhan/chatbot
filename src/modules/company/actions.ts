@@ -51,16 +51,16 @@ function appearanceDefaults(audience: 'customer' | 'internal', botName: string) 
   }
 
   return {
-    title: botName || 'Switch & Save Assistant',
+    title: botName || 'Website Assistant',
     welcomeMessage:
-      'Hi, I can help with EPOS systems, card machines, pricing, demos, and support. What would you like to sort out today?',
-    agentLabel: 'Julie',
-    onlineLabel: 'Julie is replying - live',
+      'Hi, I can help with services, pricing, appointments, orders, and support. What would you like to sort out today?',
+    agentLabel: 'Team',
+    onlineLabel: 'Team is replying - live',
     offlineLabel: 'Replying soon',
-    typingLabel: 'Julie is typing',
+    typingLabel: 'Team is typing',
     footerBranding:
       'AI assistant may be inaccurate. We may use messages and contact details to respond to your enquiry.',
-    proactiveMessage: 'Need help choosing the right EPOS or card machine? I can guide you in under a minute.',
+    proactiveMessage: 'Need help choosing the right option? I can guide you in under a minute.',
     primaryColor: '#045fff',
   };
 }

@@ -2,6 +2,7 @@ import { createSupabaseServiceClient } from '@/lib/db/server';
 import type { AIProvider, ChatMessage } from '@/lib/ai/types';
 import { INJECTION_GUARD, wrapUntrusted } from '@/lib/ai/safety';
 import { logger } from '@/lib/logger';
+import { env } from '@/lib/env';
 
 export { detectLanguage } from '@/lib/ai/lang';
 
@@ -344,6 +345,15 @@ export function isOriginAllowed(allowlist: string[], origin: string | null): boo
     host = new URL(origin).host.toLowerCase();
   } catch {
     host = origin.toLowerCase();
+  }
+  try {
+    const appHost = new URL(env.NEXT_PUBLIC_APP_URL).host.toLowerCase();
+    if (host === appHost) return true;
+  } catch {
+    // Ignore malformed app URL; normal allow-list rules still apply.
+  }
+  if (host.startsWith('localhost:') || host.startsWith('127.0.0.1:') || host === 'localhost') {
+    return true;
   }
   return allowlist.some((d) => {
     const dom = d.trim().toLowerCase().replace(/^https?:\/\//, '').replace(/\/$/, '');

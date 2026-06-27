@@ -11,7 +11,7 @@
  *   data-api      API base URL (default: origin of this script's src)
  *   data-color    primary color (default #045fff)
  *   data-position right | left (default right)
- *   data-title    header title (default "Switch & Save Assistant")
+ *   data-title    header title (default "Website Assistant")
  *   data-welcome  welcome message (default customer support/sales greeting)
  *   data-lang     en | ar | auto (default auto)
  */
@@ -48,10 +48,10 @@
     api: (script.getAttribute('data-api') || deriveApiOrigin()).replace(/\/+$/, ''),
     color: script.getAttribute('data-color') || '#045fff',
     position: script.getAttribute('data-position') === 'left' ? 'left' : 'right',
-    title: script.getAttribute('data-title') || 'Switch & Save Assistant',
+    title: script.getAttribute('data-title') || 'Website Assistant',
     welcome:
       script.getAttribute('data-welcome') ||
-      'Hi, I can help with EPOS systems, card machines, pricing, demos, and support. What would you like to sort out today?',
+      'Hi, I can help with services, pricing, appointments, orders, and support. What would you like to sort out today?',
     lang: script.getAttribute('data-lang') || 'auto',
     autoOpen: script.getAttribute('data-auto-open') === 'true',
     autoOpenDelaySeconds: Number(script.getAttribute('data-auto-open-delay') || 3)
@@ -98,12 +98,12 @@
     ,quickActions: [],
     configLoaded: false,
     activeForm: null,
-    agentLabel: 'Julie',
+    agentLabel: 'Team',
     agentAvatarUrl: null,
     launcherIcon: 'chat',
-    onlineLabel: 'Julie is replying - live',
+    onlineLabel: 'Team is replying - live',
     offlineLabel: 'Replying soon',
-    typingLabel: 'Julie is typing',
+    typingLabel: 'Team is typing',
     footerBranding: null,
     proactiveMessage: null,
     autoOpen: cfg.autoOpen,
@@ -153,9 +153,9 @@
       '.' + P + 'row.' + P + 'me{justify-content:flex-end}',
       '.' + P + 'row.' + P + 'them{justify-content:flex-start}',
       '.' + P + 'row.' + P + 'sys{justify-content:center}',
-      '.' + P + 'avatar{width:24px;height:24px;border-radius:50%;background:' + cfg.color + ';color:#fff;display:none;align-items:center;justify-content:center;font-size:11px;font-weight:700;margin-right:6px;align-self:flex-end;overflow:hidden;flex:0 0 auto}',
+      '.' + P + 'avatar{width:30px;height:30px;border-radius:50%;background:' + cfg.color + ';color:#fff;display:none;align-items:center;justify-content:center;font-size:10px;font-weight:800;margin-right:8px;align-self:flex-end;overflow:hidden;flex:0 0 auto;box-shadow:0 3px 10px rgba(15,23,42,.12);letter-spacing:.1px}',
       '.' + P + 'avatar img{width:100%;height:100%;object-fit:cover}',
-      '.' + P + 'them .' + P + 'avatar{display:none}',
+      '.' + P + 'them .' + P + 'avatar{display:flex}',
       '.' + P + 'bubble{max-width:86%;padding:14px 15px;border-radius:14px;font-size:15px;line-height:1.48;white-space:pre-wrap;word-wrap:break-word;overflow-wrap:anywhere;box-shadow:0 1px 2px rgba(15,23,42,.08)}',
       '.' + P + 'me .' + P + 'bubble{background:' + cfg.color + ';color:#fff;border-bottom-right-radius:5px}',
       '.' + P + 'them .' + P + 'bubble{background:#fff;color:#172033;border:1px solid #e6edf5;border-bottom-left-radius:5px}',
@@ -340,14 +340,14 @@
     if (kind === 'them') {
       var avatar = document.createElement('div');
       avatar.className = P + 'avatar';
-      avatar.title = state.agentLabel || 'AI Assistant';
+      avatar.title = state.agentLabel || 'Assistant';
       if (state.agentAvatarUrl) {
         var img = document.createElement('img');
         img.src = state.agentAvatarUrl;
         img.alt = '';
         avatar.appendChild(img);
       } else {
-        avatar.textContent = (state.agentLabel || 'AI').slice(0, 2).toUpperCase();
+        avatar.textContent = initials(cfg.title || state.agentLabel || 'AI');
       }
       row.appendChild(avatar);
     }
@@ -624,7 +624,7 @@
     typingRow = document.createElement('div');
     typingRow.className = P + 'row ' + P + 'them';
     typingRow.innerHTML =
-      '<div><div class="' + P + 'typing-label">' + escapeHtml(state.typingLabel || 'Assistant is typing') + '</div><div class="' + P + 'typing"><span></span><span></span><span></span></div></div>';
+      '<div><div class="' + P + 'typing-label">' + escapeHtml(state.typingLabel || 'Team is typing') + '</div><div class="' + P + 'typing"><span></span><span></span><span></span></div></div>';
     els.msgs.appendChild(typingRow);
     scrollDown();
   }
@@ -969,20 +969,44 @@
     })
       .then(function (res) {
         if (!res.ok || !res.body) {
-          throw new Error('bad_response_' + res.status);
+          return res.text().then(function (body) {
+            var code = 'bad_response_' + res.status;
+            try {
+              var parsed = JSON.parse(body || '{}');
+              if (parsed && parsed.error) code = parsed.error;
+            } catch (e) {}
+            throw new Error(code);
+          });
         }
         return consumeStream(res.body.getReader());
       })
-      .catch(function () {
+      .catch(function (err) {
         hideTyping();
         if (!state.currentBotBubble) {
-          addBubble('them', 'Sorry, something went wrong. Please try again.');
+          addBubble('them', friendlyErrorMessage(err));
         }
       })
       .then(function () {
         setSending(false);
         els.input.focus();
       });
+  }
+
+  function friendlyErrorMessage(err) {
+    var code = err && err.message ? String(err.message) : '';
+    if (code === 'domain_not_allowed') {
+      return 'This website is not enabled for the assistant yet. Please add this domain in the widget settings.';
+    }
+    if (code === 'bot_not_found') {
+      return 'This assistant is not available. Please check the widget embed code.';
+    }
+    if (code === 'internal_assistant_not_available_on_widget') {
+      return 'This assistant is for internal help desk use and cannot be used on the customer website widget.';
+    }
+    if (code === 'rate_limited') {
+      return 'Too many messages were sent quickly. Please try again in a moment.';
+    }
+    return 'Sorry, something went wrong. Please try again.';
   }
 
   function consumeStream(reader) {

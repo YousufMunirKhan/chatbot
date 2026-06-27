@@ -31,7 +31,7 @@ export function TestAssistant() {
       </CardHeader>
       <CardContent className="space-y-3">
         <form action={action} className="flex flex-col gap-2 sm:flex-row">
-          <Input name="question" placeholder="e.g. How much is the retail EPOS?" className="flex-1" />
+          <Input name="question" placeholder="e.g. How much is your starter package?" className="flex-1" />
           <AskButton />
         </form>
         {state.error ? <p className="text-sm text-destructive">{state.error}</p> : null}

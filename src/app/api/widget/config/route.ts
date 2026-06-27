@@ -63,18 +63,24 @@ export async function GET(req: Request) {
     {
       bot: {
         name: bot.name,
-        title: (appearance.title as string) || bot.name || 'Chat with us',
-        welcomeMessage: (appearance.welcomeMessage as string) || 'Hi! How can I help you today?',
+        title: (appearance.title as string) || bot.name || 'Website Assistant',
+        welcomeMessage:
+          (appearance.welcomeMessage as string) ||
+          'Hi, I can help with services, pricing, appointments, orders, and support. What would you like to sort out today?',
         primaryColor: (appearance.primaryColor as string) || null,
         position: (appearance.position as string) || 'right',
-        agentLabel: (appearance.agentLabel as string) || 'AI Assistant',
+        agentLabel: (appearance.agentLabel as string) || 'Team',
         agentAvatarUrl: (appearance.agentAvatarUrl as string) || null,
         launcherIcon: (appearance.launcherIcon as string) || 'chat',
-        onlineLabel: (appearance.onlineLabel as string) || 'Online now',
+        onlineLabel: (appearance.onlineLabel as string) || 'Team is replying - live',
         offlineLabel: (appearance.offlineLabel as string) || 'Replying soon',
-        typingLabel: (appearance.typingLabel as string) || 'Assistant is typing',
-        footerBranding: (appearance.footerBranding as string) || null,
-        proactiveMessage: (appearance.proactiveMessage as string) || null,
+        typingLabel: (appearance.typingLabel as string) || 'Team is typing',
+        footerBranding:
+          (appearance.footerBranding as string) ||
+          'AI assistant may be inaccurate. We may use messages and contact details to respond to your enquiry.',
+        proactiveMessage:
+          (appearance.proactiveMessage as string) ||
+          'Need help choosing the right option? I can guide you in under a minute.',
         autoOpen: Boolean(appearance.autoOpen),
         autoOpenOnce: appearance.autoOpenOnce !== false,
         autoOpenDelaySeconds: Number(appearance.autoOpenDelaySeconds ?? 3),

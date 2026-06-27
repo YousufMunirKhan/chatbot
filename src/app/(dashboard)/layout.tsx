@@ -44,10 +44,11 @@ const AGENT_NAV: NavSection = {
   ],
 };
 
-async function companyHasInternalWorkspace(user: SessionUser): Promise<boolean> {
-  if (!user.companyId) return false;
+async function companyShellFor(user: SessionUser): Promise<{ nav: NavSection; brand: string }> {
+  if (!user.companyId) return { nav: { group: 'Company', items: COMPANY_ADMIN_NAV_ITEMS }, brand: 'Company' };
   const sb = createSupabaseServiceClient();
-  const [{ data: internalBot }, { data: connector }] = await Promise.all([
+  const [{ data: company }, { data: internalBot }, { data: connector }] = await Promise.all([
+    sb.from('companies').select('name').eq('id', user.companyId).maybeSingle(),
     sb
       .from('bots')
       .select('id')
@@ -64,11 +65,7 @@ async function companyHasInternalWorkspace(user: SessionUser): Promise<boolean> 
       .maybeSingle(),
   ]);
 
-  return Boolean(internalBot || connector);
-}
-
-async function companyAdminNavFor(user: SessionUser): Promise<NavSection> {
-  const showInternalHelpDesk = await companyHasInternalWorkspace(user).catch(() => false);
+  const showInternalHelpDesk = Boolean(internalBot || connector);
   const items = showInternalHelpDesk
     ? [
         ...COMPANY_ADMIN_NAV_ITEMS.slice(0, 4),
@@ -76,20 +73,25 @@ async function companyAdminNavFor(user: SessionUser): Promise<NavSection> {
         ...COMPANY_ADMIN_NAV_ITEMS.slice(4),
       ]
     : COMPANY_ADMIN_NAV_ITEMS;
-  return { group: 'Company', items };
+  return { nav: { group: 'Company', items }, brand: company?.name ?? 'Company' };
 }
 
 export default async function DashboardLayout({ children }: { children: React.ReactNode }) {
   const user = await requireUser();
-  const companyNav = await companyAdminNavFor(user);
+  const companyShell = await companyShellFor(user).catch(() => ({
+    nav: { group: 'Company', items: COMPANY_ADMIN_NAV_ITEMS },
+    brand: 'Company',
+  }));
 
   const sections: NavSection[] = user.impersonation
-    ? [companyNav]
+    ? [companyShell.nav]
     : user.isSuperAdmin
       ? [PLATFORM_NAV]
       : user.role === ROLES.AGENT
       ? [AGENT_NAV]
-      : [companyNav];
+      : [companyShell.nav];
+
+  const brand = user.isSuperAdmin && !user.impersonation ? 'Switch & Save' : companyShell.brand;
 
   const roleLabel = user.impersonation
     ? `Impersonating ${user.impersonation.companyName ?? 'company'}`
@@ -103,7 +105,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
 
   return (
     <div className="flex min-h-screen">
-      <DesktopSidebar sections={sections} brand="Switch & Save" />
+      <DesktopSidebar sections={sections} brand={brand} />
 
       <div className="min-w-0 flex-1">
         {user.impersonation ? (
@@ -119,7 +121,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
         ) : null}
         <header className="flex h-14 items-center justify-between gap-3 border-b px-4 sm:px-6">
           <div className="flex min-w-0 items-center gap-3">
-            <MobileNav sections={sections} brand="Switch & Save" />
+            <MobileNav sections={sections} brand={brand} />
             <span className="truncate text-sm text-muted-foreground">{roleLabel}</span>
           </div>
           <div className="flex items-center gap-3">

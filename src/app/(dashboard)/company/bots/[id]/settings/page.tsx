@@ -44,7 +44,7 @@ export default async function BotSettingsPage({ params }: { params: { id: string
           <CardTitle>Configuration</CardTitle>
         </CardHeader>
         <CardContent>
-          <BotForm action={updateBotAction} bot={bot} submitLabel="Save changes" />
+          <BotForm action={updateBotAction} bot={bot} companyName={company.name} submitLabel="Save changes" />
         </CardContent>
       </Card>
 

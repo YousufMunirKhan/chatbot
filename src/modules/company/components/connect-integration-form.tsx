@@ -15,6 +15,13 @@ const selectCls =
 
 type Provider = 'woocommerce' | 'shopify' | 'custom_api' | 'google_calendar';
 
+const PROVIDER_HELP: Record<Provider, string> = {
+  woocommerce: 'Connect a WordPress shop that uses WooCommerce. This syncs products, prices, stock, customers, and orders.',
+  shopify: 'Connect a Shopify store with an Admin API access token. This syncs products, inventory, customers, and orders.',
+  custom_api: 'Use this for .NET, Android/POS, ERP, CRM, or any custom system that can expose the required API endpoints.',
+  google_calendar: 'Use this only for appointment availability and calendar booking support.',
+};
+
 function Submit() {
   const { pending } = useFormStatus();
   return (
@@ -34,11 +41,12 @@ export function ConnectIntegrationForm() {
         <div className="space-y-1.5">
           <Label htmlFor="provider">Provider</Label>
           <select id="provider" name="provider" className={selectCls} value={provider} onChange={(event) => setProvider(event.target.value as Provider)}>
-            <option value="woocommerce">WooCommerce</option>
-            <option value="shopify">Shopify</option>
+            <option value="woocommerce">WordPress / WooCommerce</option>
+            <option value="shopify">Shopify store</option>
             <option value="custom_api">Custom API</option>
             <option value="google_calendar">Google Calendar</option>
           </select>
+          <p className="text-xs text-muted-foreground">{PROVIDER_HELP[provider]}</p>
         </div>
         <div className="space-y-1.5">
           <Label htmlFor="name">Connection name *</Label>
@@ -50,8 +58,8 @@ export function ConnectIntegrationForm() {
         {provider === 'woocommerce' ? (
           <>
             <div className="space-y-1.5">
-              <Label htmlFor="base_url">Store URL</Label>
-              <Input id="base_url" name="base_url" type="url" placeholder="https://store.com" />
+              <Label htmlFor="base_url">WordPress store URL</Label>
+              <Input id="base_url" name="base_url" type="url" placeholder="https://yourwordpressstore.com" />
             </div>
             <div className="space-y-1.5">
               <Label htmlFor="consumer_key">Consumer key</Label>

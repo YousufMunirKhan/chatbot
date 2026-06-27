@@ -118,17 +118,17 @@ const DEFAULT_CUSTOMER_CAPABILITIES = new Set([
 ]);
 
 const CUSTOMER_DEFAULTS = {
-  name: 'Switch & Save Assistant',
-  title: 'Switch & Save Assistant',
+  name: 'Website Assistant',
+  title: 'Website Assistant',
   welcomeMessage:
-    'Hi, I can help with EPOS systems, card machines, pricing, demos, and support. What would you like to sort out today?',
-  agentLabel: 'Julie',
-  onlineLabel: 'Julie is replying - live',
+    'Hi, I can help with services, pricing, appointments, orders, and support. What would you like to sort out today?',
+  agentLabel: 'Team',
+  onlineLabel: 'Team is replying - live',
   offlineLabel: 'Replying soon',
-  typingLabel: 'Julie is typing',
+  typingLabel: 'Team is typing',
   footerBranding:
     'AI assistant may be inaccurate. We may use messages and contact details to respond to your enquiry.',
-  proactiveMessage: 'Need help choosing the right EPOS or card machine? I can guide you in under a minute.',
+  proactiveMessage: 'Need help choosing the right option? I can guide you in under a minute.',
   primaryColor: '#045fff',
 };
 
@@ -176,10 +176,12 @@ function SubmitButton({ label }: { label: string }) {
 export function BotForm({
   action,
   bot,
+  companyName,
   submitLabel,
 }: {
   action: ActionFn;
   bot?: BotRow;
+  companyName?: string;
   submitLabel: string;
 }) {
   const [state, formAction] = useFormState(action, initial);
@@ -189,6 +191,10 @@ export function BotForm({
     initialAudience,
   );
   const copyDefaults = assistantAudience === 'internal' ? INTERNAL_DEFAULTS : CUSTOMER_DEFAULTS;
+  const assistantNameFallback =
+    assistantAudience === 'internal'
+      ? `${companyName ?? 'Internal'} Help Desk`
+      : `${companyName ?? 'Website'} Assistant`;
   const capabilityOptions =
     assistantAudience === 'internal' ? INTERNAL_CAPABILITIES : CUSTOMER_CAPABILITIES;
   const [primaryColor, setPrimaryColor] = useState(
@@ -252,8 +258,8 @@ export function BotForm({
               id="name"
               name="name"
               required
-              defaultValue={bot?.name ?? ''}
-              placeholder={copyDefaults.name}
+              defaultValue={bot?.name ?? assistantNameFallback}
+              placeholder={assistantNameFallback}
             />
           </div>
           <div className="space-y-1.5">
@@ -336,8 +342,8 @@ export function BotForm({
             <Input
               id="title"
               name="title"
-              defaultValue={readNonEmptyString(appearance.title, bot?.name ?? copyDefaults.title)}
-              placeholder={copyDefaults.title}
+              defaultValue={readNonEmptyString(appearance.title, bot?.name ?? assistantNameFallback)}
+              placeholder={assistantNameFallback}
             />
           </div>
           <div className="space-y-1.5">

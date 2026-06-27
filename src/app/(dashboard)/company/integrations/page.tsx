@@ -48,7 +48,7 @@ export default async function CompanyIntegrationsPage() {
       <div>
         <h1 className="text-2xl font-semibold">Integrations &amp; Sync</h1>
         <p className="text-sm text-muted-foreground">
-          Connect WooCommerce, Shopify, Custom API, or CSV to keep products, prices, stock, orders, and customers available to the assistant.
+          Connect WordPress/WooCommerce, Shopify, Custom API, Google Calendar, or CSV so the assistant can answer from current business data.
         </p>
       </div>
 
@@ -61,10 +61,14 @@ export default async function CompanyIntegrationsPage() {
         <CardHeader>
           <CardTitle>How custom systems connect</CardTitle>
         </CardHeader>
-        <CardContent className="grid gap-3 text-sm text-muted-foreground md:grid-cols-3">
+        <CardContent className="grid gap-3 text-sm text-muted-foreground md:grid-cols-2 xl:grid-cols-4">
           <div className="rounded-md border p-3">
-            <p className="font-medium text-foreground">WooCommerce / Shopify</p>
-            <p className="mt-1">Sync products, variants, inventory, customers, orders, and order items from store APIs.</p>
+            <p className="font-medium text-foreground">WordPress/WooCommerce</p>
+            <p className="mt-1">For WordPress shops using WooCommerce. Sync products, prices, stock, customers, and orders.</p>
+          </div>
+          <div className="rounded-md border p-3">
+            <p className="font-medium text-foreground">Shopify</p>
+            <p className="mt-1">Sync Shopify products, variants, inventory, customers, orders, and order items.</p>
           </div>
           <div className="rounded-md border p-3">
             <p className="font-medium text-foreground">Custom REST API</p>

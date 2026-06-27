@@ -233,8 +233,8 @@ export function ServiceForm({ defaultCurrency }: { defaultCurrency: string }) {
     <form action={action} className="space-y-4">
       <div className="grid gap-4 lg:grid-cols-4">
         <div className="space-y-1.5">
-          <Label htmlFor="serviceName">Service name</Label>
-          <Input id="serviceName" name="name" required />
+          <Label htmlFor="serviceName">Service, product, or appointment option</Label>
+          <Input id="serviceName" name="name" required placeholder="Product demo, installation visit, consultation, support call" />
         </div>
         <div className="space-y-1.5">
           <Label htmlFor="serviceCategory">Offer type</Label>
@@ -268,7 +268,7 @@ export function ServiceForm({ defaultCurrency }: { defaultCurrency: string }) {
           </select>
         </div>
         <div className="space-y-1.5">
-          <Label htmlFor="durationMinutes">Duration</Label>
+          <Label htmlFor="durationMinutes">Typical duration</Label>
           <select id="durationMinutes" name="durationMinutes" className={selectCls} defaultValue="">
             {DURATION_OPTIONS.map((option) => (
               <option key={option.value || 'none'} value={option.value}>
@@ -279,15 +279,15 @@ export function ServiceForm({ defaultCurrency }: { defaultCurrency: string }) {
         </div>
         <label className="mt-7 flex items-center gap-2 text-sm">
           <input name="bookingRequired" type="checkbox" className="h-4 w-4" />
-          Booking required
+          Visitor can request/book this
         </label>
         <div className="space-y-1.5 lg:col-span-4">
-          <Label htmlFor="description">Description</Label>
-          <Textarea id="description" name="description" rows={3} />
+          <Label htmlFor="description">What should the assistant say about it?</Label>
+          <Textarea id="description" name="description" rows={3} placeholder="Who it is for, what is included, and any useful price or package details." />
         </div>
         <div className="space-y-1.5 lg:col-span-4">
-          <Label htmlFor="requirements">Requirements</Label>
-          <Textarea id="requirements" name="requirements" rows={2} />
+          <Label htmlFor="requirements">What should the visitor provide?</Label>
+          <Textarea id="requirements" name="requirements" rows={2} placeholder="For example location, number of tills, current provider, preferred date, or business type." />
         </div>
       </div>
       <StateMessage state={state} />
@@ -304,7 +304,7 @@ export function EditServiceForm({ service, defaultCurrency }: { service: Service
       <input type="hidden" name="id" value={service.id} />
       <div className="grid gap-4 lg:grid-cols-4">
         <div className="space-y-1.5">
-          <Label htmlFor={`serviceName-${service.id}`}>Service name</Label>
+          <Label htmlFor={`serviceName-${service.id}`}>Service, product, or appointment option</Label>
           <Input id={`serviceName-${service.id}`} name="name" required defaultValue={service.name} />
         </div>
         <div className="space-y-1.5">
@@ -337,7 +337,7 @@ export function EditServiceForm({ service, defaultCurrency }: { service: Service
           </select>
         </div>
         <div className="space-y-1.5">
-          <Label htmlFor={`duration-${service.id}`}>Duration</Label>
+          <Label htmlFor={`duration-${service.id}`}>Typical duration</Label>
           <select id={`duration-${service.id}`} name="durationMinutes" className={selectCls} defaultValue={service.durationMinutes ?? ''}>
             {DURATION_OPTIONS.map((option) => (
               <option key={option.value || 'none'} value={option.value}>
@@ -348,14 +348,14 @@ export function EditServiceForm({ service, defaultCurrency }: { service: Service
         </div>
         <label className="mt-7 flex items-center gap-2 text-sm">
           <input name="bookingRequired" type="checkbox" defaultChecked={service.bookingRequired} className="h-4 w-4" />
-          Booking required
+          Visitor can request/book this
         </label>
         <div className="space-y-1.5 lg:col-span-4">
-          <Label htmlFor={`description-${service.id}`}>Description</Label>
+          <Label htmlFor={`description-${service.id}`}>What should the assistant say about it?</Label>
           <Textarea id={`description-${service.id}`} name="description" rows={3} defaultValue={service.description ?? ''} />
         </div>
         <div className="space-y-1.5 lg:col-span-4">
-          <Label htmlFor={`requirements-${service.id}`}>Requirements</Label>
+          <Label htmlFor={`requirements-${service.id}`}>What should the visitor provide?</Label>
           <Textarea id={`requirements-${service.id}`} name="requirements" rows={2} defaultValue={service.requirements ?? ''} />
         </div>
       </div>

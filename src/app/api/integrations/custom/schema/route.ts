@@ -19,19 +19,19 @@ export async function GET() {
     products: [
       {
         id: 'prod_100',
-        title: 'Retail EPOS',
-        description: 'Cloud POS package for retail shops.',
-        category: 'POS',
+        title: 'Starter service package',
+        description: 'Example product or service package.',
+        category: 'Services',
         price: 499,
         currency: 'GBP',
-        sku: 'EPOS-RETAIL',
+        sku: 'SERVICE-STARTER',
         status: 'active',
       },
     ],
     inventory: [
       {
         product_id: 'prod_100',
-        sku: 'EPOS-RETAIL',
+        sku: 'SERVICE-STARTER',
         quantity: 12,
         location: 'Main warehouse',
       },
@@ -60,10 +60,10 @@ export async function GET() {
         placed_at: '2026-06-26T12:00:00Z',
         items: [
           {
-            title: 'Retail EPOS',
+            title: 'Starter service package',
             quantity: 1,
             price: 499,
-            sku: 'EPOS-RETAIL',
+            sku: 'SERVICE-STARTER',
           },
         ],
       },

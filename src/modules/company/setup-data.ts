@@ -91,6 +91,7 @@ export async function getCompanySetupProgress(): Promise<CompanySetupProgress> {
   const hasOrderData = catalog.orders > 0;
   const hasLeadRules = Boolean(memory.profile.leadQualificationRules);
   const hasAppointmentRules = Boolean(memory.profile.appointmentRules);
+  const hasAppointmentAvailability = hasOpenHours || hasAppointmentRules;
   const hasPaymentRules = memory.profile.paymentMethods.length > 0;
   const hasHandoffRules = Boolean(memory.profile.escalationRules);
   const hasTeamForHandoff = members.length > 1 || Boolean(memory.profile.supportEmail || memory.profile.primaryPhone || memory.profile.whatsapp);
@@ -125,14 +126,14 @@ export async function getCompanySetupProgress(): Promise<CompanySetupProgress> {
     },
     {
       key: 'appointment_booking',
-      label: 'Appointment requests',
-      href: '/company/business-data?tab=basics',
+      label: 'Demo / appointment requests',
+      href: '/company/business-data?tab=services',
       checks: [
-        [hasOpenHours, 'Add business hours'],
-        [Boolean(memory.services.length), 'Add bookable services'],
-        [hasAppointmentRules, 'Add appointment rules, duration, or confirmation process'],
+        [Boolean(memory.services.length), 'Add the options visitors can request, for example demo, installation, support visit, or consultation'],
+        [hasAppointmentAvailability, 'Add availability rules, opening hours, or how your team confirms requests'],
+        [hasContact, 'Add phone, email, or WhatsApp so the team can confirm the request'],
       ],
-      test: 'Ask to book a service and confirm the bot collects service, date, time, and contact details.',
+      test: 'Ask to book a demo or appointment and confirm the bot collects the option, date/time preference, and contact details.',
     },
     {
       key: 'help_desk',
@@ -150,7 +151,7 @@ export async function getCompanySetupProgress(): Promise<CompanySetupProgress> {
       href: '/company/integrations',
       checks: [
         [hasCatalogue, 'Connect/import products or menu items'],
-        [hasLiveProductSource, 'Use Shopify, WooCommerce, CSV refresh, Custom API, or a connector for current prices and stock'],
+        [hasLiveProductSource, 'Use Shopify, WordPress/WooCommerce, CSV refresh, Custom API, or a connector for current prices and stock'],
       ],
       test: 'Ask for a product price or availability and confirm the bot does not guess.',
     },
@@ -249,12 +250,12 @@ export async function getCompanySetupProgress(): Promise<CompanySetupProgress> {
       description: 'Select what the assistant can actually do: sales, booking, support, leads, orders, or help desk.',
       href: hasAssistant ? '/company/bots' : '/company/bots/new',
       complete: hasCapabilities,
-      detail: hasCapabilities ? 'Capabilities selected' : 'Choose customer-facing or help desk capabilities',
+      detail: hasCapabilities ? 'Capabilities selected' : 'Choose what customers should be able to do',
     },
     {
       key: 'required-data',
       title: 'Required business data',
-      description: 'Add only the facts needed for selected capabilities: basics, services, FAQs, policies, products, or files.',
+      description: 'Add only the facts needed for selected customer journeys: contact details, offers, appointment options, FAQs, policies, products, or files.',
       href: '/company/business-data',
       complete: hasRequiredData,
       detail: hasRequiredData
