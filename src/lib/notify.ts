@@ -1,5 +1,6 @@
 import { createSupabaseServiceClient } from '@/lib/db/server';
 import { sendEmail } from '@/lib/email';
+import { sendNotificationEvent } from '@/lib/notification-delivery';
 import { dispatchWebhookEvent, NOTIFICATION_TO_EVENT } from '@/lib/webhooks';
 
 /**
@@ -49,7 +50,22 @@ export async function notify(params: {
     });
   }
 
+  await sendNotificationEvent({
+    companyId: params.companyId,
+    eventType: params.type,
+    title: params.title,
+    body: params.body,
+    data: params.data,
+  });
+
   if (params.email) {
+    const { data: deliverySettings } = await sb
+      .from('company_notification_settings')
+      .select('company_id')
+      .eq('company_id', params.companyId)
+      .maybeSingle();
+    if (deliverySettings) return;
+
     // Email each company admin.
     const { data: members } = await sb
       .from('company_users')

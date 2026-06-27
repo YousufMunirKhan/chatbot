@@ -8,7 +8,10 @@ import { logger } from '@/lib/logger';
  * no-ops (logs) so the rest of the system works without an email provider.
  */
 export async function sendEmail(params: {
-  to: string;
+  to: string | string[];
+  cc?: string | string[];
+  bcc?: string | string[];
+  replyTo?: string | null;
   subject: string;
   html: string;
 }): Promise<{ sent: boolean }> {
@@ -27,7 +30,9 @@ export async function sendEmail(params: {
       password: settings.smtpPassword,
       from: formatFrom(settings.fromEmail, settings.fromName),
       to: params.to,
-      replyTo: settings.replyTo,
+      cc: params.cc,
+      bcc: params.bcc,
+      replyTo: params.replyTo ?? settings.replyTo,
       subject: params.subject,
       html: params.html,
     });
@@ -45,9 +50,11 @@ export async function sendEmail(params: {
       body: JSON.stringify({
         from: formatFrom(settings.fromEmail, settings.fromName),
         to: params.to,
+        cc: normalizeAddresses(params.cc),
+        bcc: normalizeAddresses(params.bcc),
         subject: params.subject,
         html: params.html,
-        reply_to: settings.replyTo ?? undefined,
+        reply_to: params.replyTo ?? settings.replyTo ?? undefined,
       }),
     });
     if (!res.ok) {
@@ -63,6 +70,11 @@ export async function sendEmail(params: {
 
 function formatFrom(email: string, name?: string | null): string {
   return name ? `${name} <${email}>` : email;
+}
+
+function normalizeAddresses(value?: string | string[] | null): string[] {
+  if (!value) return [];
+  return (Array.isArray(value) ? value : [value]).map((v) => v.trim()).filter(Boolean);
 }
 
 function encodeBase64(s: string): string {
@@ -107,14 +119,16 @@ function escapeHeader(s: string): string {
   return s.replace(/[\r\n]/g, ' ').trim();
 }
 
-async function sendSmtpEmail(params: {
+export async function sendSmtpEmail(params: {
   host: string;
   port: number;
   secure: boolean;
   username?: string | null;
   password?: string | null;
   from: string;
-  to: string;
+  to: string | string[];
+  cc?: string | string[] | null;
+  bcc?: string | string[] | null;
   replyTo?: string | null;
   subject: string;
   html: string;
@@ -139,12 +153,20 @@ async function sendSmtpEmail(params: {
       await write(socket, encodeBase64(params.password), ['235']);
     }
     const fromEmail = params.from.match(/<([^>]+)>/)?.[1] ?? params.from;
+    const toList = normalizeAddresses(params.to);
+    const ccList = normalizeAddresses(params.cc);
+    const bccList = normalizeAddresses(params.bcc);
+    const recipients = [...toList, ...ccList, ...bccList];
+    if (!recipients.length) throw new Error('SMTP error: no recipients');
     await write(socket, `MAIL FROM:<${fromEmail}>`, ['250']);
-    await write(socket, `RCPT TO:<${params.to}>`, ['250', '251']);
+    for (const recipient of recipients) {
+      await write(socket, `RCPT TO:<${recipient}>`, ['250', '251']);
+    }
     await write(socket, 'DATA', ['354']);
     const headers = [
       `From: ${escapeHeader(params.from)}`,
-      `To: ${escapeHeader(params.to)}`,
+      `To: ${escapeHeader(toList.join(', '))}`,
+      ccList.length ? `Cc: ${escapeHeader(ccList.join(', '))}` : '',
       `Subject: ${escapeHeader(params.subject)}`,
       params.replyTo ? `Reply-To: ${escapeHeader(params.replyTo)}` : '',
       'MIME-Version: 1.0',

@@ -541,7 +541,11 @@ export async function POST(req: Request) {
       } catch (err) {
         logger.error('Chat engine error', {
           companyId: bot.companyId,
+          botId: bot.id,
           conversationId: convo.id,
+          module: 'api_chat',
+          route: '/api/chat',
+          stack: err instanceof Error ? err.stack : undefined,
           error: err instanceof Error ? err.message : String(err),
         });
         send({ type: 'error', value: 'Sorry, something went wrong.' });

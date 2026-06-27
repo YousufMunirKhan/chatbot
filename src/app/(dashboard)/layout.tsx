@@ -20,6 +20,8 @@ const PLATFORM_NAV: NavSection = {
     { href: '/super-admin/companies', label: 'Companies' },
     { href: '/super-admin/billing', label: 'Billing & Plans' },
     { href: '/super-admin/quality', label: 'Quality & Usage' },
+    { href: '/super-admin/notifications', label: 'Notifications' },
+    { href: '/super-admin/error-logs', label: 'Error Logs' },
     { href: '/super-admin/settings', label: 'Settings' },
   ],
 };
@@ -29,6 +31,7 @@ const COMPANY_ADMIN_NAV_ITEMS: NavSection['items'] = [
   { href: '/company/setup', label: 'Setup' },
   { href: '/company/widget', label: 'Website Widget' },
   { href: '/company/inbox', label: 'Inbox' },
+  { href: '/company/notifications', label: 'Notifications' },
   { href: '/company/customers', label: 'Customers' },
   { href: '/company/business-data', label: 'Business Data' },
   { href: '/company/quick-actions', label: 'Quick Actions' },

@@ -9,8 +9,13 @@ type Level = 'debug' | 'info' | 'warn' | 'error';
 
 type Context = Record<string, unknown> & {
   companyId?: string;
+  userId?: string;
+  botId?: string;
   conversationId?: string;
   module?: string;
+  route?: string;
+  statusCode?: number;
+  stack?: string;
 };
 
 const LEVEL_ORDER: Record<Level, number> = { debug: 10, info: 20, warn: 30, error: 40 };
@@ -31,6 +36,26 @@ function emit(level: Level, message: string, context?: Context) {
   if (level === 'error') console.error(line);
   else if (level === 'warn') console.warn(line);
   else console.log(line);
+
+  if (level === 'error' && typeof window === 'undefined') {
+    void import('@/lib/application-errors')
+      .then(({ logAppError }) =>
+        logAppError({
+          companyId: context?.companyId,
+          userId: context?.userId,
+          botId: context?.botId,
+          conversationId: context?.conversationId,
+          source: String(context?.module ?? 'server'),
+          severity: 'error',
+          message,
+          stack: typeof context?.stack === 'string' ? context.stack : null,
+          route: typeof context?.route === 'string' ? context.route : null,
+          statusCode: typeof context?.statusCode === 'number' ? context.statusCode : null,
+          metadata: context,
+        }),
+      )
+      .catch(() => {});
+  }
 }
 
 export const logger = {

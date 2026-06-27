@@ -378,6 +378,21 @@ export function BotForm({
             </p>
           </div>
           <div className="space-y-1.5">
+            <Label htmlFor="avatarMode">Default avatar style</Label>
+            <select
+              id="avatarMode"
+              name="avatarMode"
+              className={selectCls}
+              defaultValue={(appearance.avatarMode as string) ?? 'initials'}
+            >
+              <option value="initials">Initials</option>
+              <option value="headset">Headset</option>
+              <option value="chat">Chat bubble</option>
+              <option value="spark">Spark</option>
+              <option value="image">Use avatar image</option>
+            </select>
+          </div>
+          <div className="space-y-1.5">
             <Label htmlFor="launcherIcon">Launcher icon</Label>
             <select
               id="launcherIcon"
@@ -386,8 +401,44 @@ export function BotForm({
               defaultValue={(appearance.launcherIcon as string) ?? 'chat'}
             >
               <option value="chat">Chat</option>
+              <option value="headset">Headset</option>
               <option value="spark">Spark</option>
               <option value="help">Help</option>
+              <option value="question">Question</option>
+              <option value="initials">Initials</option>
+              <option value="custom">Custom image</option>
+            </select>
+          </div>
+          <div className="space-y-1.5">
+            <Label htmlFor="launcherLabel">Launcher label</Label>
+            <Input
+              id="launcherLabel"
+              name="launcherLabel"
+              defaultValue={readString(appearance.launcherLabel)}
+              placeholder="Chat with us"
+            />
+          </div>
+          <div className="space-y-1.5">
+            <Label htmlFor="launcherImageUrl">Launcher image URL</Label>
+            <Input
+              id="launcherImageUrl"
+              name="launcherImageUrl"
+              type="url"
+              defaultValue={readString(appearance.launcherImageUrl)}
+              placeholder="Optional image URL for custom launcher icon"
+            />
+          </div>
+          <div className="space-y-1.5">
+            <Label htmlFor="launcherDotMode">Launcher alert dot</Label>
+            <select
+              id="launcherDotMode"
+              name="launcherDotMode"
+              className={selectCls}
+              defaultValue={(appearance.launcherDotMode as string) ?? 'unread'}
+            >
+              <option value="unread">Show by default</option>
+              <option value="always">Always show</option>
+              <option value="hidden">Hide</option>
             </select>
           </div>
           <div className="space-y-1.5">
@@ -460,12 +511,44 @@ export function BotForm({
             </div>
           </div>
           <div className="space-y-1.5">
+            <Label htmlFor="headerTextColor">Header text color</Label>
+            <Input
+              id="headerTextColor"
+              name="headerTextColor"
+              type="color"
+              defaultValue={safeColor(appearance.headerTextColor || '#ffffff')}
+              className="h-10 w-16 cursor-pointer p-1"
+            />
+          </div>
+          <div className="space-y-1.5">
+            <Label htmlFor="launcherDotColor">Alert dot color</Label>
+            <Input
+              id="launcherDotColor"
+              name="launcherDotColor"
+              type="color"
+              defaultValue={safeColor(appearance.launcherDotColor || '#ef4444')}
+              className="h-10 w-16 cursor-pointer p-1"
+            />
+          </div>
+          <div className="space-y-1.5">
+            <Label htmlFor="headerStyle">Header style</Label>
+            <select
+              id="headerStyle"
+              name="headerStyle"
+              className={selectCls}
+              defaultValue={(appearance.headerStyle as string) ?? 'solid'}
+            >
+              <option value="solid">Solid</option>
+              <option value="gradient">Soft gradient</option>
+            </select>
+          </div>
+          <div className="space-y-1.5">
             <Label htmlFor="launcherStyle">Launcher style</Label>
             <select
               id="launcherStyle"
               name="launcherStyle"
               className={selectCls}
-              defaultValue={(appearance.launcherStyle as string) ?? 'circle'}
+              defaultValue={(appearance.launcherStyle as string) ?? 'pill'}
             >
               <option value="circle">Circle</option>
               <option value="pill">Pill with label</option>

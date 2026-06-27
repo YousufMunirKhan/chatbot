@@ -394,3 +394,95 @@ export async function listAuditLogs(limit = 100): Promise<AuditRow[]> {
     };
   });
 }
+
+export type ErrorLogSeverity = 'info' | 'warning' | 'error' | 'critical';
+export type ErrorLogStatus = 'all' | 'open' | 'resolved';
+
+export interface ErrorLogFilters {
+  companyId?: string;
+  severity?: ErrorLogSeverity | 'all';
+  source?: string;
+  status?: ErrorLogStatus;
+  q?: string;
+  limit?: number;
+}
+
+export interface ErrorLogRow {
+  id: string;
+  companyId: string | null;
+  companyName: string | null;
+  userEmail: string | null;
+  botName: string | null;
+  conversationId: string | null;
+  source: string;
+  severity: ErrorLogSeverity;
+  message: string;
+  stack: string | null;
+  route: string | null;
+  statusCode: number | null;
+  fingerprint: string | null;
+  metadata: Record<string, unknown>;
+  resolvedAt: string | null;
+  resolvedByEmail: string | null;
+  createdAt: string;
+}
+
+function normalizeLimit(value: number | undefined, fallback = 150, max = 1000): number {
+  if (!value || !Number.isFinite(value)) return fallback;
+  return Math.max(1, Math.min(max, Math.floor(value)));
+}
+
+export async function listErrorLogs(filters: ErrorLogFilters = {}): Promise<ErrorLogRow[]> {
+  noStore();
+  const sb = createSupabaseServiceClient();
+  let query = sb
+    .from('application_error_logs')
+    .select(
+      'id,company_id,user_id,bot_id,conversation_id,source,severity,message,stack,route,status_code,fingerprint,metadata_json,resolved_at,created_at, companies(name), user:users!application_error_logs_user_id_fkey(email), bots(name), resolved_by_user:users!application_error_logs_resolved_by_fkey(email)',
+    )
+    .order('created_at', { ascending: false })
+    .limit(normalizeLimit(filters.limit));
+
+  if (filters.companyId) query = query.eq('company_id', filters.companyId);
+  if (filters.severity && filters.severity !== 'all') query = query.eq('severity', filters.severity);
+  if (filters.source) query = query.ilike('source', `%${filters.source}%`);
+  if (filters.status === 'open') query = query.is('resolved_at', null);
+  if (filters.status === 'resolved') query = query.not('resolved_at', 'is', null);
+  if (filters.q) query = query.or(`message.ilike.%${filters.q}%,route.ilike.%${filters.q}%,source.ilike.%${filters.q}%`);
+
+  const { data, error } = await query;
+  if (error) throw error;
+  return (data ?? []).map((row) => {
+    const x = row as Record<string, unknown>;
+    return {
+      id: x.id as string,
+      companyId: (x.company_id as string) ?? null,
+      companyName: (rec(x.companies).name as string) ?? null,
+      userEmail: (rec(x.user).email as string) ?? null,
+      botName: (rec(x.bots).name as string) ?? null,
+      conversationId: (x.conversation_id as string) ?? null,
+      source: x.source as string,
+      severity: x.severity as ErrorLogSeverity,
+      message: x.message as string,
+      stack: (x.stack as string) ?? null,
+      route: (x.route as string) ?? null,
+      statusCode: (x.status_code as number) ?? null,
+      fingerprint: (x.fingerprint as string) ?? null,
+      metadata: (x.metadata_json as Record<string, unknown>) ?? {},
+      resolvedAt: (x.resolved_at as string) ?? null,
+      resolvedByEmail: (rec(x.resolved_by_user).email as string) ?? null,
+      createdAt: x.created_at as string,
+    };
+  });
+}
+
+export async function listErrorLogCompanies(): Promise<Array<{ id: string; name: string }>> {
+  noStore();
+  const sb = createSupabaseServiceClient();
+  const { data, error } = await sb
+    .from('companies')
+    .select('id,name')
+    .order('name', { ascending: true });
+  if (error) throw error;
+  return (data ?? []).map((row) => ({ id: row.id as string, name: row.name as string }));
+}

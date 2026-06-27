@@ -100,7 +100,14 @@
     activeForm: null,
     agentLabel: 'Team',
     agentAvatarUrl: null,
+    avatarMode: 'initials',
     launcherIcon: 'chat',
+    launcherImageUrl: null,
+    launcherLabel: null,
+    launcherDotMode: 'unread',
+    launcherDotColor: '#ef4444',
+    headerTextColor: '#ffffff',
+    headerStyle: 'solid',
     onlineLabel: 'Team is replying - live',
     offlineLabel: 'Replying soon',
     typingLabel: 'Team is typing',
@@ -128,9 +135,14 @@
     var css = [
       '.' + P + 'root,.' + P + 'root *{box-sizing:border-box;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif}',
       '.' + P + 'launcher{position:fixed;bottom:20px;z-index:2147483000;width:60px;height:60px;border-radius:50%;border:none;cursor:pointer;box-shadow:0 12px 34px rgba(17,24,39,.22);background:' + cfg.color + ';color:#fff;display:flex;align-items:center;justify-content:center;transition:transform .15s ease,box-shadow .15s ease}',
+      '.' + P + 'launcher{overflow:visible}',
       '.' + P + 'launcher.' + P + 'pill{width:auto;min-width:64px;padding:0 16px;border-radius:999px;gap:8px;font-size:14px;font-weight:600}',
       '.' + P + 'launcher-label{display:none}',
       '.' + P + 'pill .' + P + 'launcher-label{display:inline}',
+      '.' + P + 'launcher-dot{position:absolute;right:2px;top:2px;width:16px;height:16px;border-radius:50%;background:#ef4444;border:3px solid #fff;box-shadow:0 5px 12px rgba(15,23,42,.24)}',
+      '.' + P + 'pill .' + P + 'launcher-dot{right:-2px;top:-2px}',
+      '.' + P + 'launcher-img{width:28px;height:28px;border-radius:50%;object-fit:cover}',
+      '.' + P + 'launcher-initials{font-size:13px;font-weight:900;letter-spacing:0}',
       '.' + P + 'launcher:hover{transform:translateY(-1px) scale(1.04);box-shadow:0 16px 42px rgba(17,24,39,.28)}',
       '.' + P + 'launcher svg{width:28px;height:28px;fill:#fff}',
       '.' + P + 'pos-right{right:20px}',
@@ -141,6 +153,7 @@
       '.' + P + 'head-left{display:flex;align-items:center;gap:12px;min-width:0}',
       '.' + P + 'head-avatar{width:42px;height:42px;border-radius:50%;background:rgba(255,255,255,.18);border:1px solid rgba(255,255,255,.28);color:#fff;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:800;letter-spacing:.2px;overflow:hidden;flex:0 0 auto;box-shadow:inset 0 1px 0 rgba(255,255,255,.2)}',
       '.' + P + 'head-avatar img{width:100%;height:100%;object-fit:cover}',
+      '.' + P + 'head-avatar svg{width:24px;height:24px;fill:currentColor}',
       '.' + P + 'header h3{margin:0;font-size:16px;font-weight:800;line-height:1.15;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:245px}',
       '.' + P + 'status{font-size:12px;font-weight:700;opacity:.95;margin-top:4px;display:flex;align-items:center;gap:6px;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}',
       '.' + P + 'status:before{content:"";width:9px;height:9px;border-radius:50%;background:#22c55e;box-shadow:0 0 0 3px rgba(34,197,94,.18);flex:0 0 auto}',
@@ -155,6 +168,7 @@
       '.' + P + 'row.' + P + 'sys{justify-content:center}',
       '.' + P + 'avatar{width:30px;height:30px;border-radius:50%;background:' + cfg.color + ';color:#fff;display:none;align-items:center;justify-content:center;font-size:10px;font-weight:800;margin-right:8px;align-self:flex-end;overflow:hidden;flex:0 0 auto;box-shadow:0 3px 10px rgba(15,23,42,.12);letter-spacing:.1px}',
       '.' + P + 'avatar img{width:100%;height:100%;object-fit:cover}',
+      '.' + P + 'avatar svg{width:18px;height:18px;fill:currentColor}',
       '.' + P + 'them .' + P + 'avatar{display:flex}',
       '.' + P + 'bubble{max-width:86%;padding:14px 15px;border-radius:14px;font-size:15px;line-height:1.48;white-space:pre-wrap;word-wrap:break-word;overflow-wrap:anywhere;box-shadow:0 1px 2px rgba(15,23,42,.08)}',
       '.' + P + 'me .' + P + 'bubble{background:' + cfg.color + ';color:#fff;border-bottom-right-radius:5px}',
@@ -244,7 +258,7 @@
     launcher.type = 'button';
     launcher.className = P + 'launcher ' + P + 'pos-' + cfg.position;
     launcher.setAttribute('aria-label', cfg.title);
-    launcher.innerHTML = launcherSvg(state.launcherIcon) + '<span class="' + P + 'launcher-label">' + escapeHtml(cfg.title) + '</span>';
+    launcher.innerHTML = launcherMarkup();
 
     var win = document.createElement('div');
     win.className = P + 'window ' + P + 'pos-' + cfg.position;
@@ -315,7 +329,7 @@
     root.appendChild(win);
     document.body.appendChild(root);
 
-    els = { root: root, launcher: launcher, win: win, msgs: msgs, actions: actions, form: form, brand: brand, input: input, send: send, title: h3, status: status, headAvatar: headAvatar };
+    els = { root: root, launcher: launcher, win: win, header: header, msgs: msgs, actions: actions, form: form, brand: brand, input: input, send: send, title: h3, status: status, headAvatar: headAvatar };
     applyWidgetAppearance();
 
     launcher.addEventListener('click', toggle);
@@ -341,11 +355,13 @@
       var avatar = document.createElement('div');
       avatar.className = P + 'avatar';
       avatar.title = state.agentLabel || 'Assistant';
-      if (state.agentAvatarUrl) {
+      if (state.avatarMode === 'image' && state.agentAvatarUrl) {
         var img = document.createElement('img');
         img.src = state.agentAvatarUrl;
         img.alt = '';
         avatar.appendChild(img);
+      } else if (state.avatarMode === 'headset' || state.avatarMode === 'chat' || state.avatarMode === 'spark') {
+        avatar.innerHTML = launcherSvg(state.avatarMode);
       } else {
         avatar.textContent = initials(cfg.title || state.agentLabel || 'AI');
       }
@@ -376,6 +392,25 @@
     });
   }
 
+  function reportClientError(message, metadata) {
+    try {
+      fetch(cfg.api + '/api/client-errors', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          publicBotId: cfg.botId,
+          visitorId: visitorId,
+          conversationId: conversationId || undefined,
+          source: 'widget',
+          severity: 'error',
+          message: String(message || 'Widget error'),
+          route: window.location.href,
+          metadata: metadata || {}
+        })
+      }).catch(function () {});
+    } catch (e) {}
+  }
+
   function loadWidgetConfig(context) {
     var url =
       cfg.api +
@@ -402,7 +437,14 @@
           if (data.bot.primaryColor && !script.getAttribute('data-color')) cfg.color = data.bot.primaryColor;
           state.agentLabel = data.bot.agentLabel || state.agentLabel;
           state.agentAvatarUrl = data.bot.agentAvatarUrl || null;
+          state.avatarMode = data.bot.avatarMode || state.avatarMode;
           state.launcherIcon = data.bot.launcherIcon || state.launcherIcon;
+          state.launcherImageUrl = data.bot.launcherImageUrl || null;
+          state.launcherLabel = data.bot.launcherLabel || null;
+          state.launcherDotMode = data.bot.launcherDotMode || state.launcherDotMode;
+          state.launcherDotColor = data.bot.launcherDotColor || state.launcherDotColor;
+          state.headerTextColor = data.bot.headerTextColor || state.headerTextColor;
+          state.headerStyle = data.bot.headerStyle || state.headerStyle;
           state.onlineLabel = data.bot.onlineLabel || state.onlineLabel;
           state.offlineLabel = data.bot.offlineLabel || state.offlineLabel;
           state.typingLabel = data.bot.typingLabel || state.typingLabel;
@@ -421,7 +463,7 @@
           state.bottomOffset = Number(data.bot.bottomOffset || 20);
           state.sideOffset = Number(data.bot.sideOffset || 20);
           state.zIndex = Number(data.bot.zIndex || 2147483000);
-          if (els.launcher) els.launcher.innerHTML = launcherSvg(state.launcherIcon) + '<span class="' + P + 'launcher-label">' + escapeHtml(cfg.title) + '</span>';
+          if (els.launcher) els.launcher.innerHTML = launcherMarkup();
           if (els.status) els.status.textContent = state.onlineLabel;
           if (els.headAvatar) renderHeaderAvatar();
           if (els.brand) {
@@ -434,8 +476,9 @@
         state.quickActions = data.quickActions || [];
         renderQuickActions();
       })
-      .catch(function () {
+      .catch(function (err) {
         state.configLoaded = true;
+        reportClientError('Widget config failed', { error: err && err.message ? err.message : String(err) });
       });
   }
 
@@ -647,9 +690,27 @@
   }
 
   function launcherSvg(kind) {
+    if (kind === 'headset') return '<svg viewBox="0 0 24 24"><path d="M12 3C7 3 3 7 3 12v4c0 1.7 1.3 3 3 3h2v-8H5.1C5.6 7.6 8.5 5 12 5s6.4 2.6 6.9 6H16v8h2.2c-.5 1.2-1.7 2-3.2 2h-2v2h2c3.3 0 6-2.7 6-6v-5c0-5-4-9-9-9z"/></svg>';
     if (kind === 'spark') return '<svg viewBox="0 0 24 24"><path d="M12 2l2.4 6.4L21 11l-6.6 2.6L12 20l-2.4-6.4L3 11l6.6-2.6z"/></svg>';
     if (kind === 'help') return '<svg viewBox="0 0 24 24"><path d="M11 18h2v-2h-2v2zm1-16C6.5 2 2 6 2 11h2c0-3.9 3.6-7 8-7s8 3.1 8 7-3.6 7-8 7v2c5.5 0 10-4 10-9S17.5 2 12 2zm0 4c-2.2 0-4 1.3-4 3h2c0-.6.9-1 2-1s2 .7 2 1.5c0 1.5-3 1.4-3 4.5h2c0-2 3-2.2 3-4.5C16 7.6 14.2 6 12 6z"/></svg>';
+    if (kind === 'question') return '<svg viewBox="0 0 24 24"><path d="M12 2a10 10 0 100 20 10 10 0 000-20zm0 17a1.25 1.25 0 110-2.5A1.25 1.25 0 0112 19zm1.2-5.1v.6h-2v-.8c0-1.2.7-1.9 1.5-2.5.8-.6 1.4-1.1 1.4-2 0-1-.8-1.7-2-1.7-1.1 0-2 .7-2.4 1.8l-1.8-.8C8.6 6.7 10.1 5.5 12 5.5c2.4 0 4.1 1.5 4.1 3.6 0 1.8-1.1 2.7-2 3.4-.6.5-.9.8-.9 1.4z"/></svg>';
     return '<svg viewBox="0 0 24 24"><path d="M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2z"/></svg>';
+  }
+
+  function launcherMarkup() {
+    var label = state.launcherLabel || cfg.title || 'Chat with us';
+    var icon = '';
+    if (state.launcherIcon === 'custom' && state.launcherImageUrl) {
+      icon = '<img class="' + P + 'launcher-img" src="' + escapeHtml(state.launcherImageUrl) + '" alt="">';
+    } else if (state.launcherIcon === 'initials') {
+      icon = '<span class="' + P + 'launcher-initials">' + escapeHtml(initials(label)) + '</span>';
+    } else {
+      icon = launcherSvg(state.launcherIcon);
+    }
+    var dot = state.launcherDotMode === 'hidden'
+      ? ''
+      : '<span class="' + P + 'launcher-dot" style="background:' + escapeHtml(state.launcherDotColor || '#ef4444') + '"></span>';
+    return icon + '<span class="' + P + 'launcher-label">' + escapeHtml(label) + '</span>' + dot;
   }
 
   function initials(text) {
@@ -663,11 +724,23 @@
   function renderHeaderAvatar() {
     if (!els.headAvatar) return;
     els.headAvatar.innerHTML = '';
-    if (state.agentAvatarUrl) {
+    if (state.avatarMode === 'image' && state.agentAvatarUrl) {
       var img = document.createElement('img');
       img.src = state.agentAvatarUrl;
       img.alt = '';
       els.headAvatar.appendChild(img);
+      return;
+    }
+    if (state.avatarMode === 'headset') {
+      els.headAvatar.innerHTML = launcherSvg('headset');
+      return;
+    }
+    if (state.avatarMode === 'chat') {
+      els.headAvatar.innerHTML = launcherSvg('chat');
+      return;
+    }
+    if (state.avatarMode === 'spark') {
+      els.headAvatar.innerHTML = launcherSvg('spark');
       return;
     }
     els.headAvatar.textContent = initials(cfg.title || state.agentLabel || 'AI');
@@ -760,6 +833,14 @@
     els.launcher.style.bottom = 'calc(' + bottom + 'px + env(safe-area-inset-bottom))';
     els.launcher.style.right = state.position === 'left' ? 'auto' : 'calc(' + side + 'px + env(safe-area-inset-right))';
     els.launcher.style.left = state.position === 'left' ? 'calc(' + side + 'px + env(safe-area-inset-left))' : 'auto';
+    els.launcher.style.background = cfg.color;
+    if (els.header) {
+      els.header.style.background =
+        state.headerStyle === 'gradient'
+          ? 'linear-gradient(135deg,' + cfg.color + ',#1d4ed8)'
+          : cfg.color;
+      els.header.style.color = state.headerTextColor || '#ffffff';
+    }
     // NB: the window box (size + position) is applied below, gated by viewport —
     // inline px must NOT be set on mobile or it overrides the full-screen media query.
 
@@ -982,6 +1063,7 @@
       })
       .catch(function (err) {
         hideTyping();
+        reportClientError('Widget chat request failed', { error: err && err.message ? err.message : String(err) });
         if (!state.currentBotBubble) {
           addBubble('them', friendlyErrorMessage(err));
         }
