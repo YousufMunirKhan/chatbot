@@ -3,9 +3,9 @@ import { notFound } from 'next/navigation';
 import { requireRole } from '@/lib/auth';
 import { ROLES } from '@/lib/constants';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { CopyButton } from '@/components/copy-button';
 import { BotForm } from '@/modules/company/components/bot-form';
 import { PromptConfigForm } from '@/modules/company/components/prompt-config-form';
+import { WidgetEmbedInstructions } from '@/modules/company/components/widget-embed-instructions';
 import { updateBotAction } from '@/modules/company/actions';
 import { getBot, getCurrentCompany } from '@/modules/company/data';
 import { loadPromptConfig } from '@/modules/company/prompt';
@@ -74,12 +74,12 @@ export default async function BotSettingsPage({ params }: { params: { id: string
         <CardHeader>
           <CardTitle>Embed snippet</CardTitle>
         </CardHeader>
-        <CardContent className="space-y-3">
-          <p className="text-sm text-muted-foreground">
-            Paste this before <code>&lt;/body&gt;</code> on your website.
-          </p>
-          <pre className="overflow-auto rounded-md bg-muted p-3 text-xs">{embed}</pre>
-          <CopyButton value={embed} label="Copy snippet" />
+        <CardContent>
+          <WidgetEmbedInstructions
+            embed={embed}
+            domainAllowlist={bot.domainAllowlist}
+            settingsHref={`/company/bots/${bot.id}/settings`}
+          />
         </CardContent>
       </Card>
     </div>

@@ -3,8 +3,8 @@ import { requireRole } from '@/lib/auth';
 import { ROLES } from '@/lib/constants';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { CopyButton } from '@/components/copy-button';
 import { listBots } from '@/modules/company/data';
+import { WidgetEmbedInstructions } from '@/modules/company/components/widget-embed-instructions';
 import { env } from '@/lib/env';
 
 export default async function WidgetPage() {
@@ -76,26 +76,11 @@ export default async function WidgetPage() {
                   </p>
                 </div>
 
-                {/* Embed snippet */}
-                <div>
-                  <p className="mb-2 text-sm font-medium">Embed on your website</p>
-                  <pre className="overflow-auto rounded-md bg-muted p-3 text-xs">{embed}</pre>
-                  <div className="mt-2 flex items-center gap-3">
-                    <CopyButton value={embed} label="Copy snippet" />
-                    <span className="text-xs text-muted-foreground">
-                      Paste before &lt;/body&gt; on your site. Allowed domains:{' '}
-                      {b.domainAllowlist.length ? b.domainAllowlist.join(', ') : 'not limited yet'}
-                    </span>
-                  </div>
-                  {b.domainAllowlist.length === 0 ? (
-                    <div className="mt-3 rounded-md border border-amber-200 bg-amber-50 p-3 text-sm text-amber-950">
-                      Add your real website domain before launch so other sites cannot use this widget ID.
-                      <Button asChild size="sm" variant="outline" className="ml-3 bg-white">
-                        <Link href={`/company/bots/${b.id}/settings`}>Add domain</Link>
-                      </Button>
-                    </div>
-                  ) : null}
-                </div>
+                <WidgetEmbedInstructions
+                  embed={embed}
+                  domainAllowlist={b.domainAllowlist}
+                  settingsHref={`/company/bots/${b.id}/settings`}
+                />
               </CardContent>
             </Card>
           );
