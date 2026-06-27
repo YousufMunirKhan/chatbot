@@ -96,11 +96,6 @@ function loadServerEnv() {
     throw new Error(`❌ Invalid server environment variables:\n${format(parsed.error)}`);
   }
   const data = parsed.data;
-  const hasAiProvider =
-    data.OPENAI_API_KEY || data.ANTHROPIC_API_KEY || data.VOYAGE_API_KEY || data.COHERE_API_KEY;
-  if (!hasAiProvider && data.APP_ENV !== 'development') {
-    throw new Error('❌ At least one AI provider key is required (OpenAI/Anthropic/Voyage/Cohere).');
-  }
   return data;
 }
 
