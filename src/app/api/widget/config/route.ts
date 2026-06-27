@@ -23,7 +23,7 @@ function cors(origin: string | null): Record<string, string> {
 function json(obj: unknown, status: number, headers: Record<string, string>) {
   return new Response(JSON.stringify(obj), {
     status,
-    headers: { ...headers, 'Content-Type': 'application/json' },
+    headers: { ...headers, 'Content-Type': 'application/json', 'Cache-Control': 'no-store, max-age=0' },
   });
 }
 
@@ -79,6 +79,7 @@ export async function GET(req: Request) {
         launcherDotColor: (appearance.launcherDotColor as string) || '#ef4444',
         headerTextColor: (appearance.headerTextColor as string) || '#ffffff',
         headerStyle: (appearance.headerStyle as string) || 'solid',
+        widgetVersion: Number(appearance.widgetVersion ?? 0),
         onlineLabel: (appearance.onlineLabel as string) || 'Team is replying - live',
         offlineLabel: (appearance.offlineLabel as string) || 'Replying soon',
         typingLabel: (appearance.typingLabel as string) || 'Team is typing',

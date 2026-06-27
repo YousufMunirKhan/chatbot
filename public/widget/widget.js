@@ -135,6 +135,7 @@
     var css = [
       '.' + P + 'root,.' + P + 'root *{box-sizing:border-box;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif}',
       '.' + P + 'launcher{position:fixed;bottom:20px;z-index:2147483000;width:60px;height:60px;border-radius:50%;border:none;cursor:pointer;box-shadow:0 12px 34px rgba(17,24,39,.22);background:' + cfg.color + ';color:#fff;display:flex;align-items:center;justify-content:center;transition:transform .15s ease,box-shadow .15s ease}',
+      '.' + P + 'root.' + P + 'open .' + P + 'launcher{display:none}',
       '.' + P + 'launcher{overflow:visible}',
       '.' + P + 'launcher.' + P + 'pill{width:auto;min-width:64px;padding:0 16px;border-radius:999px;gap:8px;font-size:14px;font-weight:600}',
       '.' + P + 'launcher-label{display:none}',
@@ -166,14 +167,20 @@
       '.' + P + 'row.' + P + 'me{justify-content:flex-end}',
       '.' + P + 'row.' + P + 'them{justify-content:flex-start}',
       '.' + P + 'row.' + P + 'sys{justify-content:center}',
-      '.' + P + 'avatar{width:30px;height:30px;border-radius:50%;background:' + cfg.color + ';color:#fff;display:none;align-items:center;justify-content:center;font-size:10px;font-weight:800;margin-right:8px;align-self:flex-end;overflow:hidden;flex:0 0 auto;box-shadow:0 3px 10px rgba(15,23,42,.12);letter-spacing:.1px}',
+      '.' + P + 'avatar{width:28px;height:28px;border-radius:50%;background:' + cfg.color + ';color:#fff;display:none;align-items:center;justify-content:center;font-size:10px;font-weight:800;margin-right:8px;align-self:flex-start;overflow:hidden;flex:0 0 auto;box-shadow:0 3px 10px rgba(15,23,42,.12);letter-spacing:.1px}',
       '.' + P + 'avatar img{width:100%;height:100%;object-fit:cover}',
       '.' + P + 'avatar svg{width:18px;height:18px;fill:currentColor}',
       '.' + P + 'them .' + P + 'avatar{display:flex}',
       '.' + P + 'bubble{max-width:86%;padding:14px 15px;border-radius:14px;font-size:15px;line-height:1.48;white-space:pre-wrap;word-wrap:break-word;overflow-wrap:anywhere;box-shadow:0 1px 2px rgba(15,23,42,.08)}',
       '.' + P + 'me .' + P + 'bubble{background:' + cfg.color + ';color:#fff;border-bottom-right-radius:5px}',
-      '.' + P + 'them .' + P + 'bubble{background:#fff;color:#172033;border:1px solid #e6edf5;border-bottom-left-radius:5px}',
+      '.' + P + 'them .' + P + 'bubble{background:#fff;color:#172033;border:1px solid #e6edf5;border-bottom-left-radius:5px;white-space:normal}',
       '.' + P + 'sys .' + P + 'bubble{background:transparent;color:#888;font-size:12px;text-align:center;max-width:100%}',
+      '.' + P + 'bubble p{margin:0 0 10px}',
+      '.' + P + 'bubble p:last-child{margin-bottom:0}',
+      '.' + P + 'bubble ul{margin:0 0 12px 0;padding-left:0;list-style:none;display:flex;flex-direction:column;gap:7px}',
+      '.' + P + 'bubble li{position:relative;padding-left:16px}',
+      '.' + P + 'bubble li:before{content:"";position:absolute;left:0;top:.68em;width:5px;height:5px;border-radius:50%;background:#334155}',
+      '.' + P + 'bubble li strong{font-weight:800}',
       '.' + P + 'bubble strong{font-weight:600}',
       '.' + P + 'bubble a{color:inherit;text-decoration:underline}',
       '.' + P + 'bubble code{background:rgba(0,0,0,.06);border-radius:4px;padding:1px 4px;font-size:90%;font-family:ui-monospace,Menlo,Consolas,monospace}',
@@ -183,7 +190,7 @@
       '.' + P + 'table th,.' + P + 'table td{border:1px solid rgba(0,0,0,.12);padding:4px 8px;text-align:left;white-space:nowrap}',
       '.' + P + 'table th{background:rgba(0,0,0,.04);font-weight:600}',
       '.' + P + 'actions{flex:0 0 auto;display:flex;gap:8px;flex-wrap:wrap;padding:14px 16px 12px;border-top:1px solid #e9eef6;background:#f3f6fb;max-height:128px;overflow-y:auto}',
-      '.' + P + 'action{border:1px solid #cfe0f5;background:#fff;color:' + cfg.color + ';border-radius:999px;padding:10px 14px;font-size:14px;font-weight:800;line-height:1.2;cursor:pointer;max-width:100%;white-space:nowrap;text-align:center;transition:border-color .15s,color .15s,background .15s,box-shadow .15s}',
+      '.' + P + 'action{border:1px solid #cfe0f5;background:#fff;color:' + cfg.color + ';border-radius:999px;padding:9px 13px;font-size:14px;font-weight:700;line-height:1.2;cursor:pointer;max-width:100%;white-space:nowrap;text-align:center;transition:border-color .15s,color .15s,background .15s,box-shadow .15s}',
       '.' + P + 'action:hover{border-color:' + cfg.color + ';color:' + cfg.color + ';background:#f8fbff;box-shadow:0 3px 10px rgba(37,99,235,.12)}',
       '.' + P + 'form{flex:0 0 auto;border-top:1px solid #eee;background:#fff;padding:16px;display:none;gap:12px;flex-direction:column;max-height:78%;overflow-y:auto}',
       '.' + P + 'form.' + P + 'show{display:flex}',
@@ -203,10 +210,11 @@
       '.' + P + 'footer{flex:0 0 auto;display:flex;gap:10px;padding:12px 12px 8px;border-top:1px solid #e9eef6;background:#fff;align-items:center}',
       '.' + P + 'input{flex:1 1 auto;border:1px solid #d7e2ef;border-radius:14px;padding:13px 14px;font-size:15px;outline:none;resize:none;min-width:0;color:#172033}',
       '.' + P + 'input::placeholder{color:#9aa8bb}',
-      '.' + P + 'input:focus{border-color:' + cfg.color + ';box-shadow:0 0 0 3px rgba(37,99,235,.1)}',
+      '.' + P + 'input:focus{border-color:' + cfg.color + ';box-shadow:0 0 0 2px rgba(37,99,235,.12)}',
       '.' + P + 'send{flex:0 0 auto;border:none;background:' + cfg.color + ';color:#fff;width:48px;height:48px;border-radius:14px;cursor:pointer;display:flex;align-items:center;justify-content:center;box-shadow:0 8px 18px rgba(37,99,235,.24)}',
       '.' + P + 'send:disabled{opacity:.5;cursor:not-allowed}',
       '.' + P + 'send svg{width:22px;height:22px;fill:#fff}',
+      '.' + P + 'send svg path{fill:#fff}',
       '.' + P + 'typing{display:flex;gap:4px;padding:11px 14px;background:#e9ebef;border-radius:14px;border-bottom-left-radius:4px;width:auto}',
       '.' + P + 'typing-label{font-size:12px;color:#6b7280;padding:0 4px 4px}',
       '.' + P + 'typing span{width:7px;height:7px;border-radius:50%;background:#9aa0a6;animation:' + P + 'blink 1.2s infinite both}',
@@ -349,7 +357,7 @@
     row.className = P + 'row ' + P + kind; // me | them | sys
     var bubble = document.createElement('div');
     bubble.className = P + 'bubble';
-    if (kind === 'them') bubble.innerHTML = renderMarkdown(text);
+    if (kind === 'them') bubble.innerHTML = renderRichMarkdown(text);
     else bubble.textContent = text;
     if (kind === 'them') {
       var avatar = document.createElement('div');
@@ -814,6 +822,80 @@
     return out.join('\n');
   }
 
+  function renderRichMarkdown(raw) {
+    var lines = escapeHtml(raw == null ? '' : String(raw)).split('\n');
+    var out = [];
+    var paragraph = [];
+    var listItems = [];
+
+    function flushParagraph() {
+      if (!paragraph.length) return;
+      out.push('<p>' + mdInline(paragraph.join(' ')) + '</p>');
+      paragraph = [];
+    }
+
+    function flushList() {
+      if (!listItems.length) return;
+      out.push('<ul>' + listItems.map(function (item) {
+        return '<li>' + mdInline(item) + '</li>';
+      }).join('') + '</ul>');
+      listItems = [];
+    }
+
+    for (var i = 0; i < lines.length; i++) {
+      if (lines[i].indexOf('|') !== -1 && isTableSep(lines[i + 1])) {
+        flushParagraph();
+        flushList();
+        var header = mdRow(lines[i]);
+        i += 2;
+        var body = [];
+        while (i < lines.length && lines[i].indexOf('|') !== -1 && lines[i].trim() !== '') {
+          body.push(mdRow(lines[i]));
+          i++;
+        }
+        i--;
+        var html = '<div class="' + P + 'tablewrap"><table class="' + P + 'table"><thead><tr>';
+        header.forEach(function (c) { html += '<th>' + mdInline(c) + '</th>'; });
+        html += '</tr></thead><tbody>';
+        body.forEach(function (r) {
+          html += '<tr>';
+          for (var k = 0; k < header.length; k++) html += '<td>' + mdInline(r[k] || '') + '</td>';
+          html += '</tr>';
+        });
+        html += '</tbody></table></div>';
+        out.push(html);
+        continue;
+      }
+
+      var line = lines[i];
+      if (!line.trim()) {
+        flushParagraph();
+        flushList();
+        continue;
+      }
+      if (/^\s*([-*_])\1{2,}\s*$/.test(line)) {
+        flushParagraph();
+        flushList();
+        out.push('<span class="' + P + 'hr"></span>');
+        continue;
+      }
+
+      line = line.replace(/^\s{0,3}#{1,6}\s*(.+)$/, '<strong>$1</strong>');
+      var bullet = line.match(/^\s*(?:[-*]|&bull;|&#8226;)\s+(.+)$/);
+      if (bullet) {
+        flushParagraph();
+        listItems.push(bullet[1]);
+      } else {
+        flushList();
+        paragraph.push(line.trim());
+      }
+    }
+
+    flushParagraph();
+    flushList();
+    return out.join('');
+  }
+
   function isMobileViewport() {
     return window.matchMedia && window.matchMedia('(max-width: 480px)').matches;
   }
@@ -915,6 +997,7 @@
   function openWidget(auto) {
     if (state.open) return;
     state.open = true;
+    els.root.classList.add(P + 'open');
     els.win.classList.add(P + 'show');
     if (!state.configLoaded) loadWidgetConfig('initial');
     if (!state.welcomed) {
@@ -930,6 +1013,7 @@
   function closeWidget() {
     if (!state.open) return;
     state.open = false;
+    els.root.classList.remove(P + 'open');
     els.win.classList.remove(P + 'show');
     disconnectRealtime();
   }
@@ -1155,7 +1239,7 @@
           state.currentBotBubble._raw = '';
         }
         state.currentBotBubble._raw += evt.value != null ? evt.value : '';
-        state.currentBotBubble.innerHTML = renderMarkdown(state.currentBotBubble._raw);
+        state.currentBotBubble.innerHTML = renderRichMarkdown(state.currentBotBubble._raw);
         scrollDown();
         break;
       case 'action':
