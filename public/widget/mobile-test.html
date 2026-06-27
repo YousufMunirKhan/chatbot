@@ -1,0 +1,23 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Widget mobile placement test</title>
+  <style>
+    body { font-family: system-ui, sans-serif; margin: 0; }
+    .hero { padding: 24px; background: #0f172a; color: #fff; }
+    .block { padding: 24px; border-bottom: 1px solid #e5e7eb; }
+    .footer { padding: 40px 24px; background: #111827; color: #fff; text-align: center; }
+  </style>
+</head>
+<body>
+  <div class="hero"><h1>Mobile placement test</h1><p>Launcher should stay fixed bottom-right.</p></div>
+  <div class="block">Content block 1</div>
+  <div class="block">Content block 2</div>
+  <div class="block">Content block 3</div>
+  <div class="block">Content block 4</div>
+  <div class="footer">FOOTER</div>
+  <script src="./widget.js" data-bot-id="test-bot-placement" data-color="#7c3aed"></script>
+</body>
+</html>
