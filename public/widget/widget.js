@@ -116,6 +116,18 @@
     autoOpen: cfg.autoOpen,
     autoOpenOnce: true,
     autoOpenDelaySeconds: cfg.autoOpenDelaySeconds,
+    // Per-device auto-open: desktop and mobile each get their own on/off + delay
+    // so you can (e.g.) nudge laptops at 2s but wait 60s on phones where the
+    // chat takes over the whole screen. Fall back to the legacy single setting.
+    autoOpenDesktop: cfg.autoOpen,
+    autoOpenMobile: cfg.autoOpen,
+    autoOpenDelayDesktopSeconds: cfg.autoOpenDelaySeconds,
+    autoOpenDelayMobileSeconds: 60,
+    // Attention "glow" on the launcher (pulsing halo + expanding ring). Stops
+    // for good once the visitor opens the chat. Mobile-only by default.
+    launcherGlow: false,
+    launcherGlowMobileOnly: true,
+    hasOpened: false,
     launcherStyle: 'circle',
     launcherSize: 'default',
     windowSize: 'default',
@@ -151,6 +163,14 @@
       '.' + P + 'pill .' + P + 'launcher-label{display:inline}',
       '.' + P + 'launcher-dot{position:absolute;right:2px;top:2px;width:16px;height:16px;border-radius:50%;background:#ef4444;border:3px solid #fff;box-shadow:0 5px 12px rgba(15,23,42,.24)}',
       '.' + P + 'pill .' + P + 'launcher-dot{right:-2px;top:-2px}',
+      // Attention glow: a breathing halo on the launcher plus an expanding ring
+      // drawn by ::after (outset box-shadow, so it never covers the icon). The
+      // color comes from --aiba-glow, set from the brand color in JS.
+      '.' + P + 'launcher.' + P + 'glow{animation:' + P + 'glowpulse 1.8s ease-in-out infinite}',
+      '.' + P + 'launcher.' + P + 'glow::after{content:"";position:absolute;inset:0;border-radius:inherit;pointer-events:none;animation:' + P + 'glowring 1.8s ease-out infinite}',
+      '@keyframes ' + P + 'glowpulse{0%,100%{box-shadow:0 12px 34px rgba(17,24,39,.22),0 0 0 0 var(--aiba-glow)}50%{box-shadow:0 12px 34px rgba(17,24,39,.22),0 0 22px 6px var(--aiba-glow)}}',
+      '@keyframes ' + P + 'glowring{0%{box-shadow:0 0 0 0 var(--aiba-glow)}70%{box-shadow:0 0 0 16px rgba(0,0,0,0)}100%{box-shadow:0 0 0 0 rgba(0,0,0,0)}}',
+      '@media (prefers-reduced-motion:reduce){.' + P + 'launcher.' + P + 'glow,.' + P + 'launcher.' + P + 'glow::after{animation:none}}',
       '.' + P + 'launcher-img{width:28px;height:28px;border-radius:50%;object-fit:cover}',
       '.' + P + 'launcher-initials{font-size:13px;font-weight:900;letter-spacing:0}',
       '.' + P + 'launcher:hover{transform:translateY(-1px) scale(1.04);box-shadow:0 16px 42px rgba(17,24,39,.28)}',
@@ -492,6 +512,13 @@
           state.autoOpen = Boolean(data.bot.autoOpen);
           state.autoOpenOnce = data.bot.autoOpenOnce !== false;
           state.autoOpenDelaySeconds = Number(data.bot.autoOpenDelaySeconds || 3);
+          // Per-device auto-open (fall back to the legacy single fields).
+          state.autoOpenDesktop = data.bot.autoOpenDesktop != null ? Boolean(data.bot.autoOpenDesktop) : state.autoOpen;
+          state.autoOpenMobile = data.bot.autoOpenMobile != null ? Boolean(data.bot.autoOpenMobile) : state.autoOpen;
+          state.autoOpenDelayDesktopSeconds = Number(data.bot.autoOpenDelayDesktopSeconds != null ? data.bot.autoOpenDelayDesktopSeconds : state.autoOpenDelaySeconds);
+          state.autoOpenDelayMobileSeconds = Number(data.bot.autoOpenDelayMobileSeconds != null ? data.bot.autoOpenDelayMobileSeconds : 60);
+          state.launcherGlow = Boolean(data.bot.launcherGlow);
+          state.launcherGlowMobileOnly = data.bot.launcherGlowMobileOnly !== false;
           state.launcherStyle = data.bot.launcherStyle || state.launcherStyle;
           state.launcherSize = data.bot.launcherSize || state.launcherSize;
           state.windowSize = data.bot.windowSize || state.windowSize;
@@ -1007,6 +1034,18 @@
     return window.matchMedia && window.matchMedia('(max-width: 480px)').matches;
   }
 
+  // Convert a #rrggbb (or #rgb) brand color into an rgba() string so the glow
+  // halo can be a translucent version of the brand color.
+  function hexToRgba(hex, alpha) {
+    var h = String(hex || '').replace('#', '');
+    if (h.length === 3) h = h[0] + h[0] + h[1] + h[1] + h[2] + h[2];
+    if (h.length !== 6) return 'rgba(37,99,235,' + alpha + ')';
+    var r = parseInt(h.slice(0, 2), 16);
+    var g = parseInt(h.slice(2, 4), 16);
+    var b = parseInt(h.slice(4, 6), 16);
+    return 'rgba(' + r + ',' + g + ',' + b + ',' + alpha + ')';
+  }
+
   function applyWidgetAppearance() {
     if (!els.root || !els.launcher || !els.win) return;
     var isMobile = isMobileViewport();
@@ -1021,6 +1060,13 @@
     // so every accent - bubbles, send button, quick actions, chips, CTAs - repaints,
     // not just the launcher/header that get explicit inline colors below.
     els.root.style.setProperty('--aiba-color', cfg.color);
+    els.root.style.setProperty('--aiba-glow', hexToRgba(cfg.color, 0.55));
+
+    // Attention glow: on while enabled, applicable to this device, and the
+    // visitor hasn't opened the chat yet. Stops permanently after first open.
+    var glowOn = state.launcherGlow && !state.hasOpened &&
+      (!state.launcherGlowMobileOnly || isMobile);
+    els.launcher.classList.toggle(P + 'glow', glowOn);
 
     var bottom = Number(state.bottomOffset || 20);
     var side = Number(state.sideOffset || 20);
@@ -1116,7 +1162,9 @@
   function openWidget(auto) {
     if (state.open) return;
     state.open = true;
+    state.hasOpened = true; // glow never returns once the chat has been opened
     els.root.classList.add(P + 'open');
+    els.launcher.classList.remove(P + 'glow');
     els.win.classList.add(P + 'show');
     if (!state.configLoaded) loadWidgetConfig('initial');
     if (!state.welcomed) {
@@ -1138,13 +1186,18 @@
   }
 
   function scheduleAutoOpen() {
-    if (!state.autoOpen || state.autoOpenTimer || state.open) return;
+    if (state.autoOpenTimer || state.open) return;
+    // Pick this device's auto-open on/off and delay (desktop vs mobile).
+    var isMobile = isMobileViewport();
+    var enabled = isMobile ? state.autoOpenMobile : state.autoOpenDesktop;
+    var delay = isMobile ? state.autoOpenDelayMobileSeconds : state.autoOpenDelayDesktopSeconds;
+    if (!enabled) return;
     if (state.autoOpenOnce && lsGet('autoOpened') === '1') return;
     state.autoOpenTimer = setTimeout(function () {
       state.autoOpenTimer = null;
       if (state.autoOpenOnce) lsSet('autoOpened', '1');
       if (!state.open) openWidget(true);
-    }, Math.max(0, Number(state.autoOpenDelaySeconds || 0)) * 1000);
+    }, Math.max(0, Number(delay || 0)) * 1000);
   }
 
   // ---- Open/close & realtime ------------------------------------------------

@@ -92,6 +92,16 @@ export async function GET(req: Request) {
         autoOpen: Boolean(appearance.autoOpen),
         autoOpenOnce: appearance.autoOpenOnce !== false,
         autoOpenDelaySeconds: Number(appearance.autoOpenDelaySeconds ?? 3),
+        autoOpenDesktop:
+          appearance.autoOpenDesktop != null ? Boolean(appearance.autoOpenDesktop) : Boolean(appearance.autoOpen),
+        autoOpenMobile:
+          appearance.autoOpenMobile != null ? Boolean(appearance.autoOpenMobile) : Boolean(appearance.autoOpen),
+        autoOpenDelayDesktopSeconds: Number(
+          appearance.autoOpenDelayDesktopSeconds ?? appearance.autoOpenDelaySeconds ?? 2,
+        ),
+        autoOpenDelayMobileSeconds: Number(appearance.autoOpenDelayMobileSeconds ?? 60),
+        launcherGlow: Boolean(appearance.launcherGlow),
+        launcherGlowMobileOnly: appearance.launcherGlowMobileOnly !== false,
         launcherStyle: (appearance.launcherStyle as string) || 'pill',
         launcherSize: (appearance.launcherSize as string) || 'default',
         windowSize: (appearance.windowSize as string) || 'default',

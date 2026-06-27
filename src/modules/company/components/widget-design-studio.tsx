@@ -117,9 +117,17 @@ export function WidgetDesignStudio({
   const [windowSize, setWindowSize] = useState(readString(a.windowSize, 'default'));
   const [mobileMode, setMobileMode] = useState(readString(a.mobileMode, 'fullscreen'));
   const [position, setPosition] = useState(readString(a.position, 'right'));
-  const [autoOpen, setAutoOpen] = useState(readBool(a.autoOpen, false));
   const [autoOpenOnce, setAutoOpenOnce] = useState(readBool(a.autoOpenOnce, true));
-  const [autoOpenDelaySeconds, setAutoOpenDelaySeconds] = useState(String(readNum(a.autoOpenDelaySeconds, 3)));
+  const [autoOpenDesktop, setAutoOpenDesktop] = useState(readBool(a.autoOpenDesktop, readBool(a.autoOpen, false)));
+  const [autoOpenMobile, setAutoOpenMobile] = useState(readBool(a.autoOpenMobile, readBool(a.autoOpen, false)));
+  const [autoOpenDelayDesktopSeconds, setAutoOpenDelayDesktopSeconds] = useState(
+    String(readNum(a.autoOpenDelayDesktopSeconds, readNum(a.autoOpenDelaySeconds, 2))),
+  );
+  const [autoOpenDelayMobileSeconds, setAutoOpenDelayMobileSeconds] = useState(
+    String(readNum(a.autoOpenDelayMobileSeconds, 60)),
+  );
+  const [launcherGlow, setLauncherGlow] = useState(readBool(a.launcherGlow, false));
+  const [launcherGlowMobileOnly, setLauncherGlowMobileOnly] = useState(readBool(a.launcherGlowMobileOnly, true));
   const [showOnMobile, setShowOnMobile] = useState(readBool(a.showOnMobile, true));
   const [showOnDesktop, setShowOnDesktop] = useState(readBool(a.showOnDesktop, true));
   const [bottomOffset, setBottomOffset] = useState(String(readNum(a.bottomOffset, 20)));
@@ -333,8 +341,11 @@ export function WidgetDesignStudio({
                   <option value="left">Bottom left</option>
                 </select>
               </Field>
-              <Field label="Auto-open delay">
-                <Input name="autoOpenDelaySeconds" type="number" min={0} max={120} value={autoOpenDelaySeconds} onChange={(e) => setAutoOpenDelaySeconds(e.target.value)} />
+              <Field label="Desktop auto-open delay" hint="Seconds before the chat opens on laptops/desktops.">
+                <Input name="autoOpenDelayDesktopSeconds" type="number" min={0} max={120} value={autoOpenDelayDesktopSeconds} onChange={(e) => setAutoOpenDelayDesktopSeconds(e.target.value)} />
+              </Field>
+              <Field label="Mobile auto-open delay" hint="Seconds before the chat opens on phones (e.g. 60).">
+                <Input name="autoOpenDelayMobileSeconds" type="number" min={0} max={600} value={autoOpenDelayMobileSeconds} onChange={(e) => setAutoOpenDelayMobileSeconds(e.target.value)} />
               </Field>
               <Field label="Bottom spacing">
                 <Input name="bottomOffset" type="number" min={0} max={120} value={bottomOffset} onChange={(e) => setBottomOffset(e.target.value)} />
@@ -345,12 +356,24 @@ export function WidgetDesignStudio({
             </div>
             <div className="mt-3 grid gap-2 sm:grid-cols-2">
               <label className="flex items-center gap-2 rounded-md border p-2.5 text-sm">
-                <input type="checkbox" name="autoOpen" checked={autoOpen} onChange={(e) => setAutoOpen(e.target.checked)} className="h-4 w-4" />
-                Auto-open chat
+                <input type="checkbox" name="autoOpenDesktop" checked={autoOpenDesktop} onChange={(e) => setAutoOpenDesktop(e.target.checked)} className="h-4 w-4" />
+                Auto-open on desktop
+              </label>
+              <label className="flex items-center gap-2 rounded-md border p-2.5 text-sm">
+                <input type="checkbox" name="autoOpenMobile" checked={autoOpenMobile} onChange={(e) => setAutoOpenMobile(e.target.checked)} className="h-4 w-4" />
+                Auto-open on mobile
               </label>
               <label className="flex items-center gap-2 rounded-md border p-2.5 text-sm">
                 <input type="checkbox" name="autoOpenOnce" checked={autoOpenOnce} onChange={(e) => setAutoOpenOnce(e.target.checked)} className="h-4 w-4" />
                 Auto-open once per visitor
+              </label>
+              <label className="flex items-center gap-2 rounded-md border p-2.5 text-sm">
+                <input type="checkbox" name="launcherGlow" checked={launcherGlow} onChange={(e) => setLauncherGlow(e.target.checked)} className="h-4 w-4" />
+                Glowing launcher
+              </label>
+              <label className="flex items-center gap-2 rounded-md border p-2.5 text-sm">
+                <input type="checkbox" name="launcherGlowMobileOnly" checked={launcherGlowMobileOnly} onChange={(e) => setLauncherGlowMobileOnly(e.target.checked)} className="h-4 w-4" />
+                Glow on mobile only
               </label>
               <label className="flex items-center gap-2 rounded-md border p-2.5 text-sm">
                 <input type="checkbox" name="showOnMobile" checked={showOnMobile} onChange={(e) => setShowOnMobile(e.target.checked)} className="h-4 w-4" />
@@ -487,8 +510,15 @@ export function WidgetDesignStudio({
                 }`}
                 style={{ background: primaryColor }}
               >
-                <span>{launcherIcon === 'initials' ? initials(launcherLabel || title) : launcherIcon === 'headset' ? '◔' : '●'}</span>
-                {launcherStyle === 'pill' ? <span>{launcherLabel || 'Chat with us'}</span> : null}
+                {launcherGlow && (!launcherGlowMobileOnly || previewMode === 'mobile') ? (
+                  <span
+                    className="absolute inset-0 animate-ping rounded-full opacity-60"
+                    style={{ background: primaryColor }}
+                    aria-hidden
+                  />
+                ) : null}
+                <span className="relative">{launcherIcon === 'initials' ? initials(launcherLabel || title) : launcherIcon === 'headset' ? '◔' : '●'}</span>
+                {launcherStyle === 'pill' ? <span className="relative">{launcherLabel || 'Chat with us'}</span> : null}
                 {launcherDotMode !== 'hidden' ? <span className="absolute -right-0.5 -top-0.5 h-4 w-4 rounded-full border-[3px] border-white" style={{ background: launcherDotColor }} /> : null}
               </div>
             </div>
