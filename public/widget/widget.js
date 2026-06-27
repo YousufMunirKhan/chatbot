@@ -708,6 +708,74 @@
     if (force || isNearBottom()) els.msgs.scrollTop = els.msgs.scrollHeight;
   }
 
+  // ---- Typewriter reveal ----------------------------------------------------
+  // The server can stream the answer in big chunks (a whole sentence at once),
+  // which made replies "dump" in and snap to the bottom. Instead of rendering
+  // each chunk immediately, we buffer the full text and reveal it word-by-word
+  // at a smooth, self-pacing rate. Because the revealed text grows a little per
+  // animation frame, scrollDown() follows it as a gentle glide, not a jump.
+  var raf = window.requestAnimationFrame ? window.requestAnimationFrame.bind(window) : function (cb) { return setTimeout(cb, 16); };
+  var caf = window.cancelAnimationFrame ? window.cancelAnimationFrame.bind(window) : clearTimeout;
+  var tw = { bubble: null, full: '', shown: 0, frame: 0 };
+
+  function twRender() {
+    if (tw.bubble) tw.bubble.innerHTML = renderRichMarkdown(tw.full.slice(0, tw.shown));
+  }
+
+  // Begin a fresh reveal for a new bot bubble. Finishes any previous one first
+  // so nothing is ever left half-typed if a new answer starts.
+  function twReset(bubble) {
+    twFlush();
+    tw.bubble = bubble;
+    tw.full = '';
+    tw.shown = 0;
+  }
+
+  // Feed newly-streamed text into the buffer and make sure the loop is running.
+  function twPush(text) {
+    if (text == null || text === '') return;
+    tw.full += text;
+    if (!tw.frame && tw.bubble) tw.frame = raf(twTick);
+  }
+
+  function twTick() {
+    tw.frame = 0;
+    if (!tw.bubble) return;
+    var remaining = tw.full.length - tw.shown;
+    if (remaining > 0) {
+      // Ease-out pace: reveal ~1/16 of the backlog each frame (min 2 chars), so
+      // it catches up quickly when far behind but eases as it nears the end -
+      // reads like steady typing rather than a dump.
+      var step = Math.max(2, Math.ceil(remaining / 16));
+      var next = tw.shown + step;
+      // Snap forward to the next word/line break so words aren't split mid-frame.
+      if (next < tw.full.length) {
+        var sp = tw.full.indexOf(' ', next);
+        var nl = tw.full.indexOf('\n', next);
+        var b = sp === -1 ? nl : nl === -1 ? sp : Math.min(sp, nl);
+        if (b !== -1 && b - next < 24) next = b + 1;
+      }
+      tw.shown = Math.min(next, tw.full.length);
+      twRender();
+      scrollDown();
+    }
+    // Keep animating only while there is still buffered text to reveal. When it
+    // catches up the loop stops; twPush() restarts it when more text arrives.
+    if (tw.shown < tw.full.length) tw.frame = raf(twTick);
+  }
+
+  // Reveal whatever is buffered immediately and stop animating. Used when the
+  // turn ends in a non-streaming way (inline action / handoff / error).
+  function twFlush() {
+    if (tw.frame) { caf(tw.frame); tw.frame = 0; }
+    if (tw.bubble && tw.shown < tw.full.length) {
+      tw.shown = tw.full.length;
+      twRender();
+      scrollDown();
+    }
+    tw.bubble = null;
+  }
+
   var typingRow = null;
   function showTyping() {
     if (typingRow) return;
@@ -1284,33 +1352,39 @@
         if (!state.currentBotBubble) updateTypingLabel(evt.value);
         break;
       case 'token':
+        // Dots disappear the moment text starts, then the answer types itself
+        // out word-by-word via the typewriter buffer (twPush) instead of being
+        // dumped in all at once.
         hideTyping();
         if (!state.currentBotBubble) {
           state.currentBotBubble = addBubble('them', '');
-          state.currentBotBubble._raw = '';
+          twReset(state.currentBotBubble);
         }
-        state.currentBotBubble._raw += evt.value != null ? evt.value : '';
-        state.currentBotBubble.innerHTML = renderRichMarkdown(state.currentBotBubble._raw);
-        scrollDown();
+        twPush(evt.value != null ? evt.value : '');
         break;
       case 'action':
         // The bot asked the widget to render a UI element (form / quick replies
         // / product cards / fallback CTA) inline in the conversation.
         hideTyping();
+        twFlush(); // show any buffered text before the inline UI appears
         state.currentBotBubble = null;
         try { renderInlineAction(evt); } catch (e) {}
         break;
       case 'human':
         hideTyping();
+        twFlush();
         addBubble('sys', 'An agent will reply shortly.');
         connectRealtime();
         break;
       case 'error':
         hideTyping();
+        twFlush();
         addBubble('them', evt.value || 'Sorry, something went wrong.');
         state.currentBotBubble = null;
         break;
       case 'done':
+        // Don't flush - let the typewriter finish revealing naturally. Config
+        // refresh (quick actions) can happen while the last words type out.
         hideTyping();
         state.currentBotBubble = null;
         loadWidgetConfig('after_answer');
