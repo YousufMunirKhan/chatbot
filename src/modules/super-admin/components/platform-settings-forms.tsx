@@ -140,6 +140,8 @@ export function AiSettingsForm({ settings }: { settings: PlatformSettingsView['a
 
   const chatDef = chatProviderById(chatProvider) ?? CHAT_PROVIDERS[0]!;
   const embedDef = embedProviderById(embedProvider) ?? EMBED_PROVIDERS[0]!;
+  const activeKey = KEY_FIELDS.find((k) => k.id === chatProvider);
+  const inactiveKeys = KEY_FIELDS.filter((k) => k.id !== chatProvider);
 
   function onChatProvider(id: string) {
     setChatProvider(id);
@@ -243,26 +245,50 @@ export function AiSettingsForm({ settings }: { settings: PlatformSettingsView['a
           </div>
         </div>
 
-        <div>
-          <p className="mb-2 text-sm font-medium">API keys</p>
-          <div className="grid gap-4 sm:grid-cols-2">
-            {KEY_FIELDS.map((k) => (
-              <div key={k.id} className="space-y-1.5">
-                <Label htmlFor={k.field}>
-                  {k.label}
-                  {k.id === chatProvider ? (
-                    <span className="ml-2 text-xs text-emerald-600">active</span>
-                  ) : null}
+        <div className="space-y-3">
+          <div>
+            <p className="text-sm font-medium">Active provider key</p>
+            <p className="text-xs text-muted-foreground">
+              Only this selected chat provider is used for replies. Saved keys below are kept for
+              future rotation and are not active.
+            </p>
+          </div>
+          {activeKey ? (
+            <div className="grid gap-4 sm:grid-cols-2">
+              <div className="space-y-1.5">
+                <Label htmlFor={activeKey.field}>
+                  {activeKey.label}
+                  <span className="ml-2 text-xs text-emerald-600">active</span>
                 </Label>
                 <Input
-                  id={k.field}
-                  name={k.field}
+                  id={activeKey.field}
+                  name={activeKey.field}
                   type="password"
-                  placeholder={settings[k.hasFlag] ? 'Saved. Leave blank to keep.' : k.placeholder}
+                  placeholder={
+                    settings[activeKey.hasFlag] ? 'Saved. Leave blank to keep.' : activeKey.placeholder
+                  }
                 />
               </div>
-            ))}
-          </div>
+            </div>
+          ) : null}
+          <details className="rounded-md border p-4">
+            <summary className="cursor-pointer text-sm font-medium">
+              Advanced saved provider keys
+            </summary>
+            <div className="mt-4 grid gap-4 sm:grid-cols-2">
+              {inactiveKeys.map((k) => (
+                <div key={k.id} className="space-y-1.5">
+                  <Label htmlFor={k.field}>{k.label}</Label>
+                  <Input
+                    id={k.field}
+                    name={k.field}
+                    type="password"
+                    placeholder={settings[k.hasFlag] ? 'Saved. Leave blank to keep.' : k.placeholder}
+                  />
+                </div>
+              ))}
+            </div>
+          </details>
         </div>
 
         <p className="text-xs text-muted-foreground">

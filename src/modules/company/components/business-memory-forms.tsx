@@ -73,6 +73,34 @@ export function BusinessMemoryForm({ profile }: { profile: BusinessProfileMemory
           <Input id="brandVoice" name="brandVoice" defaultValue={profile.brandVoice ?? ''} placeholder="premium, friendly, concise" />
         </div>
         <div className="space-y-1.5">
+          <Label htmlFor="answerLength">Answer length</Label>
+          <select id="answerLength" name="answerLength" className={selectCls} defaultValue={profile.answerLength}>
+            <option value="short">Short</option>
+            <option value="balanced">Balanced</option>
+            <option value="detailed">Detailed</option>
+          </select>
+        </div>
+        <div className="space-y-1.5">
+          <Label htmlFor="answerStrictness">Fact strictness</Label>
+          <select id="answerStrictness" name="answerStrictness" className={selectCls} defaultValue={profile.answerStrictness}>
+            <option value="strict">Strict: only company data</option>
+            <option value="grounded">Grounded: prefer company data</option>
+            <option value="flexible">Flexible: general help allowed</option>
+          </select>
+        </div>
+        <div className="space-y-1.5">
+          <Label htmlFor="salesStyle">Sales style</Label>
+          <select id="salesStyle" name="salesStyle" className={selectCls} defaultValue={profile.salesStyle}>
+            <option value="support_only">Support only</option>
+            <option value="helpful">Helpful recommendations</option>
+            <option value="sales_focused">Sales focused</option>
+          </select>
+        </div>
+        <div className="space-y-1.5">
+          <Label htmlFor="bannedPhrases">Banned phrases</Label>
+          <Input id="bannedPhrases" name="bannedPhrases" defaultValue={profile.bannedPhrases.join(', ')} placeholder="cheap, no problem, dear customer" />
+        </div>
+        <div className="space-y-1.5">
           <Label htmlFor="defaultCurrency">Default currency</Label>
           <select id="defaultCurrency" name="defaultCurrency" className={selectCls} defaultValue={profile.defaultCurrency}>
             {!CURRENCY_OPTIONS.includes(profile.defaultCurrency) ? (
@@ -122,6 +150,14 @@ export function BusinessMemoryForm({ profile }: { profile: BusinessProfileMemory
         <div className="space-y-1.5">
           <Label htmlFor="escalationRules">Escalation rules</Label>
           <Textarea id="escalationRules" name="escalationRules" defaultValue={profile.escalationRules ?? ''} rows={3} />
+        </div>
+        <div className="space-y-1.5">
+          <Label htmlFor="escalationMessage">Escalation message</Label>
+          <Textarea id="escalationMessage" name="escalationMessage" defaultValue={profile.escalationMessage ?? ''} rows={3} />
+        </div>
+        <div className="space-y-1.5 lg:col-span-2">
+          <Label htmlFor="toneNotes">Tone notes</Label>
+          <Textarea id="toneNotes" name="toneNotes" defaultValue={profile.toneNotes ?? ''} rows={3} />
         </div>
         <div className="space-y-1.5">
           <Label htmlFor="leadQualificationRules">Lead qualification rules</Label>

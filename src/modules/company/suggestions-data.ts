@@ -45,14 +45,14 @@ export async function computeQualityRoom(companyId: string): Promise<QualityRoom
   const [profileRes, hoursRes, policiesRes, faqsRes, productsRes, integrationsRes, docsRes, botsRes, evalQRes, failuresRes] =
     await Promise.all([
       sb.from('company_business_profiles').select('short_description,primary_phone,support_email,whatsapp').eq('company_id', companyId).maybeSingle(),
-      sb.from('company_business_hours').select('*', { count: 'exact', head: true }).eq('company_id', companyId),
-      sb.from('company_policies').select('*', { count: 'exact', head: true }).eq('company_id', companyId).eq('is_active', true),
-      sb.from('company_faqs').select('*', { count: 'exact', head: true }).eq('company_id', companyId).eq('is_active', true),
-      sb.from('synced_products').select('*', { count: 'exact', head: true }).eq('company_id', companyId),
-      sb.from('integration_accounts').select('*', { count: 'exact', head: true }).eq('company_id', companyId).eq('status', 'connected'),
-      sb.from('documents').select('*', { count: 'exact', head: true }).eq('company_id', companyId).eq('status', 'ready'),
-      sb.from('bots').select('*', { count: 'exact', head: true }).eq('company_id', companyId).eq('ai_enabled', true),
-      sb.from('eval_questions').select('*', { count: 'exact', head: true }).eq('company_id', companyId),
+      sb.from('company_business_hours').select('id', { count: 'exact', head: true }).eq('company_id', companyId),
+      sb.from('company_policies').select('id', { count: 'exact', head: true }).eq('company_id', companyId).eq('is_active', true),
+      sb.from('company_faqs').select('id', { count: 'exact', head: true }).eq('company_id', companyId).eq('is_active', true),
+      sb.from('synced_products').select('id', { count: 'exact', head: true }).eq('company_id', companyId),
+      sb.from('integration_accounts').select('id', { count: 'exact', head: true }).eq('company_id', companyId).eq('status', 'connected'),
+      sb.from('documents').select('id', { count: 'exact', head: true }).eq('company_id', companyId).eq('status', 'ready'),
+      sb.from('bots').select('id', { count: 'exact', head: true }).eq('company_id', companyId).eq('ai_enabled', true),
+      sb.from('eval_questions').select('id', { count: 'exact', head: true }).eq('company_id', companyId),
       sb
         .from('answer_quality_logs')
         .select('question,failure_reason')

@@ -1,5 +1,6 @@
 import { redirect } from 'next/navigation';
 import { cookies } from 'next/headers';
+import { cache } from 'react';
 import { createSupabaseServerClient, createSupabaseServiceClient } from '@/lib/db/server';
 import { ForbiddenError } from '@/lib/errors';
 import { ROLES, type Role } from '@/lib/constants';
@@ -28,7 +29,9 @@ export interface SessionUser {
 }
 
 /** Returns the current user (or null if not signed in). Read-only; never redirects. */
-export async function getSessionUser(options?: { skipTwoFactorCheck?: boolean }): Promise<SessionUser | null> {
+export const getSessionUser = cache(async function getSessionUser(
+  options?: { skipTwoFactorCheck?: boolean },
+): Promise<SessionUser | null> {
   const supabase = createSupabaseServerClient();
   const {
     data: { user },
@@ -99,7 +102,7 @@ export async function getSessionUser(options?: { skipTwoFactorCheck?: boolean })
     role,
     impersonation,
   };
-}
+});
 
 /** The landing route for a user based on their role. */
 export function homePathFor(user: SessionUser): string {

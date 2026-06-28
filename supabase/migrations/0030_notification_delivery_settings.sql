@@ -41,7 +41,7 @@ create table if not exists public.notification_delivery_logs (
   error_message text,
   related_lead_id uuid references public.leads(id) on delete set null,
   related_appointment_id uuid references public.appointments(id) on delete set null,
-  related_order_id uuid references public.orders(id) on delete set null,
+  related_order_id uuid references public.chat_orders(id) on delete set null,
   conversation_id uuid references public.conversations(id) on delete set null,
   metadata_json jsonb not null default '{}'::jsonb,
   created_at timestamptz not null default now()

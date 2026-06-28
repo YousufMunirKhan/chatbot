@@ -1,5 +1,6 @@
 import { unstable_noStore as noStore } from 'next/cache';
 import { createSupabaseServiceClient } from '@/lib/db/server';
+import { currentMonthStartIso, getReplyAllowanceUsage, type ReplyAllowanceUsage } from '@/lib/billing';
 import { PLANS } from './plans';
 
 /**
@@ -27,8 +28,58 @@ export interface CompanyRow {
   subStatus: string | null;
   freeUntil: string | null;
   messageLimit: number | null;
+  repliesUsed: number;
+  extraReplies: number;
+  repliesAvailable: number | null;
+  repliesRemaining: number | null;
+  aiCostThisMonth: number;
+  creditBalance: number | null;
+  creditUsed: number | null;
+  whatsappOwner: string;
+  whatsappProvider: string;
   botCount: number;
   memberCount: number;
+}
+
+async function sumAiCostThisMonth(companyId: string): Promise<number> {
+  const sb = createSupabaseServiceClient();
+  const { data } = await sb
+    .from('ai_usage_logs')
+    .select('estimated_cost')
+    .eq('company_id', companyId)
+    .gte('created_at', currentMonthStartIso());
+  return (data ?? []).reduce((sum, row) => sum + Number(row.estimated_cost ?? 0), 0);
+}
+
+async function getCreditSummary(companyId: string): Promise<{ balance: number | null; used: number | null }> {
+  const sb = createSupabaseServiceClient();
+  const { data } = await sb
+    .from('company_credit_accounts')
+    .select('balance_amount,lifetime_usage_charged')
+    .eq('company_id', companyId)
+    .maybeSingle();
+  if (!data) return { balance: null, used: null };
+  return {
+    balance: Number((data as Record<string, unknown>).balance_amount ?? 0),
+    used: Number((data as Record<string, unknown>).lifetime_usage_charged ?? 0),
+  };
+}
+
+async function getWhatsAppSummary(companyId: string): Promise<{ owner: string; provider: string }> {
+  const sb = createSupabaseServiceClient();
+  const { data } = await sb
+    .from('company_notification_settings')
+    .select('whatsapp_enabled,whatsapp_sender_mode,whatsapp_provider')
+    .eq('company_id', companyId)
+    .maybeSingle();
+  if (!data || !(data as Record<string, unknown>).whatsapp_enabled) {
+    return { owner: 'Not enabled', provider: 'disabled' };
+  }
+  const row = data as Record<string, unknown>;
+  return {
+    owner: row.whatsapp_sender_mode === 'platform_managed' ? 'Platform-managed' : 'Company-managed',
+    provider: ((row.whatsapp_provider as string) ?? 'disabled').replace(/_/g, ' '),
+  };
 }
 
 export async function listCompanies(): Promise<CompanyRow[]> {
@@ -42,13 +93,19 @@ export async function listCompanies(): Promise<CompanyRow[]> {
     .order('created_at', { ascending: false });
   if (error) throw error;
 
-  return (data ?? []).map((c: Record<string, unknown>) => {
+  return Promise.all((data ?? []).map(async (c: Record<string, unknown>) => {
     const sub = (one(c.subscriptions) ?? {}) as {
       plan?: string;
       status?: string;
       free_until?: string;
       message_limit?: number;
     };
+    const [replyUsage, aiCostThisMonth, credit, whatsapp] = await Promise.all([
+      getReplyAllowanceUsage(c.id as string),
+      sumAiCostThisMonth(c.id as string),
+      getCreditSummary(c.id as string),
+      getWhatsAppSummary(c.id as string),
+    ]);
     return {
       id: c.id as string,
       name: c.name as string,
@@ -58,10 +115,19 @@ export async function listCompanies(): Promise<CompanyRow[]> {
       subStatus: sub.status ?? null,
       freeUntil: sub.free_until ?? null,
       messageLimit: sub.message_limit ?? null,
+      repliesUsed: replyUsage.used,
+      extraReplies: replyUsage.extraReplies,
+      repliesAvailable: replyUsage.totalAvailable,
+      repliesRemaining: replyUsage.remaining,
+      aiCostThisMonth,
+      creditBalance: credit.balance,
+      creditUsed: credit.used,
+      whatsappOwner: whatsapp.owner,
+      whatsappProvider: whatsapp.provider,
       botCount: countOf(c.bots),
       memberCount: countOf(c.company_users),
     };
-  });
+  }));
 }
 
 function monthlyRevenue(row: CompanyRow): number {
@@ -173,6 +239,17 @@ export interface CompanyDetail {
     description: string | null;
     createdAt: string;
   }[];
+  replyUsage: ReplyAllowanceUsage;
+  totalChatMessagesThisMonth: number;
+  aiCostThisMonth: number;
+  estimatedRevenue: number;
+  estimatedProfit: number;
+  whatsapp: {
+    enabled: boolean;
+    senderMode: string;
+    provider: string;
+    recipientCount: number;
+  };
   counts?: {
     documents: number;
     quickActions: number;
@@ -212,6 +289,10 @@ export async function getCompanyDetail(id: string): Promise<CompanyDetail | null
     appointments,
     integrations,
     qualityIssues,
+    replyUsage,
+    totalChatMessagesThisMonth,
+    aiCostThisMonth,
+    whatsappSettings,
   ] = await Promise.all([
     sb
       .from('bots')
@@ -262,7 +343,45 @@ export async function getCompanyDetail(id: string): Promise<CompanyDetail | null
       .select('id', { count: 'exact', head: true })
       .eq('company_id', id)
       .not('failure_reason', 'is', null),
+    getReplyAllowanceUsage(id),
+    sb
+      .from('messages')
+      .select('id', { count: 'exact', head: true })
+      .eq('company_id', id)
+      .gte('created_at', currentMonthStartIso()),
+    sumAiCostThisMonth(id),
+    sb
+      .from('company_notification_settings')
+      .select('whatsapp_enabled,whatsapp_sender_mode,whatsapp_provider,whatsapp_recipients')
+      .eq('company_id', id)
+      .maybeSingle(),
   ]);
+
+  const estimatedRevenue = monthlyRevenue({
+    id: c.id as string,
+    name: c.name as string,
+    status: c.status as string,
+    createdAt: c.created_at as string,
+    plan: (sub.plan as string) ?? null,
+    subStatus: (sub.status as string) ?? null,
+    freeUntil: (sub.free_until as string) ?? null,
+    messageLimit: (sub.message_limit as number) ?? null,
+    repliesUsed: replyUsage.used,
+    extraReplies: replyUsage.extraReplies,
+    repliesAvailable: replyUsage.totalAvailable,
+    repliesRemaining: replyUsage.remaining,
+    aiCostThisMonth,
+    creditBalance: null,
+    creditUsed: null,
+    whatsappOwner: '',
+    whatsappProvider: '',
+    botCount: 0,
+    memberCount: 0,
+  });
+  const whatsRow = (whatsappSettings.data ?? {}) as Record<string, unknown>;
+  const whatsRecipients = Array.isArray(whatsRow.whatsapp_recipients)
+    ? whatsRow.whatsapp_recipients
+    : [];
 
   return {
     id: c.id as string,
@@ -355,6 +474,20 @@ export async function getCompanyDetail(id: string): Promise<CompanyDetail | null
         createdAt: x.created_at as string,
       };
     }),
+    replyUsage,
+    totalChatMessagesThisMonth: totalChatMessagesThisMonth.count ?? 0,
+    aiCostThisMonth,
+    estimatedRevenue,
+    estimatedProfit: estimatedRevenue - aiCostThisMonth,
+    whatsapp: {
+      enabled: Boolean(whatsRow.whatsapp_enabled),
+      senderMode:
+        whatsRow.whatsapp_sender_mode === 'platform_managed'
+          ? 'Platform-managed'
+          : 'Company-managed',
+      provider: ((whatsRow.whatsapp_provider as string) ?? 'disabled').replace(/_/g, ' '),
+      recipientCount: whatsRecipients.length,
+    },
     counts: {
       documents: documents.count ?? 0,
       quickActions: quickActions.count ?? 0,
@@ -379,7 +512,7 @@ export async function listAuditLogs(limit = 100): Promise<AuditRow[]> {
   const sb = createSupabaseServiceClient();
   const { data, error } = await sb
     .from('audit_logs')
-    .select('id,action,created_at, users(email), companies(name)')
+    .select('id,action,created_at, actor:users!audit_logs_actor_user_id_fkey(email), companies(name)')
     .order('created_at', { ascending: false })
     .limit(limit);
   if (error) throw error;
@@ -389,7 +522,42 @@ export async function listAuditLogs(limit = 100): Promise<AuditRow[]> {
       id: x.id as string,
       action: x.action as string,
       createdAt: x.created_at as string,
-      actorEmail: (rec(x.users).email as string) ?? null,
+      actorEmail: (rec(x.actor).email as string) ?? null,
+      companyName: (rec(x.companies).name as string) ?? null,
+    };
+  });
+}
+
+export interface AdminAccessLogRow {
+  id: string;
+  action: string;
+  targetType: string | null;
+  targetId: string | null;
+  createdAt: string;
+  adminEmail: string | null;
+  companyName: string | null;
+}
+
+export async function listAdminAccessLogs(limit = 100): Promise<AdminAccessLogRow[]> {
+  noStore();
+  const sb = createSupabaseServiceClient();
+  const { data, error } = await sb
+    .from('admin_access_logs')
+    .select(
+      'id,action,target_type,target_id,created_at, admin:users!admin_access_logs_super_admin_id_fkey(email), companies(name)',
+    )
+    .order('created_at', { ascending: false })
+    .limit(limit);
+  if (error) throw error;
+  return (data ?? []).map((row) => {
+    const x = row as Record<string, unknown>;
+    return {
+      id: x.id as string,
+      action: x.action as string,
+      targetType: (x.target_type as string) ?? null,
+      targetId: (x.target_id as string) ?? null,
+      createdAt: x.created_at as string,
+      adminEmail: (rec(x.admin).email as string) ?? null,
       companyName: (rec(x.companies).name as string) ?? null,
     };
   });

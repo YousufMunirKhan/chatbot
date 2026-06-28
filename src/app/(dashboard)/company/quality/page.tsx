@@ -41,7 +41,9 @@ export default async function CompanyQualityPage() {
     listQualityFixes(),
   ]);
   const pct = room.setupTotal ? Math.round((room.setupCompleted / room.setupTotal) * 100) : 0;
-  const problemAnswers = summary.recent.filter((row) => row.failureReason).slice(0, 8);
+  const problemAnswers = summary.recent
+    .filter((row) => row.failureReason || row.autoAuditStatus === 'needs_review' || row.autoAuditStatus === 'failed')
+    .slice(0, 8);
 
   return (
     <div className="space-y-6">
@@ -205,7 +207,8 @@ export default async function CompanyQualityPage() {
             problemAnswers.map((item) => (
               <div key={item.id} className="space-y-4 rounded-xl border p-4">
                 <div className="flex flex-wrap items-center gap-2">
-                  <Badge variant="warning">{reasonLabel(item.failureReason)}</Badge>
+                  <Badge variant="warning">{reasonLabel(item.autoAuditLabel ?? item.failureReason)}</Badge>
+                  {item.autoAuditScore == null ? null : <Badge variant="secondary">{item.autoAuditScore}% audit</Badge>}
                   {item.sourceTypes.length ? <Badge variant="secondary">{item.sourceTypes.join(', ')}</Badge> : null}
                   <span className="text-xs text-muted-foreground">{new Date(item.createdAt).toLocaleString()}</span>
                 </div>
@@ -219,6 +222,12 @@ export default async function CompanyQualityPage() {
                     <p className="mt-2 line-clamp-5 text-sm text-muted-foreground">{item.answer}</p>
                   </div>
                 </div>
+                {item.autoAuditReason || item.suggestedFix ? (
+                  <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-950">
+                    {item.autoAuditReason ? <p>{item.autoAuditReason}</p> : null}
+                    {item.suggestedFix ? <p className="mt-1 font-medium">{item.suggestedFix}</p> : null}
+                  </div>
+                ) : null}
                 <QualityFeedbackForm qualityLogId={item.id} />
               </div>
             ))

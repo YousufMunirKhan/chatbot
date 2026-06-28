@@ -115,7 +115,8 @@ export function NotificationSettingsForm({ settings }: { settings: CompanyNotifi
         <div>
           <h2 className="text-base font-semibold">WhatsApp</h2>
           <p className="text-sm text-muted-foreground">
-            Company chooses recipient numbers here. Super Admin controls the WhatsApp provider.
+            Connect your company Meta or Twilio WhatsApp account. Your company owns the sender
+            account and provider charges unless support has explicitly enabled a managed sender.
           </p>
         </div>
         <div className="grid gap-4 sm:grid-cols-2">
@@ -123,6 +124,31 @@ export function NotificationSettingsForm({ settings }: { settings: CompanyNotifi
             <input type="checkbox" name="whatsappEnabled" defaultChecked={settings.whatsappEnabled} className="h-4 w-4" />
             Send WhatsApp notifications
           </label>
+          <div className="space-y-1.5">
+            <Label htmlFor="whatsappSenderMode">Sender owner</Label>
+            <select
+              id="whatsappSenderMode"
+              name="whatsappSenderMode"
+              className={selectCls}
+              defaultValue={settings.whatsappSenderMode}
+            >
+              <option value="company">Company-managed sender</option>
+              <option value="platform_managed">Platform-managed sender (support add-on)</option>
+            </select>
+          </div>
+          <div className="space-y-1.5">
+            <Label htmlFor="whatsappProvider">WhatsApp provider</Label>
+            <select
+              id="whatsappProvider"
+              name="whatsappProvider"
+              className={selectCls}
+              defaultValue={settings.whatsappProvider}
+            >
+              <option value="disabled">Disabled</option>
+              <option value="meta_cloud">Meta Cloud API</option>
+              <option value="twilio">Twilio WhatsApp</option>
+            </select>
+          </div>
           <div className="space-y-1.5 sm:col-span-2">
             <Label htmlFor="whatsappRecipients">WhatsApp recipient numbers</Label>
             <Textarea
@@ -132,6 +158,54 @@ export function NotificationSettingsForm({ settings }: { settings: CompanyNotifi
               defaultValue={settings.whatsappRecipients.join('\n')}
               placeholder="+447700900123"
             />
+          </div>
+          <div className="rounded-md border p-4 sm:col-span-2">
+            <h3 className="text-sm font-semibold">Meta Cloud API credentials</h3>
+            <div className="mt-4 grid gap-4 sm:grid-cols-2">
+              <div className="space-y-1.5">
+                <Label htmlFor="metaPhoneNumberId">Phone number ID</Label>
+                <Input id="metaPhoneNumberId" name="metaPhoneNumberId" defaultValue={settings.metaPhoneNumberId} />
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="metaAccessToken">Access token</Label>
+                <Input
+                  id="metaAccessToken"
+                  name="metaAccessToken"
+                  type="password"
+                  placeholder={settings.hasMetaAccessToken ? 'Saved. Leave blank to keep.' : ''}
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="metaTemplateName">Template name</Label>
+                <Input id="metaTemplateName" name="metaTemplateName" defaultValue={settings.metaTemplateName} placeholder="lead_alert" />
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="metaTemplateLanguage">Template language</Label>
+                <Input id="metaTemplateLanguage" name="metaTemplateLanguage" defaultValue={settings.metaTemplateLanguage} placeholder="en_GB" />
+              </div>
+            </div>
+          </div>
+          <div className="rounded-md border p-4 sm:col-span-2">
+            <h3 className="text-sm font-semibold">Twilio WhatsApp credentials</h3>
+            <div className="mt-4 grid gap-4 sm:grid-cols-2">
+              <div className="space-y-1.5">
+                <Label htmlFor="twilioAccountSid">Account SID</Label>
+                <Input id="twilioAccountSid" name="twilioAccountSid" defaultValue={settings.twilioAccountSid} />
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="twilioAuthToken">Auth token</Label>
+                <Input
+                  id="twilioAuthToken"
+                  name="twilioAuthToken"
+                  type="password"
+                  placeholder={settings.hasTwilioAuthToken ? 'Saved. Leave blank to keep.' : ''}
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="twilioWhatsappFrom">WhatsApp from number</Label>
+                <Input id="twilioWhatsappFrom" name="twilioWhatsappFrom" defaultValue={settings.twilioWhatsappFrom} placeholder="+14155238886" />
+              </div>
+            </div>
           </div>
         </div>
       </section>

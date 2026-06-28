@@ -3,12 +3,15 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { InfoBanner } from '@/components/info-banner';
 import { listFinancials } from '@/modules/super-admin/data';
-import { formatCurrency } from '@/lib/format';
 
 export default async function ProfitPage() {
   const rows = await listFinancials();
   const totals = rows.reduce(
-    (t, r) => ({ revenue: t.revenue + r.revenue, aiCost: t.aiCost + r.aiCost, profit: t.profit + r.profit }),
+    (t, r) => ({
+      revenue: t.revenue + r.revenue,
+      aiCost: t.aiCost + r.aiCost,
+      profit: t.profit + r.profit,
+    }),
     { revenue: 0, aiCost: 0, profit: 0 },
   );
 
@@ -16,12 +19,14 @@ export default async function ProfitPage() {
     <div className="space-y-6">
       <div>
         <h1 className="text-2xl font-semibold">Profit / Loss</h1>
-        <p className="text-sm text-muted-foreground">Revenue − AI cost, per company.</p>
+        <p className="text-sm text-muted-foreground">
+          Plan revenue, internal AI cost, and estimated margin per company.
+        </p>
       </div>
 
       <InfoBanner>
-        Revenue is derived from assigned plans. AI cost becomes live with{' '}
-        <strong>Module 20</strong>; until then profit equals revenue.
+        Revenue is derived from assigned plans. AI provider cost is estimated from token usage for
+        the current calendar month.
       </InfoBanner>
 
       <Card>
@@ -30,9 +35,9 @@ export default async function ProfitPage() {
             <TableHeader>
               <TableRow>
                 <TableHead>Company</TableHead>
-                <TableHead className="text-right">Revenue (mo)</TableHead>
-                <TableHead className="text-right">AI cost (mo)</TableHead>
-                <TableHead className="text-right">Profit (mo)</TableHead>
+                <TableHead className="text-right">Plan revenue</TableHead>
+                <TableHead className="text-right">AI cost</TableHead>
+                <TableHead className="text-right">Est. margin</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -43,16 +48,16 @@ export default async function ProfitPage() {
                       {r.name}
                     </Link>
                   </TableCell>
-                  <TableCell className="text-right">{formatCurrency(r.revenue)}</TableCell>
-                  <TableCell className="text-right">{formatCurrency(r.aiCost)}</TableCell>
-                  <TableCell className="text-right">{formatCurrency(r.profit)}</TableCell>
+                  <TableCell className="text-right">{gbp(r.revenue)}</TableCell>
+                  <TableCell className="text-right">{usd(r.aiCost)}</TableCell>
+                  <TableCell className="text-right">{gbp(r.profit)}</TableCell>
                 </TableRow>
               ))}
               <TableRow>
                 <TableCell className="font-semibold">Total</TableCell>
-                <TableCell className="text-right font-semibold">{formatCurrency(totals.revenue)}</TableCell>
-                <TableCell className="text-right font-semibold">{formatCurrency(totals.aiCost)}</TableCell>
-                <TableCell className="text-right font-semibold">{formatCurrency(totals.profit)}</TableCell>
+                <TableCell className="text-right font-semibold">{gbp(totals.revenue)}</TableCell>
+                <TableCell className="text-right font-semibold">{usd(totals.aiCost)}</TableCell>
+                <TableCell className="text-right font-semibold">{gbp(totals.profit)}</TableCell>
               </TableRow>
             </TableBody>
           </Table>
@@ -60,4 +65,20 @@ export default async function ProfitPage() {
       </Card>
     </div>
   );
+}
+
+function gbp(value: number) {
+  return new Intl.NumberFormat('en-GB', {
+    style: 'currency',
+    currency: 'GBP',
+    maximumFractionDigits: 2,
+  }).format(value);
+}
+
+function usd(value: number) {
+  return new Intl.NumberFormat('en-US', {
+    style: 'currency',
+    currency: 'USD',
+    maximumFractionDigits: 4,
+  }).format(value);
 }

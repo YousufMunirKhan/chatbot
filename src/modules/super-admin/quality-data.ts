@@ -66,6 +66,53 @@ export async function getPlatformQualitySummary(): Promise<PlatformQualitySummar
   };
 }
 
+export interface AutoAuditIssueRow {
+  id: string;
+  companyId: string;
+  companyName: string;
+  conversationId: string | null;
+  question: string;
+  answer: string;
+  status: string;
+  label: string | null;
+  score: number | null;
+  reason: string | null;
+  suggestedFix: string | null;
+  createdAt: string;
+}
+
+export async function listAutoAuditIssues(limit = 30): Promise<AutoAuditIssueRow[]> {
+  const sb = createSupabaseServiceClient();
+  const { data, error } = await sb
+    .from('answer_quality_logs')
+    .select(
+      'id,company_id,conversation_id,question,answer,auto_audit_status,auto_audit_label,auto_audit_score,auto_audit_reason,suggested_fix,created_at, companies(name)',
+    )
+    .in('auto_audit_status', ['needs_review', 'failed'])
+    .order('created_at', { ascending: false })
+    .limit(limit);
+  if (error) throw error;
+  return (data ?? []).map((row) => {
+    const x = row as Record<string, unknown>;
+    const company = x.companies as { name?: string } | { name?: string }[] | null;
+    const companyName = Array.isArray(company) ? company[0]?.name : company?.name;
+    return {
+      id: x.id as string,
+      companyId: x.company_id as string,
+      companyName: companyName ?? 'Unknown company',
+      conversationId: (x.conversation_id as string) ?? null,
+      question: String(x.question ?? ''),
+      answer: String(x.answer ?? ''),
+      status: (x.auto_audit_status as string) ?? 'needs_review',
+      label: (x.auto_audit_label as string) ?? null,
+      score: x.auto_audit_score == null ? null : Number(x.auto_audit_score),
+      reason: (x.auto_audit_reason as string) ?? null,
+      suggestedFix: (x.suggested_fix as string) ?? null,
+      createdAt: x.created_at as string,
+    };
+  });
+}
+
 export interface PlatformEvalRow {
   companyId: string;
   companyName: string;

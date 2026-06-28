@@ -3,7 +3,7 @@ import { ROLES } from '@/lib/constants';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { getCompanyId, getCurrentCompany } from '@/modules/company/data';
-import { getSubscription, getMonthlyMessageCount } from '@/lib/billing';
+import { getReplyAllowanceUsage, getSubscription } from '@/lib/billing';
 import { formatDate, formatNumber } from '@/lib/format';
 import { BillingUpgrade } from '@/modules/company/components/billing-upgrade';
 import { listBillingPlans } from '@/modules/super-admin/billing-data';
@@ -29,10 +29,10 @@ function statusVariant(status: string | null): 'success' | 'warning' | 'secondar
 export default async function BillingPage() {
   await requireRole([ROLES.COMPANY_ADMIN]);
   const companyId = await getCompanyId();
-  const [{ subscription }, sub, used, publicPlans] = await Promise.all([
+  const [{ subscription }, sub, replyUsage, publicPlans] = await Promise.all([
     getCurrentCompany(),
     getSubscription(companyId),
-    getMonthlyMessageCount(companyId),
+    getReplyAllowanceUsage(companyId),
     listBillingPlans({ publicOnly: true }),
   ]);
 
@@ -42,9 +42,10 @@ export default async function BillingPage() {
   const status = sub?.status ?? subscription.status ?? null;
   const freeUntil = sub?.freeUntil ?? subscription.freeUntil;
   const messageLimit = sub?.messageLimit ?? subscription.messageLimit;
+  const totalAvailable = replyUsage.totalAvailable;
   const usagePct =
-    messageLimit && messageLimit > 0
-      ? Math.min(100, Math.round((used / messageLimit) * 100))
+    totalAvailable && totalAvailable > 0
+      ? Math.min(100, Math.round((replyUsage.used / totalAvailable) * 100))
       : null;
 
   return (
@@ -65,7 +66,9 @@ export default async function BillingPage() {
         </CardHeader>
         <CardContent className="grid gap-3 text-sm sm:grid-cols-2">
           <Row label="Free until" value={formatDate(freeUntil)} />
-          <Row label="Message allowance" value={lim(messageLimit)} />
+          <Row label="Monthly AI replies" value={lim(messageLimit)} />
+          <Row label="Extra replies added" value={formatNumber(replyUsage.extraReplies)} />
+          <Row label="Allowance resets" value={formatDate(replyUsage.resetAt)} />
           <Row label="Assistant limit" value={lim(sub?.botLimit ?? subscription.botLimit)} />
           <Row label="Team seat limit" value={lim(sub?.agentLimit ?? subscription.agentLimit)} />
           <Row
@@ -77,14 +80,14 @@ export default async function BillingPage() {
 
       <Card>
         <CardHeader>
-          <CardTitle>Usage this month</CardTitle>
+          <CardTitle>AI reply usage this month</CardTitle>
         </CardHeader>
         <CardContent className="space-y-3">
           <div className="flex items-end justify-between">
             <span className="text-sm text-muted-foreground">AI replies used</span>
             <span className="text-2xl font-semibold">
-              {formatNumber(used)} /{' '}
-              {messageLimit == null ? 'Unlimited' : formatNumber(messageLimit)}
+              {formatNumber(replyUsage.used)} /{' '}
+              {totalAvailable == null ? 'Unlimited' : formatNumber(totalAvailable)}
             </span>
           </div>
           <div className="h-2 w-full overflow-hidden rounded-full bg-muted">
@@ -94,9 +97,16 @@ export default async function BillingPage() {
             />
           </div>
           <p className="text-xs text-muted-foreground">
-            {messageLimit == null
-              ? 'Unlimited messages on your current package.'
-              : `${usagePct}% of your monthly AI reply allowance used.`}
+            {totalAvailable == null
+              ? 'Unlimited AI replies on your current package.'
+              : `${usagePct}% used. Your base monthly allowance is ${formatNumber(messageLimit ?? 0)}${
+                  replyUsage.extraReplies > 0
+                    ? `, plus ${formatNumber(replyUsage.extraReplies)} extra replies added by support`
+                    : ''
+                }.`}
+          </p>
+          <p className="text-xs text-muted-foreground">
+            Unused monthly replies expire at the end of each billing month and do not roll over.
           </p>
         </CardContent>
       </Card>

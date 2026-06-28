@@ -8,6 +8,7 @@ import { ROLES } from '@/lib/constants';
 import { createSupabaseServiceClient } from '@/lib/db/server';
 import { logger } from '@/lib/logger';
 import { runEval } from '@/lib/ai/eval';
+import { currentMonthEndIso } from '@/lib/billing';
 import { sendImprovementEmail } from './improvements-data';
 import { PLANS, PLAN_KEYS, SUBSCRIPTION_STATUSES } from './plans';
 
@@ -390,6 +391,59 @@ export async function topUpCompanyCreditAction(formData: FormData): Promise<void
     metadata: { amountGbp: v.amount, description: v.description ?? null },
   });
   revalidatePath(`/super-admin/companies/${v.companyId}`);
+  revalidatePath('/super-admin/usage');
+}
+
+const replyGrantSchema = z.object({
+  companyId: z.string().uuid(),
+  replyCount: z.coerce.number().int().positive('Reply count must be greater than zero'),
+  grantType: z
+    .enum(['manual', 'goodwill', 'paid_extra', 'support_adjustment'])
+    .default('manual'),
+  reason: z.string().trim().min(2, 'Add a short note for this reply grant'),
+  expiresAt: optDate,
+});
+
+function expiryIso(value: string | undefined): string {
+  if (!value) return currentMonthEndIso();
+  return new Date(`${value}T23:59:59.999Z`).toISOString();
+}
+
+export async function grantCompanyRepliesAction(formData: FormData): Promise<void> {
+  const admin = await requireRole([ROLES.SUPER_ADMIN]);
+  const v = replyGrantSchema.parse(Object.fromEntries(formData));
+  const sb = createSupabaseServiceClient();
+  const expiresAt = expiryIso(v.expiresAt);
+
+  const { data, error } = await sb
+    .from('company_reply_grants')
+    .insert({
+      company_id: v.companyId,
+      reply_count: v.replyCount,
+      reason: v.reason,
+      grant_type: v.grantType,
+      expires_at: expiresAt,
+      created_by: admin.userId,
+    })
+    .select('id')
+    .single();
+  if (error) throw error;
+
+  await writeAudit(sb, {
+    companyId: v.companyId,
+    actorId: admin.userId,
+    action: 'replies.granted',
+    targetType: 'company_reply_grant',
+    targetId: (data?.id as string) ?? v.companyId,
+    metadata: {
+      replyCount: v.replyCount,
+      grantType: v.grantType,
+      reason: v.reason,
+      expiresAt,
+    },
+  });
+  revalidatePath(`/super-admin/companies/${v.companyId}`);
+  revalidatePath('/super-admin/companies');
   revalidatePath('/super-admin/usage');
 }
 

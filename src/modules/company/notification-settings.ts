@@ -21,7 +21,16 @@ export interface CompanyNotificationSettingsView {
   smtpFromEmail: string;
   smtpFromName: string;
   whatsappEnabled: boolean;
+  whatsappSenderMode: 'company' | 'platform_managed';
+  whatsappProvider: 'disabled' | 'meta_cloud' | 'twilio';
   whatsappRecipients: string[];
+  metaPhoneNumberId: string;
+  hasMetaAccessToken: boolean;
+  metaTemplateName: string;
+  metaTemplateLanguage: string;
+  twilioAccountSid: string;
+  hasTwilioAuthToken: boolean;
+  twilioWhatsappFrom: string;
   slackEnabled: boolean;
   hasSlackWebhook: boolean;
   webhookEnabled: boolean;
@@ -83,7 +92,20 @@ export async function getCompanyNotificationSettings(): Promise<CompanyNotificat
     smtpFromEmail: (row.smtp_from_email as string) ?? '',
     smtpFromName: (row.smtp_from_name as string) ?? '',
     whatsappEnabled: Boolean(row.whatsapp_enabled),
+    whatsappSenderMode:
+      row.whatsapp_sender_mode === 'platform_managed' ? 'platform_managed' : 'company',
+    whatsappProvider:
+      row.whatsapp_provider === 'meta_cloud' || row.whatsapp_provider === 'twilio'
+        ? row.whatsapp_provider
+        : 'disabled',
     whatsappRecipients: arr(row.whatsapp_recipients),
+    metaPhoneNumberId: (row.meta_phone_number_id as string) ?? '',
+    hasMetaAccessToken: Boolean(row.meta_access_token_encrypted),
+    metaTemplateName: (row.meta_template_name as string) ?? '',
+    metaTemplateLanguage: (row.meta_template_language as string) ?? 'en_GB',
+    twilioAccountSid: (row.twilio_account_sid as string) ?? '',
+    hasTwilioAuthToken: Boolean(row.twilio_auth_token_encrypted),
+    twilioWhatsappFrom: (row.twilio_whatsapp_from as string) ?? '',
     slackEnabled: Boolean(row.slack_enabled),
     hasSlackWebhook: Boolean(row.slack_webhook_encrypted),
     webhookEnabled: Boolean(row.webhook_enabled),

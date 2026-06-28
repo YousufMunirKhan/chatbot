@@ -1,4 +1,5 @@
 import { redirect } from 'next/navigation';
+import { cache } from 'react';
 import { getSessionUser, homePathFor } from '@/lib/auth';
 import { createSupabaseServiceClient } from '@/lib/db/server';
 import { NotFoundError } from '@/lib/errors';
@@ -12,12 +13,12 @@ import { NotFoundError } from '@/lib/errors';
  * If the user has no company (e.g. a super admin), they are redirected to their
  * own home instead of crashing the page.
  */
-export async function getCompanyId(): Promise<string> {
+export const getCompanyId = cache(async function getCompanyId(): Promise<string> {
   const user = await getSessionUser();
   if (!user) redirect('/login');
   if (!user.companyId) redirect(homePathFor(user));
   return user.companyId;
-}
+});
 
 const one = <T>(v: T | T[] | null | undefined): T | null =>
   Array.isArray(v) ? (v[0] ?? null) : (v ?? null);

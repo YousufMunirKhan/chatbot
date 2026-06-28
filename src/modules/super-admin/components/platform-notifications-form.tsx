@@ -33,17 +33,26 @@ export function PlatformNotificationsForm({ settings }: { settings: PlatformNoti
           </select>
         </div>
         <div className="space-y-1.5">
-          <Label htmlFor="whatsappProvider">WhatsApp provider</Label>
+          <Label htmlFor="whatsappProvider">Platform-managed WhatsApp provider</Label>
           <select id="whatsappProvider" name="whatsappProvider" className={selectCls} defaultValue={settings.whatsappProvider}>
             <option value="disabled">Disabled</option>
             <option value="meta_cloud">Meta Cloud API</option>
             <option value="twilio">Twilio WhatsApp</option>
           </select>
+          <p className="text-xs text-muted-foreground">
+            Used only when a company is explicitly set to platform-managed WhatsApp.
+          </p>
         </div>
       </div>
 
       <section className="space-y-3">
-        <h2 className="text-base font-semibold">Meta Cloud API</h2>
+        <div>
+          <h2 className="text-base font-semibold">Meta Cloud API managed sender</h2>
+          <p className="text-sm text-muted-foreground">
+            Company-owned WhatsApp credentials are configured inside the company account. These
+            platform credentials are only for a paid/support managed sender.
+          </p>
+        </div>
         <div className="grid gap-4 sm:grid-cols-2">
           <div className="space-y-1.5">
             <Label htmlFor="metaPhoneNumberId">Phone number ID</Label>
@@ -70,7 +79,13 @@ export function PlatformNotificationsForm({ settings }: { settings: PlatformNoti
       </section>
 
       <section className="space-y-3">
-        <h2 className="text-base font-semibold">Twilio WhatsApp</h2>
+        <div>
+          <h2 className="text-base font-semibold">Twilio WhatsApp managed sender</h2>
+          <p className="text-sm text-muted-foreground">
+            Do not use this for normal company accounts unless you intend the platform to own and
+            bill the WhatsApp sender.
+          </p>
+        </div>
         <div className="grid gap-4 sm:grid-cols-2">
           <div className="space-y-1.5">
             <Label htmlFor="twilioAccountSid">Account SID</Label>

@@ -97,6 +97,11 @@ export async function loadCompactBusinessContext(companyId: string, sb: SB = cre
     line('Industry', profile.industry),
     line('Target customers', profile.target_customers),
     line('Brand voice', profile.brand_voice),
+    line('Answer length', profile.answer_length),
+    line('Fact strictness', profile.answer_strictness),
+    line('Sales style', profile.sales_style),
+    line('Tone notes', profile.tone_notes),
+    line('Avoid phrases', profile.banned_phrases),
     line('Why customers choose us', profile.unique_selling_points),
     line('Service areas', profile.service_areas),
     line('Payment methods', profile.payment_methods),
@@ -168,6 +173,7 @@ export async function loadCompactBusinessContext(companyId: string, sb: SB = cre
 
   const rules = [
     line('Escalation rules', profile.escalation_rules),
+    line('Escalation message', profile.escalation_message),
     line('Lead qualification rules', profile.lead_qualification_rules),
     line('Appointment rules', profile.appointment_rules),
   ].filter(Boolean);

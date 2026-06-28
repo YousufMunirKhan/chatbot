@@ -3,7 +3,6 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { InfoBanner } from '@/components/info-banner';
 import { listFinancials } from '@/modules/super-admin/data';
-import { formatCurrency } from '@/lib/format';
 
 export default async function CostsPage() {
   const rows = await listFinancials();
@@ -37,12 +36,12 @@ export default async function CostsPage() {
                       {r.name}
                     </Link>
                   </TableCell>
-                  <TableCell className="text-right">{formatCurrency(r.aiCost)}</TableCell>
+                  <TableCell className="text-right">{usd(r.aiCost)}</TableCell>
                 </TableRow>
               ))}
               <TableRow>
                 <TableCell className="font-semibold">Total</TableCell>
-                <TableCell className="text-right font-semibold">{formatCurrency(total)}</TableCell>
+                <TableCell className="text-right font-semibold">{usd(total)}</TableCell>
               </TableRow>
             </TableBody>
           </Table>
@@ -50,4 +49,12 @@ export default async function CostsPage() {
       </Card>
     </div>
   );
+}
+
+function usd(value: number) {
+  return new Intl.NumberFormat('en-US', {
+    style: 'currency',
+    currency: 'USD',
+    maximumFractionDigits: 4,
+  }).format(value);
 }

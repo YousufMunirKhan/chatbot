@@ -13,6 +13,12 @@ export interface BusinessProfileMemory {
   industry: string | null;
   targetCustomers: string | null;
   brandVoice: string | null;
+  answerLength: string;
+  answerStrictness: string;
+  salesStyle: string;
+  toneNotes: string | null;
+  bannedPhrases: string[];
+  escalationMessage: string | null;
   uniqueSellingPoints: string | null;
   primaryPhone: string | null;
   supportEmail: string | null;
@@ -101,6 +107,12 @@ const EMPTY_PROFILE: BusinessProfileMemory = {
   industry: null,
   targetCustomers: null,
   brandVoice: null,
+  answerLength: 'balanced',
+  answerStrictness: 'grounded',
+  salesStyle: 'helpful',
+  toneNotes: null,
+  bannedPhrases: [],
+  escalationMessage: null,
   uniqueSellingPoints: null,
   primaryPhone: null,
   supportEmail: null,
@@ -155,6 +167,12 @@ export async function getBusinessMemory(): Promise<BusinessMemoryData> {
         industry: str(p.industry),
         targetCustomers: str(p.target_customers),
         brandVoice: str(p.brand_voice),
+        answerLength: str(p.answer_length) ?? 'balanced',
+        answerStrictness: str(p.answer_strictness) ?? 'grounded',
+        salesStyle: str(p.sales_style) ?? 'helpful',
+        toneNotes: str(p.tone_notes),
+        bannedPhrases: Array.isArray(p.banned_phrases) ? p.banned_phrases.map(String) : [],
+        escalationMessage: str(p.escalation_message),
         uniqueSellingPoints: str(p.unique_selling_points),
         primaryPhone: str(p.primary_phone),
         supportEmail: str(p.support_email),

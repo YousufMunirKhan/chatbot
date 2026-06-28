@@ -16,6 +16,11 @@ export interface QualitySummary {
     model: string | null;
     cost: number;
     failureReason: string | null;
+    autoAuditStatus: string | null;
+    autoAuditLabel: string | null;
+    autoAuditScore: number | null;
+    autoAuditReason: string | null;
+    suggestedFix: string | null;
     sourceTypes: string[];
     createdAt: string;
   }>;
@@ -39,7 +44,10 @@ export interface QualityFixRow {
   createdAt: string;
 }
 
-function summarize(rows: Array<Record<string, unknown>>): QualitySummary {
+function summarize(
+  rows: Array<Record<string, unknown>>,
+  recentRows: Array<Record<string, unknown>>,
+): QualitySummary {
   const failureCounts = new Map<string, number>();
   const questionCounts = new Map<string, number>();
   let cost = 0;
@@ -63,7 +71,7 @@ function summarize(rows: Array<Record<string, unknown>>): QualitySummary {
 
   return {
     total: rows.length,
-    failed: rows.filter((r) => Boolean(r.failure_reason)).length,
+    failed: rows.filter((r) => Boolean(r.failure_reason) || ['needs_review', 'failed'].includes(String(r.auto_audit_status ?? ''))).length,
     handoffs,
     cost,
     avgLatencyMs: latencyCount ? Math.round(latencyTotal / latencyCount) : 0,
@@ -75,13 +83,18 @@ function summarize(rows: Array<Record<string, unknown>>): QualitySummary {
       .map(([question, count]) => ({ question, count }))
       .sort((a, b) => b.count - a.count)
       .slice(0, 8),
-    recent: rows.slice(0, 25).map((row) => ({
+    recent: recentRows.slice(0, 25).map((row) => ({
       id: row.id as string,
       question: String(row.question ?? ''),
       answer: String(row.answer ?? ''),
       model: (row.model as string) ?? null,
       cost: Number(row.estimated_cost ?? 0),
       failureReason: (row.failure_reason as string) ?? null,
+      autoAuditStatus: (row.auto_audit_status as string) ?? null,
+      autoAuditLabel: (row.auto_audit_label as string) ?? null,
+      autoAuditScore: row.auto_audit_score == null ? null : Number(row.auto_audit_score),
+      autoAuditReason: (row.auto_audit_reason as string) ?? null,
+      suggestedFix: (row.suggested_fix as string) ?? null,
       sourceTypes: Array.isArray(row.source_types) ? row.source_types.map(String) : [],
       createdAt: row.created_at as string,
     })),
@@ -93,43 +106,45 @@ export async function getCompanyQualitySummary(): Promise<QualitySummary> {
   const sb = createSupabaseServiceClient();
   const since = new Date();
   since.setDate(since.getDate() - 30);
-  const { data, error } = await sb
-    .from('answer_quality_logs')
-    .select('*')
-    .eq('company_id', companyId)
-    .gte('created_at', since.toISOString())
-    .order('created_at', { ascending: false })
-    .limit(500);
-  if (error) throw error;
-  return summarize((data ?? []) as Array<Record<string, unknown>>);
+  const [metrics, recent] = await Promise.all([
+    sb
+      .from('answer_quality_logs')
+      .select('id,question,estimated_cost,failure_reason,auto_audit_status,created_at,latency_ms,handoff_status')
+      .eq('company_id', companyId)
+      .gte('created_at', since.toISOString())
+      .order('created_at', { ascending: false })
+      .limit(500),
+    sb
+      .from('answer_quality_logs')
+      .select(
+        'id,question,answer,model,estimated_cost,failure_reason,auto_audit_status,auto_audit_label,auto_audit_score,auto_audit_reason,suggested_fix,source_types,created_at',
+      )
+      .eq('company_id', companyId)
+      .gte('created_at', since.toISOString())
+      .order('created_at', { ascending: false })
+      .limit(25),
+  ]);
+  if (metrics.error) throw metrics.error;
+  if (recent.error) throw recent.error;
+  return summarize(
+    (metrics.data ?? []) as Array<Record<string, unknown>>,
+    (recent.data ?? []) as Array<Record<string, unknown>>,
+  );
 }
 
 export async function getKnowledgeIndexSummary(): Promise<KnowledgeIndexSummary> {
   const companyId = await getCompanyId();
   const sb = createSupabaseServiceClient();
-  const [readyDocs, failedDocs, chunks, latest] = await Promise.all([
-    sb.from('documents').select('id', { count: 'exact', head: true }).eq('company_id', companyId).eq('status', 'ready'),
-    sb.from('documents').select('id', { count: 'exact', head: true }).eq('company_id', companyId).eq('status', 'failed'),
-    sb.from('chunks').select('id', { count: 'exact', head: true }).eq('company_id', companyId),
-    sb
-      .from('documents')
-      .select('updated_at,created_at')
-      .eq('company_id', companyId)
-      .eq('status', 'ready')
-      .order('updated_at', { ascending: false })
-      .limit(1)
-      .maybeSingle(),
-  ]);
-  if (readyDocs.error) throw readyDocs.error;
-  if (failedDocs.error) throw failedDocs.error;
-  if (chunks.error) throw chunks.error;
-  if (latest.error) throw latest.error;
-  const latestRow = latest.data as { updated_at?: string | null; created_at?: string | null } | null;
+  const { data, error } = await sb
+    .rpc('company_quality_index_summary', { p_company_id: companyId })
+    .maybeSingle();
+  if (error) throw error;
+  const row = (data ?? {}) as Record<string, unknown>;
   return {
-    readyDocuments: readyDocs.count ?? 0,
-    failedDocuments: failedDocs.count ?? 0,
-    totalChunks: chunks.count ?? 0,
-    lastIndexedAt: latestRow?.updated_at ?? latestRow?.created_at ?? null,
+    readyDocuments: Number(row.ready_documents ?? 0),
+    failedDocuments: Number(row.failed_documents ?? 0),
+    totalChunks: Number(row.total_chunks ?? 0),
+    lastIndexedAt: (row.last_indexed_at as string) ?? null,
   };
 }
 

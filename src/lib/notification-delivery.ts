@@ -31,7 +31,16 @@ interface CompanyNotificationSettings {
   smtpFromEmail: string | null;
   smtpFromName: string | null;
   whatsappEnabled: boolean;
+  whatsappSenderMode: 'company' | 'platform_managed';
+  whatsappProvider: 'disabled' | 'meta_cloud' | 'twilio';
   whatsappRecipients: string[];
+  metaPhoneNumberId: string | null;
+  metaAccessToken: string | null;
+  metaTemplateName: string | null;
+  metaTemplateLanguage: string | null;
+  twilioAccountSid: string | null;
+  twilioAuthToken: string | null;
+  twilioWhatsappFrom: string | null;
   slackEnabled: boolean;
   slackWebhookUrl: string | null;
   webhookEnabled: boolean;
@@ -146,7 +155,20 @@ async function loadSettings(companyId: string): Promise<CompanyNotificationSetti
     smtpFromEmail: (row.smtp_from_email as string) ?? null,
     smtpFromName: (row.smtp_from_name as string) ?? null,
     whatsappEnabled: Boolean(row.whatsapp_enabled),
+    whatsappSenderMode:
+      row.whatsapp_sender_mode === 'platform_managed' ? 'platform_managed' : 'company',
+    whatsappProvider:
+      row.whatsapp_provider === 'meta_cloud' || row.whatsapp_provider === 'twilio'
+        ? row.whatsapp_provider
+        : 'disabled',
     whatsappRecipients: asStringArray(row.whatsapp_recipients),
+    metaPhoneNumberId: (row.meta_phone_number_id as string) ?? null,
+    metaAccessToken: decryptMaybe(row.meta_access_token_encrypted),
+    metaTemplateName: (row.meta_template_name as string) ?? null,
+    metaTemplateLanguage: (row.meta_template_language as string) ?? 'en_GB',
+    twilioAccountSid: (row.twilio_account_sid as string) ?? null,
+    twilioAuthToken: decryptMaybe(row.twilio_auth_token_encrypted),
+    twilioWhatsappFrom: (row.twilio_whatsapp_from as string) ?? null,
     slackEnabled: Boolean(row.slack_enabled),
     slackWebhookUrl: decryptMaybe(row.slack_webhook_encrypted),
     webhookEnabled: Boolean(row.webhook_enabled),
@@ -277,14 +299,20 @@ async function deliverWhatsApp(event: NotificationDeliveryEvent, settings: Compa
     return;
   }
 
-  const provider = String((await readPlatformSetting('notifications.whatsapp_provider')) ?? 'disabled');
+  const provider =
+    settings.whatsappSenderMode === 'platform_managed'
+      ? String((await readPlatformSetting('notifications.whatsapp_provider')) ?? 'disabled')
+      : settings.whatsappProvider;
   if (provider === 'disabled') {
     await logDelivery({
       event,
       channel: 'whatsapp',
       recipient: recipients.join(', '),
       status: 'skipped',
-      error: 'Platform WhatsApp provider is disabled',
+      error:
+        settings.whatsappSenderMode === 'platform_managed'
+          ? 'Platform-managed WhatsApp provider is disabled'
+          : 'Company WhatsApp provider is disabled',
     });
     return;
   }
@@ -292,8 +320,28 @@ async function deliverWhatsApp(event: NotificationDeliveryEvent, settings: Compa
   await Promise.all(
     recipients.map(async (to) => {
       try {
-        if (provider === 'twilio') await sendTwilioWhatsApp(to, textBody(event));
-        else if (provider === 'meta_cloud') await sendMetaWhatsApp(to, event);
+        if (provider === 'twilio') {
+          const credentials =
+            settings.whatsappSenderMode === 'platform_managed'
+              ? await platformTwilioCredentials()
+              : {
+                  sid: settings.twilioAccountSid,
+                  token: settings.twilioAuthToken,
+                  from: settings.twilioWhatsappFrom,
+                };
+          await sendTwilioWhatsApp(to, textBody(event), credentials);
+        } else if (provider === 'meta_cloud') {
+          const credentials =
+            settings.whatsappSenderMode === 'platform_managed'
+              ? await platformMetaCredentials()
+              : {
+                  token: settings.metaAccessToken,
+                  phoneNumberId: settings.metaPhoneNumberId,
+                  templateName: settings.metaTemplateName,
+                  languageCode: settings.metaTemplateLanguage,
+                };
+          await sendMetaWhatsApp(to, event, credentials);
+        }
         else throw new Error(`Unsupported WhatsApp provider: ${provider}`);
         await logDelivery({ event, channel: 'whatsapp', recipient: to, status: 'sent' });
       } catch (err) {
@@ -303,12 +351,36 @@ async function deliverWhatsApp(event: NotificationDeliveryEvent, settings: Compa
   );
 }
 
-async function sendTwilioWhatsApp(to: string, body: string) {
+async function platformTwilioCredentials() {
   const [sid, token, from] = await Promise.all([
     readPlatformSetting('notifications.twilio_account_sid'),
     readPlatformSetting('notifications.twilio_auth_token'),
     readPlatformSetting('notifications.twilio_whatsapp_from'),
   ]);
+  return { sid: sid ? String(sid) : null, token: token ? String(token) : null, from: from ? String(from) : null };
+}
+
+async function platformMetaCredentials() {
+  const [token, phoneNumberId, templateName, languageCode] = await Promise.all([
+    readPlatformSetting('notifications.meta_access_token'),
+    readPlatformSetting('notifications.meta_phone_number_id'),
+    readPlatformSetting('notifications.meta_template_name'),
+    readPlatformSetting('notifications.meta_template_language'),
+  ]);
+  return {
+    token: token ? String(token) : null,
+    phoneNumberId: phoneNumberId ? String(phoneNumberId) : null,
+    templateName: templateName ? String(templateName) : null,
+    languageCode: languageCode ? String(languageCode) : null,
+  };
+}
+
+async function sendTwilioWhatsApp(
+  to: string,
+  body: string,
+  credentials: { sid: string | null; token: string | null; from: string | null },
+) {
+  const { sid, token, from } = credentials;
   if (!sid || !token || !from) throw new Error('Twilio WhatsApp is not fully configured');
   const params = new URLSearchParams();
   params.set('From', String(from).startsWith('whatsapp:') ? String(from) : `whatsapp:${from}`);
@@ -325,13 +397,17 @@ async function sendTwilioWhatsApp(to: string, body: string) {
   if (!res.ok) throw new Error(`Twilio WhatsApp returned ${res.status}`);
 }
 
-async function sendMetaWhatsApp(to: string, event: NotificationDeliveryEvent) {
-  const [token, phoneNumberId, templateName, languageCode] = await Promise.all([
-    readPlatformSetting('notifications.meta_access_token'),
-    readPlatformSetting('notifications.meta_phone_number_id'),
-    readPlatformSetting('notifications.meta_template_name'),
-    readPlatformSetting('notifications.meta_template_language'),
-  ]);
+async function sendMetaWhatsApp(
+  to: string,
+  event: NotificationDeliveryEvent,
+  credentials: {
+    token: string | null;
+    phoneNumberId: string | null;
+    templateName: string | null;
+    languageCode: string | null;
+  },
+) {
+  const { token, phoneNumberId, templateName, languageCode } = credentials;
   if (!token || !phoneNumberId || !templateName) {
     throw new Error('Meta WhatsApp is not fully configured');
   }

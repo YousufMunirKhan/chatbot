@@ -5,7 +5,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { requireRole } from '@/lib/auth';
 import { ROLES } from '@/lib/constants';
 import { formatNumber } from '@/lib/format';
-import { getPlatformQualitySummary, getPlatformEvalSummary } from '@/modules/super-admin/quality-data';
+import { getPlatformQualitySummary, getPlatformEvalSummary, listAutoAuditIssues } from '@/modules/super-admin/quality-data';
 import { getPlatformImprovements, whereLabel } from '@/modules/super-admin/improvements-data';
 import { emailImprovementsAction } from '@/modules/super-admin/actions';
 import { Button } from '@/components/ui/button';
@@ -29,10 +29,11 @@ function Stat({ label, value }: { label: string; value: string }) {
 
 export default async function SuperAdminQualityPage() {
   await requireRole([ROLES.SUPER_ADMIN]);
-  const [q, evals, improvements] = await Promise.all([
+  const [q, evals, improvements, auditIssues] = await Promise.all([
     getPlatformQualitySummary(),
     getPlatformEvalSummary(),
     getPlatformImprovements(),
+    listAutoAuditIssues(),
   ]);
   const qualityScore = q.total ? Math.max(0, Math.round(((q.total - q.failed) / q.total) * 100)) : 0;
 
@@ -109,6 +110,50 @@ export default async function SuperAdminQualityPage() {
           </CardContent>
         </Card>
       </div>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Auto-audit queue</CardTitle>
+          <p className="text-sm text-muted-foreground">
+            New AI answers marked failed or needs review. Open the transcript, then approve the fix in the company&apos;s Quality Room.
+          </p>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          {auditIssues.length === 0 ? (
+            <p className="text-sm text-muted-foreground">No auto-audit issues waiting.</p>
+          ) : (
+            auditIssues.map((issue) => (
+              <div key={issue.id} className="rounded-lg border p-4">
+                <div className="mb-2 flex flex-wrap items-center gap-2">
+                  <Link href={`/super-admin/companies/${issue.companyId}`} className="font-medium text-primary hover:underline">
+                    {issue.companyName}
+                  </Link>
+                  <Badge variant={issue.status === 'failed' ? 'destructive' : 'warning'}>{issue.status.replace(/_/g, ' ')}</Badge>
+                  {issue.label ? <Badge variant="secondary">{issue.label.replace(/_/g, ' ')}</Badge> : null}
+                  {issue.score == null ? null : <span className="text-xs text-muted-foreground">{issue.score}%</span>}
+                </div>
+                <p className="line-clamp-2 text-sm font-medium">{issue.question}</p>
+                {issue.reason ? <p className="mt-1 text-sm text-muted-foreground">{issue.reason}</p> : null}
+                {issue.suggestedFix ? (
+                  <p className="mt-2 rounded-md border border-amber-200 bg-amber-50 p-2 text-sm text-amber-950">
+                    {issue.suggestedFix}
+                  </p>
+                ) : null}
+                <div className="mt-3 flex flex-wrap gap-2">
+                  {issue.conversationId ? (
+                    <Button asChild variant="outline" size="sm">
+                      <Link href={`/super-admin/chat-logs/${issue.conversationId}`}>Open transcript</Link>
+                    </Button>
+                  ) : null}
+                  <Button asChild variant="outline" size="sm">
+                    <Link href={`/super-admin/companies/${issue.companyId}?tab=quality`}>Company quality</Link>
+                  </Button>
+                </div>
+              </div>
+            ))
+          )}
+        </CardContent>
+      </Card>
 
       <Card>
         <CardHeader>

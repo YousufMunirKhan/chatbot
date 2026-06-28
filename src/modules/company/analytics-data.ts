@@ -1,5 +1,5 @@
 import { createSupabaseServiceClient } from '@/lib/db/server';
-import { getMonthlyMessageCount, getSubscription } from '@/lib/billing';
+import { getReplyAllowanceUsage, type ReplyAllowanceUsage } from '@/lib/billing';
 import { getCompanyId } from './data';
 
 /**
@@ -10,7 +10,8 @@ import { getCompanyId } from './data';
 export interface CompanyAnalytics {
   messagesThisMonth: number;
   messageLimit: number | null;
-  aiCostThisMonth: number;
+  replyUsage: ReplyAllowanceUsage;
+  totalChatMessagesThisMonth: number;
   leads: number;
   appointments: number;
   chatOrders: number;
@@ -47,22 +48,18 @@ export async function getCompanyAnalytics(): Promise<CompanyAnalytics> {
     return count ?? 0;
   };
 
-  const sumCost = async (): Promise<number> => {
-    const { data } = await sb
-      .from('ai_usage_logs')
-      .select('estimated_cost,created_at')
+  const countMonthlyMessages = async (): Promise<number> => {
+    const { count } = await sb
+      .from('messages')
+      .select('id', { count: 'exact', head: true })
       .eq('company_id', companyId)
       .gte('created_at', monthStartIso());
-    return (data ?? []).reduce((sum, r) => {
-      const row = r as Record<string, unknown>;
-      return sum + ((row.estimated_cost as number) ?? 0);
-    }, 0);
+    return count ?? 0;
   };
 
   const [
-    messagesThisMonth,
-    subscription,
-    aiCostThisMonth,
+    replyUsage,
+    totalChatMessagesThisMonth,
     leads,
     appointments,
     chatOrders,
@@ -70,9 +67,8 @@ export async function getCompanyAnalytics(): Promise<CompanyAnalytics> {
     aiHandled,
     humanHandled,
   ] = await Promise.all([
-    getMonthlyMessageCount(companyId),
-    getSubscription(companyId),
-    sumCost(),
+    getReplyAllowanceUsage(companyId),
+    countMonthlyMessages(),
     countWhere('leads'),
     countWhere('appointments'),
     countWhere('chat_orders'),
@@ -82,9 +78,10 @@ export async function getCompanyAnalytics(): Promise<CompanyAnalytics> {
   ]);
 
   return {
-    messagesThisMonth,
-    messageLimit: subscription?.messageLimit ?? null,
-    aiCostThisMonth,
+    messagesThisMonth: replyUsage.used,
+    messageLimit: replyUsage.monthlyAllowance,
+    replyUsage,
+    totalChatMessagesThisMonth,
     leads,
     appointments,
     chatOrders,

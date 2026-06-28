@@ -2,12 +2,8 @@ import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { getCompanyOverview } from '@/modules/company/data';
+import { getCompanyDashboardSummary } from '@/modules/company/dashboard-data';
 import { getCompanySetupProgress } from '@/modules/company/setup-data';
-import { listConversations } from '@/modules/company/inbox-data';
-import { listLeads } from '@/modules/company/leads-data';
-import { listAppointments } from '@/modules/company/appointments-data';
-import { listChatOrders, listSyncedOrders } from '@/modules/company/orders-data';
 import { planLabel } from '@/modules/super-admin/plans';
 import { formatDate, formatNumber } from '@/lib/format';
 
@@ -24,32 +20,25 @@ function Stat({ label, value, href }: { label: string; value: string; href?: str
 }
 
 export default async function CompanyOverview() {
-  const [o, setup, conversations, leads, appointments, chatOrders, syncedOrders] = await Promise.all([
-    getCompanyOverview(),
+  const [summary, setup] = await Promise.all([
+    getCompanyDashboardSummary(),
     getCompanySetupProgress(),
-    listConversations(),
-    listLeads(),
-    listAppointments(),
-    listChatOrders(),
-    listSyncedOrders(),
   ]);
-  const sub = o.company.subscription;
-  const activeConversations = conversations.filter((c) => c.status !== 'closed').length;
-  const customerWork = leads.length + appointments.length + chatOrders.length + syncedOrders.length;
+  const sub = summary.company.subscription;
 
   return (
     <div className="mx-auto max-w-6xl space-y-6">
       <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
         <div>
-          <h1 className="text-2xl font-semibold">{o.company.name}</h1>
+          <h1 className="text-2xl font-semibold">{summary.company.name}</h1>
           <p className="text-sm text-muted-foreground">
             {planLabel(sub.plan)} plan
             {sub.freeUntil ? `, free until ${formatDate(sub.freeUntil)}` : ''}
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          <Badge variant={o.company.status === 'active' ? 'success' : 'destructive'}>
-            {o.company.status}
+          <Badge variant={summary.company.status === 'active' ? 'success' : 'destructive'}>
+            {summary.company.status}
           </Badge>
           <Button asChild>
             <Link href={setup.nextStep?.href ?? '/company/widget'}>
@@ -88,27 +77,27 @@ export default async function CompanyOverview() {
           <div className="grid grid-cols-2 border-t bg-muted/30 lg:border-l lg:border-t-0">
             <div className="border-b border-r p-4">
               <p className="text-xs uppercase tracking-wider text-muted-foreground">Assistants</p>
-              <p className="mt-1 text-2xl font-semibold">{formatNumber(o.botCount)}</p>
+              <p className="mt-1 text-2xl font-semibold">{formatNumber(summary.botCount)}</p>
             </div>
             <div className="border-b p-4">
               <p className="text-xs uppercase tracking-wider text-muted-foreground">Team</p>
-              <p className="mt-1 text-2xl font-semibold">{formatNumber(o.memberCount)}</p>
+              <p className="mt-1 text-2xl font-semibold">{formatNumber(summary.memberCount)}</p>
             </div>
             <div className="border-r p-4">
               <p className="text-xs uppercase tracking-wider text-muted-foreground">Open chats</p>
-              <p className="mt-1 text-2xl font-semibold">{formatNumber(activeConversations)}</p>
+              <p className="mt-1 text-2xl font-semibold">{formatNumber(summary.activeConversations)}</p>
             </div>
             <div className="p-4">
               <p className="text-xs uppercase tracking-wider text-muted-foreground">Customer work</p>
-              <p className="mt-1 text-2xl font-semibold">{formatNumber(customerWork)}</p>
+              <p className="mt-1 text-2xl font-semibold">{formatNumber(summary.customerWork)}</p>
             </div>
           </div>
         </CardContent>
       </Card>
 
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <Stat label="Inbox" value={formatNumber(activeConversations)} href="/company/inbox" />
-        <Stat label="Customers" value={formatNumber(customerWork)} href="/company/customers" />
+        <Stat label="Inbox" value={formatNumber(summary.activeConversations)} href="/company/inbox" />
+        <Stat label="Customers" value={formatNumber(summary.customerWork)} href="/company/customers" />
         <Stat
           label="Message limit"
           value={sub.messageLimit == null ? 'Unlimited' : formatNumber(sub.messageLimit)}
@@ -146,11 +135,11 @@ export default async function CompanyOverview() {
           <CardContent className="space-y-3">
             <Link href="/company/inbox" className="flex items-center justify-between rounded-md border p-3 hover:bg-muted/50">
               <span className="text-sm font-medium">Reply to active conversations</span>
-              <Badge>{activeConversations}</Badge>
+              <Badge>{summary.activeConversations}</Badge>
             </Link>
             <Link href="/company/customers" className="flex items-center justify-between rounded-md border p-3 hover:bg-muted/50">
               <span className="text-sm font-medium">Review customer requests</span>
-              <Badge variant="secondary">{customerWork}</Badge>
+              <Badge variant="secondary">{summary.customerWork}</Badge>
             </Link>
             <Link href="/company/widget" className="flex items-center justify-between rounded-md border p-3 hover:bg-muted/50">
               <span className="text-sm font-medium">Test or install widget</span>

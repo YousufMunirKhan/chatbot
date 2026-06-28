@@ -90,7 +90,14 @@ export async function saveNotificationSettingsAction(
   }
 
   try {
-    const [smtpPassword, slackWebhook, genericWebhookUrl, genericWebhookSecret] = await Promise.all([
+    const [
+      smtpPassword,
+      slackWebhook,
+      genericWebhookUrl,
+      genericWebhookSecret,
+      metaAccessToken,
+      twilioAuthToken,
+    ] = await Promise.all([
       keepExistingSecret(companyId, 'smtp_password_encrypted', textValue(formData, 'smtpPassword')),
       keepExistingSecret(companyId, 'slack_webhook_encrypted', textValue(formData, 'slackWebhookUrl')),
       keepExistingSecret(
@@ -103,7 +110,20 @@ export async function saveNotificationSettingsAction(
         'generic_webhook_secret_encrypted',
         textValue(formData, 'genericWebhookSecret'),
       ),
+      keepExistingSecret(
+        companyId,
+        'meta_access_token_encrypted',
+        textValue(formData, 'metaAccessToken'),
+      ),
+      keepExistingSecret(
+        companyId,
+        'twilio_auth_token_encrypted',
+        textValue(formData, 'twilioAuthToken'),
+      ),
     ]);
+    const whatsappProvider = ['meta_cloud', 'twilio'].includes(String(formData.get('whatsappProvider')))
+      ? String(formData.get('whatsappProvider'))
+      : 'disabled';
 
     const { error } = await sb.from('company_notification_settings').upsert(
       {
@@ -123,7 +143,19 @@ export async function saveNotificationSettingsAction(
         smtp_from_email: textValue(formData, 'smtpFromEmail'),
         smtp_from_name: textValue(formData, 'smtpFromName'),
         whatsapp_enabled: formData.get('whatsappEnabled') === 'on',
+        whatsapp_sender_mode:
+          formData.get('whatsappSenderMode') === 'platform_managed'
+            ? 'platform_managed'
+            : 'company',
+        whatsapp_provider: whatsappProvider,
         whatsapp_recipients: linesToArray(formData.get('whatsappRecipients')),
+        meta_phone_number_id: textValue(formData, 'metaPhoneNumberId'),
+        meta_access_token_encrypted: metaAccessToken,
+        meta_template_name: textValue(formData, 'metaTemplateName'),
+        meta_template_language: textValue(formData, 'metaTemplateLanguage') ?? 'en_GB',
+        twilio_account_sid: textValue(formData, 'twilioAccountSid'),
+        twilio_auth_token_encrypted: twilioAuthToken,
+        twilio_whatsapp_from: textValue(formData, 'twilioWhatsappFrom'),
         slack_enabled: formData.get('slackEnabled') === 'on',
         slack_webhook_encrypted: slackWebhook,
         webhook_enabled: formData.get('webhookEnabled') === 'on',

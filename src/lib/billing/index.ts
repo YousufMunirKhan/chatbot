@@ -24,6 +24,40 @@ export interface PlanState {
   integrationLimit: number | null;
 }
 
+export interface ReplyGrantRow {
+  id: string;
+  replyCount: number;
+  reason: string;
+  grantType: string;
+  expiresAt: string | null;
+  createdAt: string;
+  createdByEmail: string | null;
+}
+
+export interface ReplyAllowanceUsage {
+  used: number;
+  monthlyAllowance: number | null;
+  extraReplies: number;
+  totalAvailable: number | null;
+  remaining: number | null;
+  resetAt: string;
+  grants: ReplyGrantRow[];
+}
+
+export function currentMonthStartIso(): string {
+  const since = new Date();
+  since.setUTCDate(1);
+  since.setUTCHours(0, 0, 0, 0);
+  return since.toISOString();
+}
+
+export function currentMonthEndIso(): string {
+  const end = new Date();
+  end.setUTCMonth(end.getUTCMonth() + 1, 1);
+  end.setUTCHours(0, 0, 0, 0);
+  return end.toISOString();
+}
+
 export async function getSubscription(companyId: string): Promise<PlanState | null> {
   const sb = createSupabaseServiceClient();
   const { data } = await sb
@@ -52,16 +86,61 @@ export async function planAllowsAdvancedModel(companyId: string): Promise<boolea
 /** Messages (AI chat operations) used in the current calendar month. */
 export async function getMonthlyMessageCount(companyId: string): Promise<number> {
   const sb = createSupabaseServiceClient();
-  const since = new Date();
-  since.setUTCDate(1);
-  since.setUTCHours(0, 0, 0, 0);
   const { count } = await sb
     .from('ai_usage_logs')
     .select('id', { count: 'exact', head: true })
     .eq('company_id', companyId)
     .eq('operation_type', 'chat')
-    .gte('created_at', since.toISOString());
+    .gte('created_at', currentMonthStartIso());
   return count ?? 0;
+}
+
+const one = <T>(v: T | T[] | null | undefined): T | null =>
+  Array.isArray(v) ? (v[0] ?? null) : (v ?? null);
+
+export async function listActiveReplyGrants(companyId: string): Promise<ReplyGrantRow[]> {
+  const sb = createSupabaseServiceClient();
+  const now = new Date().toISOString();
+  const { data } = await sb
+    .from('company_reply_grants')
+    .select('id,reply_count,reason,grant_type,expires_at,created_at, users(email)')
+    .eq('company_id', companyId)
+    .or(`expires_at.is.null,expires_at.gte.${now}`)
+    .order('created_at', { ascending: false });
+
+  return (data ?? []).map((grant) => {
+    const row = grant as Record<string, unknown>;
+    const user = one(row.users as { email?: string } | { email?: string }[] | null);
+    return {
+      id: row.id as string,
+      replyCount: Number(row.reply_count ?? 0),
+      reason: (row.reason as string) ?? 'Manual allowance adjustment',
+      grantType: (row.grant_type as string) ?? 'manual',
+      expiresAt: (row.expires_at as string) ?? null,
+      createdAt: row.created_at as string,
+      createdByEmail: user?.email ?? null,
+    };
+  });
+}
+
+export async function getReplyAllowanceUsage(companyId: string): Promise<ReplyAllowanceUsage> {
+  const [sub, used, grants] = await Promise.all([
+    getSubscription(companyId),
+    getMonthlyMessageCount(companyId),
+    listActiveReplyGrants(companyId),
+  ]);
+  const monthlyAllowance = sub?.messageLimit ?? null;
+  const extraReplies = grants.reduce((sum, grant) => sum + grant.replyCount, 0);
+  const totalAvailable = monthlyAllowance == null ? null : monthlyAllowance + extraReplies;
+  return {
+    used,
+    monthlyAllowance,
+    extraReplies,
+    totalAvailable,
+    remaining: totalAvailable == null ? null : Math.max(0, totalAvailable - used),
+    resetAt: currentMonthEndIso(),
+    grants,
+  };
 }
 
 /** True if the company may still send an AI message (under limit + not suspended). */
@@ -70,8 +149,8 @@ export async function withinMessageQuota(companyId: string): Promise<boolean> {
   if (!sub) return true;
   if (sub.status === 'suspended') return false;
   if (sub.messageLimit == null) return true;
-  const used = await getMonthlyMessageCount(companyId);
-  return used < sub.messageLimit;
+  const usage = await getReplyAllowanceUsage(companyId);
+  return usage.totalAvailable == null || usage.used < usage.totalAvailable;
 }
 
 /** Throwing guard for dashboard create actions. */
