@@ -177,7 +177,7 @@
       '.' + P + 'launcher svg{width:28px;height:28px;fill:#fff}',
       '.' + P + 'pos-right{right:20px}',
       '.' + P + 'pos-left{left:20px}',
-      '.' + P + 'window{position:fixed!important;bottom:90px;z-index:2147483000;width:396px;height:640px;max-height:calc(100vh - 110px);background:#fff;border-radius:22px;box-shadow:0 22px 70px rgba(15,23,42,.28);display:none;flex-direction:column;overflow:hidden;border:1px solid rgba(15,23,42,.08)}',
+      '.' + P + 'window{position:fixed!important;bottom:90px;z-index:2147483000;width:396px;height:auto;max-height:calc(100vh - 110px);background:#fff;border-radius:22px;box-shadow:0 22px 70px rgba(15,23,42,.28);display:none;flex-direction:column;overflow:hidden;border:1px solid rgba(15,23,42,.08)}',
       '.' + P + 'window.' + P + 'show{display:flex}',
       '.' + P + 'header{background:var(--aiba-color);color:#fff;padding:16px 18px;display:flex;align-items:center;justify-content:space-between;gap:12px;flex:0 0 auto;min-height:76px}',
       '.' + P + 'head-left{display:flex;align-items:center;gap:12px;min-width:0}',
@@ -189,7 +189,7 @@
       '.' + P + 'status:before{content:"";width:9px;height:9px;border-radius:50%;background:#22c55e;box-shadow:0 0 0 3px rgba(34,197,94,.18);flex:0 0 auto}',
       '.' + P + 'close{background:rgba(255,255,255,.13);border:none;color:#fff;font-size:25px;line-height:1;cursor:pointer;padding:0;width:44px;height:44px;border-radius:50%;opacity:.96;display:flex;align-items:center;justify-content:center;flex:0 0 auto}',
       '.' + P + 'close:hover{opacity:1;background:rgba(255,255,255,.22)}',
-      '.' + P + 'msgs{flex:1 1 auto;overflow-y:auto;padding:20px 16px 14px;background:#f3f6fb;display:flex;flex-direction:column;gap:12px;scrollbar-width:thin;scrollbar-color:#cbd5e1 transparent}',
+      '.' + P + 'msgs{flex:0 1 auto;min-height:168px;max-height:min(var(--aiba-msgs-max,360px),calc(100vh - 310px));overflow-y:auto;padding:20px 16px 14px;background:#f3f6fb;display:flex;flex-direction:column;gap:12px;scrollbar-width:thin;scrollbar-color:#cbd5e1 transparent}',
       '.' + P + 'msgs::-webkit-scrollbar{width:6px}',
       '.' + P + 'msgs::-webkit-scrollbar-thumb{background:#cbd5e1;border-radius:999px}',
       '.' + P + 'row{display:flex;width:100%}',
@@ -277,7 +277,7 @@
       '@keyframes ' + P + 'blink{0%,80%,100%{opacity:.3}40%{opacity:1}}',
       '.' + P + 'window[dir="rtl"] .' + P + 'me .' + P + 'bubble{border-bottom-right-radius:14px;border-bottom-left-radius:4px}',
       '.' + P + 'window[dir="rtl"] .' + P + 'them .' + P + 'bubble{border-bottom-left-radius:14px;border-bottom-right-radius:4px}',
-      '@media (max-width:480px){.' + P + 'window{width:100%;height:100%;max-height:100%;bottom:0;left:0;right:0;border-radius:0;border:none}.' + P + 'header{padding:calc(14px + env(safe-area-inset-top)) 16px 14px;min-height:calc(74px + env(safe-area-inset-top))}.' + P + 'header h3{max-width:calc(100vw - 132px)}.' + P + 'msgs{padding:18px 16px 12px}.' + P + 'window.' + P + 'mobile-sheet{height:82vh;max-height:82vh;bottom:0;top:auto;border-radius:22px 22px 0 0}.' + P + 'footer{padding:12px 12px 8px}.' + P + 'brand{padding:7px 18px calc(12px + env(safe-area-inset-bottom));font-size:10.5px}.' + P + 'launcher{bottom:calc(16px + env(safe-area-inset-bottom))}}'
+      '@media (max-width:480px){.' + P + 'window{width:100%;height:100%;max-height:100%;bottom:0;left:0;right:0;border-radius:0;border:none}.' + P + 'header{padding:calc(14px + env(safe-area-inset-top)) 16px 14px;min-height:calc(74px + env(safe-area-inset-top))}.' + P + 'header h3{max-width:calc(100vw - 132px)}.' + P + 'msgs{flex:1 1 auto;min-height:0;max-height:none;padding:18px 16px 12px}.' + P + 'window.' + P + 'mobile-sheet{height:82vh;max-height:82vh;bottom:0;top:auto;border-radius:22px 22px 0 0}.' + P + 'footer{padding:12px 12px 8px}.' + P + 'brand{padding:7px 18px calc(12px + env(safe-area-inset-bottom));font-size:10.5px}.' + P + 'launcher{bottom:calc(16px + env(safe-area-inset-bottom))}}'
     ].join('');
     var style = document.createElement('style');
     style.setAttribute('data-aiba-widget', cfg.botId);
@@ -1107,6 +1107,7 @@
       large: { w: 430, h: 700 }
     };
     var ws = windowSizes[state.windowSize] || windowSizes.default;
+    els.root.style.setProperty('--aiba-msgs-max', Math.max(260, ws.h - 280) + 'px');
     if (isMobile) {
       // Phones: hand the window box to the responsive CSS. Clear any desktop
       // inline px (they'd beat the media query); applyMobileViewport handles the
@@ -1114,6 +1115,7 @@
       els.win.classList.toggle(P + 'mobile-sheet', state.mobileMode === 'bottom_sheet');
       els.win.style.width = '';
       els.win.style.height = '';
+      els.win.style.maxHeight = '';
       els.win.style.top = '';
       els.win.style.bottom = '';
       els.win.style.left = '';
@@ -1126,7 +1128,8 @@
       // (between the phone breakpoint and full desktop). Falls back to the
       // configured size when there is room.
       els.win.style.width = 'min(' + ws.w + 'px, calc(100vw - ' + (side * 2) + 'px))';
-      els.win.style.height = 'min(' + ws.h + 'px, calc(100vh - ' + (bottom + 90) + 'px))';
+      els.win.style.height = '';
+      els.win.style.maxHeight = 'min(' + ws.h + 'px, calc(100vh - ' + (bottom + 90) + 'px))';
       els.win.style.bottom = 'calc(' + (bottom + 70) + 'px + env(safe-area-inset-bottom))';
       els.win.style.right = state.position === 'left' ? 'auto' : 'calc(' + side + 'px + env(safe-area-inset-right))';
       els.win.style.left = state.position === 'left' ? 'calc(' + side + 'px + env(safe-area-inset-left))' : 'auto';
