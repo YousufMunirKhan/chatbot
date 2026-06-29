@@ -28,6 +28,16 @@ function json(obj: unknown, status: number, headers: Record<string, string>) {
   });
 }
 
+function requestOrigin(reqOrigin: string | null, pageUrl?: string): string | null {
+  if (reqOrigin) return reqOrigin;
+  if (!pageUrl) return null;
+  try {
+    return new URL(pageUrl).origin;
+  } catch {
+    return null;
+  }
+}
+
 export async function OPTIONS(req: Request) {
   return new Response(null, { status: 204, headers: cors(req.headers.get('origin')) });
 }
@@ -42,7 +52,9 @@ export async function GET(req: Request) {
   const bot = await loadBotByPublicId(parsed.data.publicBotId);
   if (!bot) return json({ error: 'bot_not_found' }, 404, headers);
   if (bot.assistantAudience === 'internal') return json({ error: 'internal_assistant_not_available_on_widget' }, 403, headers);
-  if (!isOriginAllowed(bot.domainAllowlist, origin)) return json({ error: 'domain_not_allowed' }, 403, headers);
+  if (!isOriginAllowed(bot.domainAllowlist, requestOrigin(origin, parsed.data.pageUrl))) {
+    return json({ error: 'domain_not_allowed' }, 403, headers);
+  }
 
   const sb = createSupabaseServiceClient();
   const { data } = await sb

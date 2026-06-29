@@ -151,6 +151,7 @@ export function BotForm({
       : `${companyName ?? 'Website'} Assistant`;
   const capabilityOptions =
     assistantAudience === 'internal' ? INTERNAL_CAPABILITIES : CUSTOMER_CAPABILITIES;
+  const customerBotType = bot?.botType === 'help_desk' ? 'hybrid_business_assistant' : (bot?.botType ?? 'hybrid_business_assistant');
   const enableDefaultPills = appearance.enableDefaultPills !== false;
   const enableContextualPills = appearance.enableContextualPills !== false;
   const enableConnectorGeneratedPills = appearance.enableConnectorGeneratedPills !== false;
@@ -212,24 +213,38 @@ export function BotForm({
               placeholder={assistantNameFallback}
             />
           </div>
-          <div className="space-y-1.5">
-            <Label htmlFor="botType">Type</Label>
-            <select
-              id="botType"
-              name="botType"
-              className={selectCls}
-              defaultValue={bot?.botType ?? 'hybrid_business_assistant'}
-            >
-              {BOT_TYPES.map((t) => (
-                <option key={t} value={t}>
-                  {BOT_TYPE_LABELS[t] ?? t}
-                </option>
-              ))}
-            </select>
-            <p className="text-xs text-muted-foreground">
-              This controls the base style; capabilities below decide what it can actually do.
-            </p>
-          </div>
+          {assistantAudience === 'internal' ? (
+            <div className="space-y-1.5">
+              <input type="hidden" name="botType" value="help_desk" />
+              <Label>Type</Label>
+              <div className="rounded-md border bg-muted/30 px-3 py-2 text-sm font-medium">
+                Internal help desk
+              </div>
+              <p className="text-xs text-muted-foreground">
+                Uses connector docs, approved internal knowledge, and staff-only safety rules.
+              </p>
+            </div>
+          ) : (
+            <div className="space-y-1.5">
+              <Label htmlFor="botType">Type</Label>
+              <select
+                key="customer-bot-type"
+                id="botType"
+                name="botType"
+                className={selectCls}
+                defaultValue={customerBotType}
+              >
+                {BOT_TYPES.filter((t) => t !== 'help_desk').map((t) => (
+                  <option key={t} value={t}>
+                    {BOT_TYPE_LABELS[t] ?? t}
+                  </option>
+                ))}
+              </select>
+              <p className="text-xs text-muted-foreground">
+                This controls the base style; capabilities below decide what it can actually do.
+              </p>
+            </div>
+          )}
           <div className="space-y-1.5">
             <Label htmlFor="languageDefault">Default language</Label>
             <select
@@ -336,40 +351,62 @@ export function BotForm({
         </div>
       </section>
 
-      <section className="space-y-4">
-        <h2 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground">
-          Website domains
-        </h2>
-        <div className="space-y-1.5">
-          <Label htmlFor="domainAllowlist">Allowed website domains</Label>
-          <Textarea
-            id="domainAllowlist"
-            name="domainAllowlist"
-            defaultValue={(bot?.domainAllowlist ?? []).join('\n')}
-            placeholder={'acme.com\nwww.acme.com'}
-            rows={3}
-          />
-          <p className="text-xs text-muted-foreground">
-            One website domain per line. The widget only loads on these domains.
-          </p>
-        </div>
-        <div className="rounded-md border bg-muted/30 p-3 text-sm text-muted-foreground">
-          <p className="font-medium text-foreground">Widget look &amp; feel lives in the Design Studio</p>
-          <p className="mt-1">
-            Colors, launcher, avatar, labels, sizing, and placement are designed with a live preview
-            on the{' '}
+      {assistantAudience === 'internal' ? (
+        <section className="space-y-4">
+          <input type="hidden" name="domainAllowlist" value="" />
+          <h2 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground">
+            Connector setup
+          </h2>
+          <div className="rounded-md border bg-muted/30 p-3 text-sm text-muted-foreground">
+            <p className="font-medium text-foreground">Help Desk does not use a public website widget</p>
+            <p className="mt-1">
+              Install a connector in the customer software instead. Connectors sync screens,
+              approved actions, and route metadata so staff can ask questions and run safe actions
+              from the internal Help Desk.
+            </p>
             {bot ? (
-              <Link href="/company/widget" className="text-primary hover:underline">
-                Website Widget page
+              <Link href="/company/help-desk" className="mt-2 inline-block text-primary hover:underline">
+                Open connector setup
               </Link>
-            ) : (
-              <span className="font-medium text-foreground">Website Widget page</span>
-            )}
-            {bot ? '.' : ' (available once this assistant is created).'} Saving here never changes
-            that design.
-          </p>
-        </div>
-      </section>
+            ) : null}
+          </div>
+        </section>
+      ) : (
+        <section className="space-y-4">
+          <h2 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground">
+            Website domains
+          </h2>
+          <div className="space-y-1.5">
+            <Label htmlFor="domainAllowlist">Allowed website domains</Label>
+            <Textarea
+              id="domainAllowlist"
+              name="domainAllowlist"
+              defaultValue={(bot?.domainAllowlist ?? []).join('\n')}
+              placeholder={'acme.com\nwww.acme.com'}
+              rows={3}
+            />
+            <p className="text-xs text-muted-foreground">
+              One website domain per line. The widget only loads on these domains.
+            </p>
+          </div>
+          <div className="rounded-md border bg-muted/30 p-3 text-sm text-muted-foreground">
+            <p className="font-medium text-foreground">Widget look &amp; feel lives in the Design Studio</p>
+            <p className="mt-1">
+              Colors, launcher, avatar, labels, sizing, and placement are designed with a live preview
+              on the{' '}
+              {bot ? (
+                <Link href="/company/widget" className="text-primary hover:underline">
+                  Website Widget page
+                </Link>
+              ) : (
+                <span className="font-medium text-foreground">Website Widget page</span>
+              )}
+              {bot ? '.' : ' (available once this assistant is created).'} Saving here never changes
+              that design.
+            </p>
+          </div>
+        </section>
+      )}
 
       {bot ? (
         <label className="flex items-center gap-2 text-sm">

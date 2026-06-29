@@ -489,6 +489,7 @@
           severity: 'error',
           message: String(message || 'Widget error'),
           route: window.location.href,
+          statusCode: metadata && metadata.statusCode ? metadata.statusCode : undefined,
           metadata: metadata || {}
         })
       }).catch(function () {});
@@ -506,7 +507,19 @@
       encodeURIComponent(window.location.href);
     return fetch(url)
       .then(function (res) {
-        if (!res.ok) throw new Error('config_' + res.status);
+        if (!res.ok) {
+          return res.text().then(function (body) {
+            var code = 'config_' + res.status;
+            try {
+              var parsed = JSON.parse(body || '{}');
+              if (parsed && parsed.error) code = parsed.error;
+            } catch (e) {}
+            var err = new Error(code);
+            err.statusCode = res.status;
+            err.responseBody = body ? String(body).slice(0, 500) : '';
+            throw err;
+          });
+        }
         return res.json();
       })
       .then(function (data) {
@@ -586,7 +599,11 @@
       })
       .catch(function (err) {
         state.configLoaded = true;
-        reportClientError('Widget config failed', { error: err && err.message ? err.message : String(err) });
+        reportClientError('Widget config failed', {
+          error: err && err.message ? err.message : String(err),
+          statusCode: err && err.statusCode ? err.statusCode : undefined,
+          responseBody: err && err.responseBody ? err.responseBody : undefined
+        });
       });
   }
 

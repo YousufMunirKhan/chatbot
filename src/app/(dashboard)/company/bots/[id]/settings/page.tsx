@@ -28,6 +28,7 @@ export default async function BotSettingsPage({ params }: { params: { id: string
   });
 
   const embed = `<script src="${env.NEXT_PUBLIC_WIDGET_URL}" data-bot-id="${bot.publicBotId}"></script>`;
+  const isInternalAssistant = bot.assistantAudience === 'internal';
 
   return (
     <div className="mx-auto max-w-3xl space-y-6">
@@ -70,18 +71,36 @@ export default async function BotSettingsPage({ params }: { params: { id: string
         </div>
       </details>
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Embed snippet</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <WidgetEmbedInstructions
-            embed={embed}
-            domainAllowlist={bot.domainAllowlist}
-            settingsHref={`/company/bots/${bot.id}/settings`}
-          />
-        </CardContent>
-      </Card>
+      {isInternalAssistant ? (
+        <Card>
+          <CardHeader>
+            <CardTitle>Connector setup</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-3 text-sm text-muted-foreground">
+            <p>
+              Internal Help Desk assistants are installed through connectors, not public website
+              snippets. Create a connector, copy its token into the customer system, then sync
+              screens and approved actions.
+            </p>
+            <Link href="/company/help-desk" className="inline-block text-primary hover:underline">
+              Open Help Desk connectors
+            </Link>
+          </CardContent>
+        </Card>
+      ) : (
+        <Card>
+          <CardHeader>
+            <CardTitle>Embed snippet</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <WidgetEmbedInstructions
+              embed={embed}
+              domainAllowlist={bot.domainAllowlist}
+              settingsHref={`/company/bots/${bot.id}/settings`}
+            />
+          </CardContent>
+        </Card>
+      )}
     </div>
   );
 }
