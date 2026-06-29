@@ -31,6 +31,7 @@ const PLATFORM_NAV: NavSection = {
 const COMPANY_ADMIN_NAV_ITEMS: NavSection['items'] = [
   { href: '/company', label: 'Home' },
   { href: '/company/setup', label: 'Setup' },
+  { href: '/company/bots', label: 'Assistants' },
   { href: '/company/widget', label: 'Website Widget' },
   { href: '/company/inbox', label: 'Inbox' },
   { href: '/company/notifications', label: 'Notifications' },

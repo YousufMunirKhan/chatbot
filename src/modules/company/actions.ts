@@ -261,11 +261,21 @@ export async function createBotAction(_prev: ActionState, formData: FormData): P
   const { data: sub } = await sb.from('subscriptions').select('bot_limit').eq('company_id', companyId).maybeSingle();
   const botLimit = (sub as { bot_limit?: number } | null)?.bot_limit ?? null;
   if (botLimit != null) {
-    const { count } = await sb
-      .from('bots')
-      .select('id', { count: 'exact', head: true })
-      .eq('company_id', companyId);
+    const [{ count }, { data: existingBots }] = await Promise.all([
+      sb
+        .from('bots')
+        .select('id', { count: 'exact', head: true })
+        .eq('company_id', companyId),
+      sb
+        .from('bots')
+        .select('id')
+        .eq('company_id', companyId)
+        .order('created_at', { ascending: false })
+        .limit(1),
+    ]);
     if ((count ?? 0) >= botLimit) {
+      const existingId = existingBots?.[0]?.id as string | undefined;
+      if (existingId) redirect(`/company/bots/${existingId}/settings`);
       return { error: `Your plan allows up to ${botLimit} assistant(s). Upgrade to add more.` };
     }
   }

@@ -20,6 +20,7 @@ import { HelpdeskChatPreview } from '@/modules/company/components/helpdesk-chat-
 import { HelpdeskInternalChat } from '@/modules/company/components/helpdesk-internal-chat';
 import { HelpdeskChatSettingsForm } from '@/modules/company/components/helpdesk-chat-settings-form';
 import { HelpdeskDocumentReview } from '@/modules/company/components/helpdesk-document-review';
+import { listBots } from '@/modules/company/data';
 
 function platformLabel(platform: string) {
   if (platform === 'dotnet') return '.NET';
@@ -190,10 +191,13 @@ function ConnectorPowerMap() {
 }
 
 export default async function HelpDeskPage() {
-  const workspace = await getHelpdeskConnectorWorkspace();
+  const [workspace, bots] = await Promise.all([getHelpdeskConnectorWorkspace(), listBots()]);
   const draftCount = workspace.draftDocuments.length;
   const enabledActionCount = workspace.actions.filter((action) => action.isEnabled).length;
   const onlineCount = workspace.connectors.filter((connector) => connector.connectionState === 'connected').length;
+  const internalBot = bots.find((bot) => bot.assistantAudience === 'internal');
+  const assistantHref = internalBot ? `/company/bots/${internalBot.id}/settings` : '/company/bots/new';
+  const assistantLabel = internalBot ? 'Edit help desk bot' : 'Create help desk bot';
 
   return (
     <div className="mx-auto max-w-7xl space-y-6">
@@ -205,7 +209,7 @@ export default async function HelpDeskPage() {
           </p>
         </div>
         <Button asChild variant="outline">
-          <Link href="/company/bots/new">Create help desk bot</Link>
+          <Link href={assistantHref}>{assistantLabel}</Link>
         </Button>
       </div>
 
