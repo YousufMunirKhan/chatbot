@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useFormState, useFormStatus } from 'react-dom';
 import { Button } from '@/components/ui/button';
@@ -141,7 +141,8 @@ export function BotForm({
 }) {
   const [state, formAction] = useFormState(action, initial);
   const appearance = (bot?.appearance ?? {}) as Record<string, unknown>;
-  const initialAudience = appearance.assistantAudience === 'internal' ? 'internal' : 'customer';
+  const initialAudience =
+    bot?.assistantAudience ?? (appearance.assistantAudience === 'internal' ? 'internal' : 'customer');
   const [assistantAudience, setAssistantAudience] = useState<'customer' | 'internal'>(
     initialAudience,
   );
@@ -151,10 +152,15 @@ export function BotForm({
       : `${companyName ?? 'Website'} Assistant`;
   const capabilityOptions =
     assistantAudience === 'internal' ? INTERNAL_CAPABILITIES : CUSTOMER_CAPABILITIES;
-  const customerBotType = bot?.botType === 'help_desk' ? 'hybrid_business_assistant' : (bot?.botType ?? 'hybrid_business_assistant');
+  const customerBotType =
+    bot?.botType === 'help_desk' ? 'hybrid_business_assistant' : (bot?.botType ?? 'hybrid_business_assistant');
   const enableDefaultPills = appearance.enableDefaultPills !== false;
   const enableContextualPills = appearance.enableContextualPills !== false;
   const enableConnectorGeneratedPills = appearance.enableConnectorGeneratedPills !== false;
+
+  useEffect(() => {
+    setAssistantAudience(initialAudience);
+  }, [bot?.id, initialAudience]);
 
   return (
     <form action={formAction} className="space-y-8">
