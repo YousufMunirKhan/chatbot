@@ -10,6 +10,8 @@ import { AgentReplyForm } from '@/modules/company/components/agent-reply-form';
 import { AiControls } from '@/modules/company/components/ai-controls';
 import { InboxRealtime } from '@/modules/company/components/inbox-realtime';
 import { ChatAutoScroll } from '@/modules/company/components/chat-auto-scroll';
+import { TicketPanel } from '@/modules/company/components/ticket-panel';
+import { ConversationPresence } from '@/modules/company/components/conversation-presence';
 
 type BadgeVariant = 'default' | 'secondary' | 'success' | 'warning' | 'destructive' | 'outline';
 
@@ -90,42 +92,74 @@ export default async function ConversationPage({ params }: { params: { id: strin
       : convo.visitorId
     : 'Visitor';
   const status = displayStatus(convo.status, convo.aiEnabled);
+  const priorityVariant: BadgeVariant =
+    convo.priority === 'urgent' ? 'destructive' : convo.priority === 'high' ? 'warning' : 'outline';
 
   return (
-    <div className="mx-auto max-w-3xl space-y-6">
-      <InboxRealtime conversationId={convo.id} />
+    <div className="mx-auto grid max-w-6xl gap-6 lg:grid-cols-[minmax(0,1fr)_320px]">
+      <div className="space-y-6">
+        <InboxRealtime conversationId={convo.id} />
+        <ConversationPresence conversationId={convo.id} />
 
-      <div>
-        <Link href="/company/inbox" className="text-sm text-muted-foreground hover:underline">
-          ← Inbox
-        </Link>
-        <div className="mt-2 flex flex-wrap items-center gap-3">
-          <h1 className="text-2xl font-semibold">{visitorName}</h1>
-          <Badge variant={statusVariant(status)}>{statusLabel(status)}</Badge>
-          <Badge variant={convo.aiEnabled ? 'success' : 'outline'}>
-            {convo.aiEnabled ? 'AI on' : 'AI off'}
-          </Badge>
+        <div>
+          <Link href="/company/inbox" className="text-sm text-muted-foreground hover:underline">
+            ← Inbox
+          </Link>
+          <div className="mt-2 flex flex-wrap items-center gap-3">
+            <h1 className="text-2xl font-semibold">{visitorName}</h1>
+            <Badge variant={statusVariant(status)}>{statusLabel(status)}</Badge>
+            <Badge variant={convo.aiEnabled ? 'success' : 'outline'}>
+              {convo.aiEnabled ? 'AI on' : 'AI off'}
+            </Badge>
+            {convo.priority !== 'normal' ? (
+              <Badge variant={priorityVariant} className="capitalize">{convo.priority}</Badge>
+            ) : null}
+            {convo.csatRating ? (
+              <Badge variant="secondary">{convo.csatRating}★ CSAT</Badge>
+            ) : null}
+          </div>
         </div>
+
+        <Card>
+          <CardContent className="max-h-[55vh] space-y-3 overflow-y-auto p-4">
+            {convo.messages.length === 0 ? (
+              <p className="text-sm text-muted-foreground">No messages yet.</p>
+            ) : (
+              convo.messages.map((m) => <MessageBubble key={m.id} message={m} />)
+            )}
+            <ChatAutoScroll count={convo.messages.length} />
+          </CardContent>
+        </Card>
+
+        <AiControls conversationId={convo.id} aiEnabled={convo.aiEnabled} isClosed={convo.status === 'closed'} />
+
+        <Card>
+          <CardContent className="p-4">
+            <AgentReplyForm conversationId={convo.id} cannedResponses={convo.cannedResponses} />
+          </CardContent>
+        </Card>
       </div>
 
-      <Card>
-        <CardContent className="max-h-[55vh] space-y-3 overflow-y-auto p-4">
-          {convo.messages.length === 0 ? (
-            <p className="text-sm text-muted-foreground">No messages yet.</p>
-          ) : (
-            convo.messages.map((m) => <MessageBubble key={m.id} message={m} />)
-          )}
-          <ChatAutoScroll count={convo.messages.length} />
-        </CardContent>
-      </Card>
-
-      <AiControls conversationId={convo.id} aiEnabled={convo.aiEnabled} isClosed={convo.status === 'closed'} />
-
-      <Card>
-        <CardContent className="p-4">
-          <AgentReplyForm conversationId={convo.id} />
-        </CardContent>
-      </Card>
+      <div className="space-y-4 lg:sticky lg:top-4 lg:self-start">
+        {convo.csatComment ? (
+          <Card>
+            <CardContent className="p-4">
+              <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">CSAT feedback</p>
+              <p className="mt-1 text-sm">“{convo.csatComment}”</p>
+            </CardContent>
+          </Card>
+        ) : null}
+        <Card>
+          <CardContent className="p-4">
+            <TicketPanel
+              conversationId={convo.id}
+              priority={convo.priority}
+              tags={convo.tags}
+              notes={convo.notes}
+            />
+          </CardContent>
+        </Card>
+      </div>
     </div>
   );
 }

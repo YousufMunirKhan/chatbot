@@ -8,14 +8,44 @@ export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
 const packageFiles = {
-  android: ['connectors/android/README.md', 'connectors/android/HelpdeskConnectorClient.kt'],
+  android: [
+    'connectors/android/README.md',
+    'connectors/android/AI_AGENT_ANDROID.md',
+    'connectors/android/ANDROID_UI_GUIDE.md',
+    'connectors/android/HelpdeskConnectorClient.kt',
+    'connectors/android/HelpdeskChatController.kt',
+    'connectors/android/HelpdeskEncryptedTokenStore.kt',
+    'connectors/android/HelpdeskAndroidManifestStore.kt',
+    'connectors/android/HelpdeskConnectorLifecycleObserver.kt',
+    'connectors/android/HelpdeskConnectorPreviewActivity.kt',
+  ],
   dotnet: [
     'connectors/dotnet/README.md',
+    'connectors/dotnet/AI_AGENT_DOTNET.md',
+    'connectors/dotnet/WINFORMS_WPF_UI.md',
     'connectors/dotnet/Program.cs',
+    'connectors/dotnet/HelpdeskChatController.cs',
     'connectors/dotnet/SwitchSave.HelpdeskConnector.csproj',
   ],
-  web: ['connectors/web/README.md', 'connectors/web/HelpdeskConnectorClient.js'],
+  web: [
+    'connectors/web/README.md',
+    'connectors/web/AI_AGENT_WEB.md',
+    'connectors/web/HelpdeskConnectorClient.js',
+    'connectors/web/HelpdeskEmbeddedChat.js',
+    'connectors/node/AI_AGENT_NODE.md',
+    'connectors/laravel/AI_AGENT_LARAVEL.md',
+    'connectors/react/HELPDESK_REACT_COMPONENT.md',
+    'connectors/vue/HELPDESK_VUE_COMPONENT.md',
+  ],
 } as const;
+
+const sharedFiles = [
+  'connectors/HELPDESK_DEVELOPER_HANDOFF.md',
+  'connectors/AI_AGENT_INTEGRATION_PROMPT.md',
+  'connectors/PROTOCOL.md',
+  'connectors/docs/UI_COMPONENT_GUIDE.md',
+  'connectors/docs/CONNECTOR_TEST_PLAN.md',
+];
 
 type ConnectorPlatform = keyof typeof packageFiles;
 
@@ -78,6 +108,12 @@ export async function GET(req: Request, { params }: { params: { platform: string
 
   zip.file(`${folderName}/SETUP.md`, setupGuide(params.platform, baseUrl.replace(/\/+$/, '')));
   zip.file(`${folderName}/ACTION_FORMAT.json`, JSON.stringify(actionFormatExample(), null, 2));
+
+  for (const file of sharedFiles) {
+    const absolutePath = path.join(root, file);
+    const content = await fs.readFile(absolutePath);
+    zip.file(`${folderName}/${path.basename(file)}`, content);
+  }
 
   for (const file of packageFiles[params.platform]) {
     const absolutePath = path.join(root, file);

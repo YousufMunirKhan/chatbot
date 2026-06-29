@@ -23,14 +23,23 @@ const BY_NAME: Record<string, AssistantTool> = Object.fromEntries(
   ALL_TOOLS.map((t) => [t.schema.name, t]),
 );
 
-/** Tools enabled for a bot, based on its capability flags. */
-export function getToolsForBot(capabilityFlags: string[]): AssistantTool[] {
+/** Tools enabled for a bot, based on its capability flags and audience. */
+export function getToolsForBot(
+  capabilityFlags: string[],
+  assistantAudience: 'customer' | 'internal' = 'customer',
+): AssistantTool[] {
   const caps = new Set(capabilityFlags);
-  return ALL_TOOLS.filter((t) => t.capabilities.some((c) => caps.has(c)));
+  return ALL_TOOLS.filter((t) => {
+    if (t.audiences && !t.audiences.includes(assistantAudience)) return false;
+    return t.capabilities.some((c) => caps.has(c));
+  });
 }
 
-export function getToolSchemas(capabilityFlags: string[]): ToolSchema[] {
-  return getToolsForBot(capabilityFlags).map((t) => t.schema);
+export function getToolSchemas(
+  capabilityFlags: string[],
+  assistantAudience: 'customer' | 'internal' = 'customer',
+): ToolSchema[] {
+  return getToolsForBot(capabilityFlags, assistantAudience).map((t) => t.schema);
 }
 
 /** Execute a tool by name with input + context. Unknown tools return an error. */

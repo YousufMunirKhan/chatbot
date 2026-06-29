@@ -14,6 +14,14 @@ This keeps the `hdk_...` connector token out of public browser code.
 
 For internal-only admin panels, `HelpdeskConnectorClient.js` can also run in the browser, but only when the page is authenticated and trusted.
 
+For embedded staff chat, also read:
+
+- `../docs/UI_COMPONENT_GUIDE.md`
+- `../node/AI_AGENT_NODE.md`
+- `../react/HELPDESK_REACT_COMPONENT.md`
+- `../vue/HELPDESK_VUE_COMPONENT.md`
+- `HelpdeskEmbeddedChat.js`
+
 ## Example Usage
 
 ```js

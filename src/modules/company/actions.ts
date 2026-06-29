@@ -20,6 +20,7 @@ export type ActionState = { error?: string; ok?: boolean };
 
 const optText = z.preprocess((x) => (x === '' || x == null ? undefined : x), z.string().optional());
 const optNum = z.preprocess((x) => (x === '' || x == null ? undefined : x), z.coerce.number().int().optional());
+const optEnabled = z.preprocess((x) => (x == null ? true : x === 'on'), z.boolean());
 const optColor = z.preprocess(
   (x) => (x === '' || x == null ? undefined : x),
   z.string().regex(/^#[0-9a-f]{6}$/i, 'Choose a valid color').optional(),
@@ -154,6 +155,9 @@ const botBaseSchema = z.object({
   mobileMode: z.enum(['fullscreen', 'bottom_sheet']).default('fullscreen'),
   showOnMobile: z.preprocess((x) => x === 'on', z.boolean()),
   showOnDesktop: z.preprocess((x) => x === 'on', z.boolean()),
+  enableDefaultPills: optEnabled,
+  enableContextualPills: optEnabled,
+  enableConnectorGeneratedPills: optEnabled,
   bottomOffset: optNum,
   sideOffset: optNum,
   zIndex: optNum,
@@ -206,6 +210,9 @@ function readBotFields(formData: FormData) {
         mobileMode: v.mobileMode,
         showOnMobile: v.showOnMobile,
         showOnDesktop: v.showOnDesktop,
+        enableDefaultPills: v.enableDefaultPills,
+        enableContextualPills: v.enableContextualPills,
+        enableConnectorGeneratedPills: v.enableConnectorGeneratedPills,
         bottomOffset: clamp(v.bottomOffset, 20, 0, 120),
         sideOffset: clamp(v.sideOffset, 20, 0, 120),
         zIndex: clamp(v.zIndex, 2147483000, 1000, 2147483000),
@@ -219,7 +226,8 @@ function readBotFields(formData: FormData) {
 function isHelpdeskBot(value: { bot_type?: unknown; capability_flags?: unknown }): boolean {
   return (
     value.bot_type === 'help_desk' ||
-    (Array.isArray(value.capability_flags) && value.capability_flags.includes('help_desk'))
+    (Array.isArray(value.capability_flags) &&
+      value.capability_flags.some((cap) => String(cap).startsWith('internal_')))
   );
 }
 
@@ -271,7 +279,14 @@ export async function createBotAction(_prev: ActionState, formData: FormData): P
 
   // Seed editable default in-chat quick actions (lead / appointment / handoff)
   // for the enabled capabilities so forms work in the widget out of the box.
-  await seedDefaultQuickActions(sb, companyId, bot.id, fields.value.capability_flags);
+  await seedDefaultQuickActions(
+    sb,
+    companyId,
+    bot.id,
+    fields.value.capability_flags,
+    fields.value.appearance_json.assistantAudience,
+    fields.value.appearance_json.enableDefaultPills !== false,
+  );
   await recomputeBotPrompt(sb, companyId, bot.id); // assemble initial system prompt
   if (isHelpdeskBot(fields.value)) {
     await requestHelpdeskConnectorResync(companyId, 'A Help Desk bot was created.');
@@ -307,6 +322,9 @@ export async function updateBotAction(_prev: ActionState, formData: FormData): P
     ...fields.value.appearance_json,
     ...prevAppearance,
     assistantAudience: fields.value.appearance_json.assistantAudience,
+    enableDefaultPills: fields.value.appearance_json.enableDefaultPills,
+    enableContextualPills: fields.value.appearance_json.enableContextualPills,
+    enableConnectorGeneratedPills: fields.value.appearance_json.enableConnectorGeneratedPills,
   };
 
   const { error } = await sb
@@ -317,7 +335,14 @@ export async function updateBotAction(_prev: ActionState, formData: FormData): P
   if (error) return { error: error.message };
 
   // Newly-enabled capabilities get their default quick action (idempotent).
-  await seedDefaultQuickActions(sb, companyId, meta.data.botId, fields.value.capability_flags);
+  await seedDefaultQuickActions(
+    sb,
+    companyId,
+    meta.data.botId,
+    fields.value.capability_flags,
+    fields.value.appearance_json.assistantAudience,
+    fields.value.appearance_json.enableDefaultPills !== false,
+  );
   // Capabilities/type/language may have changed — keep the system prompt in sync.
   await recomputeBotPrompt(sb, companyId, meta.data.botId);
   if (isHelpdeskBot(fields.value)) {

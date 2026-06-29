@@ -138,7 +138,19 @@
     sideOffset: 20,
     position: cfg.position,
     zIndex: 2147483000,
-    autoOpenTimer: null
+    autoOpenTimer: null,
+    // CSAT (post-conversation rating). Off unless the company enables it.
+    csatEnabled: false,
+    csatPrompt: 'How would you rate this conversation?',
+    csatThanks: 'Thanks for your feedback!',
+    csatCommentEnabled: true,
+    botAnswered: false, // at least one assistant/agent reply this session
+    csatPrompted: false, // rating UI currently shown (defer close)
+    csatDone: false, // rated or skipped this conversation
+    csatRating: 0,
+    // Proactive campaigns: behaviour-triggered nudges from the dashboard.
+    proactiveRules: [],
+    proactiveTimer: null
   };
 
   // ---- Styles ---------------------------------------------------------------
@@ -274,6 +286,19 @@
       '.' + P + 'cta-row{display:flex;gap:6px;flex-wrap:wrap}',
       '.' + P + 'cta-btn{border:none;background:var(--aiba-color);color:#fff;border-radius:8px;padding:7px 12px;font-size:13px;font-weight:600;cursor:pointer}',
       '.' + P + 'cta-btn.' + P + 'ghost{background:#fff;color:var(--aiba-color);border:1px solid var(--aiba-color)}',
+      // CSAT rating card (post-conversation): star row + optional comment.
+      '.' + P + 'csat{max-width:92%;width:100%;background:#fff;border:1px solid #e3e6ea;border-radius:14px;border-bottom-left-radius:4px;padding:12px;display:flex;flex-direction:column;gap:10px}',
+      '.' + P + 'csat-title{font-size:14px;font-weight:700;color:#172033}',
+      '.' + P + 'stars{display:flex;gap:6px}',
+      '.' + P + 'star{font-size:26px;line-height:1;cursor:pointer;color:#cbd5e1;background:none;border:none;padding:0;transition:color .12s,transform .12s}',
+      '.' + P + 'star:hover{transform:scale(1.12)}',
+      '.' + P + 'star.' + P + 'on{color:#f5b301}',
+      '.' + P + 'csat textarea{width:100%;border:1px solid #d6d9de;border-radius:8px;padding:9px 11px;font-size:13px;outline:none;min-height:54px;resize:vertical}',
+      '.' + P + 'csat textarea:focus{border-color:var(--aiba-color)}',
+      '.' + P + 'csat-row{display:flex;gap:8px}',
+      '.' + P + 'csat-submit{flex:1;border:none;background:var(--aiba-color);color:#fff;border-radius:8px;padding:10px 14px;font-size:14px;font-weight:700;cursor:pointer}',
+      '.' + P + 'csat-submit:disabled{opacity:.5;cursor:not-allowed}',
+      '.' + P + 'csat-skip{border:1px solid #d6d9de;background:#fff;color:#6b7280;border-radius:8px;padding:10px 14px;font-size:13px;cursor:pointer}',
       '@keyframes ' + P + 'blink{0%,80%,100%{opacity:.3}40%{opacity:1}}',
       '.' + P + 'window[dir="rtl"] .' + P + 'me .' + P + 'bubble{border-bottom-right-radius:14px;border-bottom-left-radius:4px}',
       '.' + P + 'window[dir="rtl"] .' + P + 'them .' + P + 'bubble{border-bottom-left-radius:14px;border-bottom-right-radius:4px}',
@@ -529,6 +554,13 @@
           state.bottomOffset = Number(data.bot.bottomOffset || 20);
           state.sideOffset = Number(data.bot.sideOffset || 20);
           state.zIndex = Number(data.bot.zIndex || 2147483000);
+          state.csatEnabled = Boolean(data.bot.csatEnabled);
+          if (data.bot.csatPrompt) state.csatPrompt = data.bot.csatPrompt;
+          if (data.bot.csatThanks) state.csatThanks = data.bot.csatThanks;
+          state.csatCommentEnabled = data.bot.csatCommentEnabled !== false;
+          if (state.csatEnabled && conversationId && lsGet('csat:' + conversationId) === '1') {
+            state.csatDone = true;
+          }
           if (els.launcher) {
             // loadWidgetConfig runs after every answer; only touch the DOM when
             // the launcher actually changed so it never visibly flickers.
@@ -547,6 +579,8 @@
           applyWidgetAppearance();
           scheduleAutoOpen();
         }
+        state.proactiveRules = Array.isArray(data.proactiveRules) ? data.proactiveRules : [];
+        scheduleProactiveCampaign();
         state.quickActions = data.quickActions || [];
         renderQuickActions();
       })
@@ -1203,10 +1237,41 @@
     }, Math.max(0, Number(delay || 0)) * 1000);
   }
 
+  // Behaviour-triggered proactive nudge: pick the first active rule whose URL
+  // pattern matches this page and, after its delay, open the chat with that
+  // message. Shown at most once per session so visitors aren't nagged.
+  function scheduleProactiveCampaign() {
+    if (state.proactiveTimer || state.open) return;
+    if (!state.proactiveRules || !state.proactiveRules.length) return;
+    if (lsGet('proactiveShown') === '1') return;
+    var href = window.location.href;
+    var rule = null;
+    for (var i = 0; i < state.proactiveRules.length; i++) {
+      var r = state.proactiveRules[i];
+      if (!r || !r.message) continue;
+      if (!r.matchUrl || href.indexOf(r.matchUrl) !== -1) { rule = r; break; }
+    }
+    if (!rule) return;
+    var delay = Math.max(0, Number(rule.delaySeconds || 0)) * 1000;
+    state.proactiveTimer = setTimeout(function () {
+      state.proactiveTimer = null;
+      if (state.open) return;
+      lsSet('proactiveShown', '1');
+      state.proactiveMessage = rule.message;
+      openWidget(true); // welcome bubble uses proactiveMessage on auto-open
+    }, delay);
+  }
+
   // ---- Open/close & realtime ------------------------------------------------
   function toggle() {
-    if (state.open) closeWidget();
-    else openWidget(false);
+    if (state.open) {
+      // First close after a real exchange → ask for a rating instead of closing.
+      // The CSAT card's Skip/Submit then performs the actual close.
+      if (shouldPromptCsat()) { renderCsat(); return; }
+      closeWidget();
+    } else {
+      openWidget(false);
+    }
   }
 
   function realtimeUrl() {
@@ -1265,7 +1330,7 @@
       if (state.seenIds[m.id]) return;
       state.seenIds[m.id] = true;
       if (m.sender_type === 'system') addBubble('sys', m.content_text || '');
-      else addBubble('them', m.content_text || '');
+      else { addBubble('them', m.content_text || ''); state.botAnswered = true; }
       if (m.created_at && (!state.lastTimestamp || m.created_at > state.lastTimestamp)) {
         state.lastTimestamp = m.created_at;
         lsSet('after', state.lastTimestamp);
@@ -1274,8 +1339,129 @@
     }
     if (evt.type === 'conversation.updated') {
       if (evt.status === 'human_active') addBubble('sys', 'A human agent is now handling this chat.');
-      if (evt.status === 'closed') addBubble('sys', 'This chat has been closed.');
+      if (evt.status === 'closed') {
+        addBubble('sys', 'This chat has been closed.');
+        // Agent/system closed the chat: ask for a rating inline (window stays open).
+        if (shouldPromptCsat()) renderCsat();
+      }
     }
+  }
+
+  // ---- CSAT (post-conversation rating) --------------------------------------
+  function shouldPromptCsat() {
+    return (
+      state.csatEnabled &&
+      state.botAnswered &&
+      !!conversationId &&
+      !state.csatDone &&
+      !state.csatPrompted &&
+      lsGet('csat:' + conversationId) !== '1'
+    );
+  }
+
+  function renderCsat() {
+    state.csatPrompted = true;
+    state.csatRating = 0;
+    var box = document.createElement('div');
+    box.className = P + 'csat';
+
+    var title = document.createElement('div');
+    title.className = P + 'csat-title';
+    title.textContent = state.csatPrompt || 'How would you rate this conversation?';
+    box.appendChild(title);
+
+    var stars = document.createElement('div');
+    stars.className = P + 'stars';
+    var starEls = [];
+    function paint(value) {
+      for (var i = 0; i < starEls.length; i++) {
+        if (i < value) starEls[i].classList.add(P + 'on');
+        else starEls[i].classList.remove(P + 'on');
+      }
+    }
+    for (var s = 1; s <= 5; s++) {
+      (function (value) {
+        var star = document.createElement('button');
+        star.type = 'button';
+        star.className = P + 'star';
+        star.setAttribute('aria-label', value + ' star' + (value > 1 ? 's' : ''));
+        star.textContent = '★'; // ★
+        star.addEventListener('mouseenter', function () { paint(value); });
+        star.addEventListener('click', function () {
+          state.csatRating = value;
+          paint(value);
+          submit.disabled = false;
+        });
+        stars.appendChild(star);
+        starEls.push(star);
+      })(s);
+    }
+    stars.addEventListener('mouseleave', function () { paint(state.csatRating); });
+    box.appendChild(stars);
+
+    var comment = null;
+    if (state.csatCommentEnabled) {
+      comment = document.createElement('textarea');
+      comment.setAttribute('placeholder', state.rtl ? '...' : 'Add a comment (optional)');
+      box.appendChild(comment);
+    }
+
+    var row = document.createElement('div');
+    row.className = P + 'csat-row';
+    var submit = document.createElement('button');
+    submit.type = 'button';
+    submit.className = P + 'csat-submit';
+    submit.textContent = state.rtl ? 'إرسال' : 'Submit';
+    submit.disabled = true;
+    var skip = document.createElement('button');
+    skip.type = 'button';
+    skip.className = P + 'csat-skip';
+    skip.textContent = state.rtl ? 'تخطي' : 'Skip';
+    row.appendChild(submit);
+    row.appendChild(skip);
+    box.appendChild(row);
+
+    var rowEl = appendRow('them', box);
+
+    function finish(closeAfter) {
+      state.csatDone = true;
+      state.csatPrompted = false;
+      if (conversationId) lsSet('csat:' + conversationId, '1');
+      if (rowEl && rowEl.parentNode) rowEl.parentNode.removeChild(rowEl);
+      if (closeAfter && state.open) closeWidget();
+    }
+
+    skip.addEventListener('click', function () { finish(true); });
+    submit.addEventListener('click', function () {
+      if (!state.csatRating) return;
+      submit.disabled = true;
+      submitCsat(state.csatRating, comment ? comment.value : '', function (ok) {
+        if (ok) {
+          finish(false);
+          addBubble('sys', state.csatThanks || 'Thanks for your feedback!');
+        } else {
+          submit.disabled = false;
+          addBubble('sys', 'Sorry, we could not save your rating. Please try again.');
+        }
+      });
+    });
+  }
+
+  function submitCsat(rating, comment, cb) {
+    if (!conversationId) { cb(false); return; }
+    fetch(cfg.api + '/api/widget/csat', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        publicBotId: cfg.botId,
+        visitorId: visitorId,
+        conversationId: conversationId,
+        rating: rating,
+        comment: comment || undefined
+      })
+    })
+      .then(function (res) { cb(res.ok); })
+      .catch(function () { cb(false); });
   }
 
   // ---- Send + SSE stream ----------------------------------------------------
@@ -1443,6 +1629,7 @@
         // refresh (quick actions) can happen while the last words type out.
         hideTyping();
         state.currentBotBubble = null;
+        state.botAnswered = true; // a reply landed → conversation is rateable
         loadWidgetConfig('after_answer');
         break;
     }

@@ -2,6 +2,8 @@ import { setTimeout as sleep } from 'node:timers/promises';
 import { z } from 'zod';
 import { createSupabaseServiceClient } from '@/lib/db/server';
 import type { ToolContext } from '@/lib/tools/types';
+import { insertHelpdeskAuditLog, updateHelpdeskAuditLogForEvent } from './audit';
+import { executeManagedEvent } from './managed';
 
 const HELP_DESK_ACTION_TIMEOUT_MS = 18_000;
 const HELP_DESK_ACTION_POLL_MS = 1_000;
@@ -32,7 +34,11 @@ function arr(value: unknown): string[] {
   return Array.isArray(value) ? value.map(String).filter(Boolean) : [];
 }
 
-export function hasHelpdeskRuntime(capabilityFlags: string[]): boolean {
+export function hasHelpdeskRuntime(
+  capabilityFlags: string[],
+  assistantAudience: 'customer' | 'internal' = 'customer',
+): boolean {
+  if (assistantAudience !== 'internal') return false;
   const caps = new Set(capabilityFlags);
   return (
     caps.has('help_desk') ||
@@ -212,6 +218,24 @@ export async function runHelpdeskConnectorAction(
     action.actionType === 'danger' ||
     action.risk !== 'low';
   if (isWriteOrRisky && !parsed.data.confirmed) {
+    await insertHelpdeskAuditLog({
+      companyId: ctx.companyId,
+      connectorId: action.connectorId,
+      actionId: action.id,
+      actorUserId: ctx.actorUserId ?? null,
+      source: 'chat',
+      actionName: action.name,
+      confirmationRequired: true,
+      confirmed: false,
+      status: 'confirmation_required',
+      input: parsed.data.input,
+      metadata: {
+        botId: ctx.botId,
+        conversationId: ctx.conversationId,
+        currentRoute: ctx.currentRoute,
+        staffRole: ctx.staffRole,
+      },
+    });
     return {
       ok: false,
       confirmationRequired: true,
@@ -226,6 +250,7 @@ export async function runHelpdeskConnectorAction(
   }
 
   const sb = createSupabaseServiceClient();
+  const dryRun = parsed.data.input._dryRun === true || parsed.data.input.dryRun === true;
   const { data: event, error } = await sb
     .from('helpdesk_connector_events')
     .insert({
@@ -237,6 +262,7 @@ export async function runHelpdeskConnectorAction(
         ...parsed.data.input,
         _botId: ctx.botId,
         _conversationId: ctx.conversationId,
+        _dryRun: dryRun,
       },
       status: 'queued',
     })
@@ -247,11 +273,56 @@ export async function runHelpdeskConnectorAction(
     return { ok: false, error: error?.message ?? 'Could not queue connector action.' };
   }
 
+  await insertHelpdeskAuditLog({
+    companyId: ctx.companyId,
+    connectorId: action.connectorId,
+    actionId: action.id,
+    eventId: event.id as string,
+    actorUserId: ctx.actorUserId ?? null,
+    source: 'chat',
+    actionName: action.name,
+    confirmationRequired: isWriteOrRisky,
+    confirmed: parsed.data.confirmed,
+    dryRun,
+    status: 'queued',
+    input: parsed.data.input,
+    metadata: {
+      botId: ctx.botId,
+      conversationId: ctx.conversationId,
+      currentRoute: ctx.currentRoute,
+      staffRole: ctx.staffRole,
+    },
+  });
+
+  // Managed (cloud) connectors have no external poller — execute server-side now
+  // and write the result, so the wait below returns it immediately.
+  await executeManagedEvent({
+    companyId: ctx.companyId,
+    connectorId: action.connectorId,
+    eventId: event.id as string,
+    eventName: action.name,
+    input: parsed.data.input as Record<string, unknown>,
+  }).catch(() => false);
+
+  const result = await waitForEventResult(ctx.companyId, event.id as string);
+  if ('status' in result && ['completed', 'failed', 'cancelled'].includes(String(result.status))) {
+    await updateHelpdeskAuditLogForEvent({
+      companyId: ctx.companyId,
+      eventId: event.id as string,
+      status: result.status as 'completed' | 'failed' | 'cancelled',
+      response: 'response' in result ? result.response : null,
+      errorMessage: 'error' in result ? result.error : null,
+      metadata: {
+        completedAt: 'completedAt' in result ? result.completedAt : null,
+      },
+    });
+  }
+
   return {
     ok: true,
     action_name: action.name,
     connector: action.connectorName,
     eventId: event.id,
-    ...(await waitForEventResult(ctx.companyId, event.id as string)),
+    ...result,
   };
 }

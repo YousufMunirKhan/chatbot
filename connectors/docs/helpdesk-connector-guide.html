@@ -1,0 +1,393 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Switch&amp;Save Help Desk Connector Guide</title>
+    <style>
+      :root {
+        color-scheme: light;
+        --ink: #172033;
+        --muted: #667085;
+        --line: #d9e0ea;
+        --panel: #f7f9fc;
+        --brand: #3157d5;
+        --ok: #0f7a4f;
+        --warn: #9a5b00;
+        --bad: #b42318;
+      }
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        font-family:
+          Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+        color: var(--ink);
+        background: #ffffff;
+        line-height: 1.55;
+      }
+      header {
+        border-bottom: 1px solid var(--line);
+        background: var(--panel);
+      }
+      .wrap {
+        width: min(1120px, calc(100% - 32px));
+        margin: 0 auto;
+      }
+      .hero {
+        padding: 44px 0 30px;
+      }
+      h1 {
+        margin: 0;
+        font-size: clamp(30px, 4vw, 48px);
+        line-height: 1.06;
+      }
+      h2 {
+        margin: 34px 0 12px;
+        font-size: 24px;
+      }
+      h3 {
+        margin: 22px 0 10px;
+        font-size: 18px;
+      }
+      p {
+        margin: 0 0 12px;
+      }
+      .lead {
+        max-width: 780px;
+        margin-top: 14px;
+        color: var(--muted);
+        font-size: 17px;
+      }
+      nav {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        padding: 14px 0 18px;
+      }
+      nav a {
+        border: 1px solid var(--line);
+        border-radius: 6px;
+        padding: 8px 10px;
+        color: var(--brand);
+        text-decoration: none;
+        background: #fff;
+        font-size: 14px;
+      }
+      main {
+        padding: 28px 0 60px;
+      }
+      .grid {
+        display: grid;
+        gap: 16px;
+      }
+      .grid.cols {
+        grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+      }
+      .card {
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        padding: 16px;
+        background: #fff;
+      }
+      .card h3 {
+        margin-top: 0;
+      }
+      .pill {
+        display: inline-block;
+        border-radius: 999px;
+        padding: 3px 9px;
+        background: #eaf0ff;
+        color: #1f3fb8;
+        font-size: 12px;
+        font-weight: 700;
+        text-transform: uppercase;
+      }
+      pre {
+        overflow: auto;
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        padding: 14px;
+        background: #0f172a;
+        color: #e5e7eb;
+        font-size: 13px;
+        line-height: 1.5;
+      }
+      code {
+        font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+      }
+      table {
+        width: 100%;
+        border-collapse: collapse;
+        margin: 12px 0 18px;
+        font-size: 14px;
+      }
+      th,
+      td {
+        border: 1px solid var(--line);
+        padding: 9px;
+        text-align: left;
+        vertical-align: top;
+      }
+      th {
+        background: var(--panel);
+      }
+      ul,
+      ol {
+        padding-left: 22px;
+      }
+      .ok {
+        color: var(--ok);
+        font-weight: 700;
+      }
+      .warn {
+        color: var(--warn);
+        font-weight: 700;
+      }
+      .bad {
+        color: var(--bad);
+        font-weight: 700;
+      }
+      footer {
+        border-top: 1px solid var(--line);
+        color: var(--muted);
+        padding: 22px 0;
+        font-size: 14px;
+      }
+    </style>
+  </head>
+  <body>
+    <header>
+      <div class="wrap hero">
+        <span class="pill">Developer guide</span>
+        <h1>Help Desk Connector</h1>
+        <p class="lead">
+          A practical guide for integrating Android, Web, and .NET software with the Switch&amp;Save
+          internal Help Desk Bot. The connector sends reviewed software documentation and approved
+          action definitions. Live business data stays inside the customer system.
+        </p>
+      </div>
+      <nav class="wrap" aria-label="Page sections">
+        <a href="#model">Model</a>
+        <a href="#studio">Connector Studio</a>
+        <a href="#manifest">Manifest</a>
+        <a href="#actions">Actions</a>
+        <a href="#navigation">Clickable Paths</a>
+        <a href="#audit">Audit</a>
+        <a href="#platforms">Platforms</a>
+        <a href="#ai-docs">AI Agent Docs</a>
+      </nav>
+    </header>
+
+    <main class="wrap">
+      <section id="model">
+        <h2>How The Connector Works</h2>
+        <div class="grid cols">
+          <div class="card">
+            <h3>1. Discover</h3>
+            <p>Read routes, menus, screens, fields, validation rules, permissions, and service actions from the app.</p>
+          </div>
+          <div class="card">
+            <h3>2. Edit</h3>
+            <p>Show a proper editable preview. Developers should not have to edit raw JSON as the normal workflow.</p>
+          </div>
+          <div class="card">
+            <h3>3. Audit</h3>
+            <p>Check schema, handlers, navigation, confirmation rules, unsafe content, and missing documentation.</p>
+          </div>
+          <div class="card">
+            <h3>4. Sync</h3>
+            <p>Send docs and action manifest as drafts. Admin approval is required before the bot can use docs.</p>
+          </div>
+        </div>
+      </section>
+
+      <section id="studio">
+        <h2>Connector Studio</h2>
+        <p>
+          Connector Studio is the local preview/editor experience. It may be a Web UI, desktop screen,
+          Android debug screen, or console UI for the first release.
+        </p>
+        <table>
+          <thead>
+            <tr>
+              <th>Area</th>
+              <th>What It Shows</th>
+              <th>What Developer Can Do</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>Screens</td>
+              <td>Module, screen, path, purpose, steps, fields, common errors.</td>
+              <td>Edit, accept AI-generated draft, ignore, or mark needs review.</td>
+            </tr>
+            <tr>
+              <td>Actions</td>
+              <td>Standard action library, connection status, risk, required fields, handlers.</td>
+              <td>Connect local handler, disable, change roles, or mark custom.</td>
+            </tr>
+            <tr>
+              <td>Navigation</td>
+              <td>Open-screen button labels, route IDs, Android routes, Web URLs, .NET commands.</td>
+              <td>Test clickable paths and fix broken targets.</td>
+            </tr>
+            <tr>
+              <td>Changes</td>
+              <td>New, updated, removed, and unchanged screens/actions since last saved manifest.</td>
+              <td>Accept update, edit first, ignore, or remove from platform.</td>
+            </tr>
+            <tr>
+              <td>Audit</td>
+              <td>Passed checks, warnings, and blocked issues.</td>
+              <td>Fix blockers before sync.</td>
+            </tr>
+          </tbody>
+        </table>
+      </section>
+
+      <section id="manifest">
+        <h2>Manifest Concept</h2>
+        <p>The connector manifest has two main parts: documentation and actions.</p>
+        <pre><code>{
+  "appVersion": "1.0.0",
+  "documents": [
+    {
+      "externalKey": "inventory.add_product",
+      "module": "Inventory",
+      "screen": "Add Product",
+      "path": "Inventory > Products > Add Product",
+      "purpose": "Create a new product.",
+      "steps": ["Open Inventory", "Open Products", "Choose Add Product", "Save"],
+      "fields": [
+        { "name": "product_name", "required": true, "description": "Product display name" }
+      ],
+      "commonErrors": ["SKU already exists"],
+      "actions": ["search_product", "create_product"]
+    }
+  ],
+  "actions": [
+    {
+      "name": "search_product",
+      "description": "Search products by name or SKU.",
+      "type": "read",
+      "risk": "low",
+      "requiredFields": ["query"],
+      "optionalFields": [],
+      "allowedRoles": ["admin", "manager", "cashier"],
+      "needsConfirmation": false
+    }
+  ]
+}</code></pre>
+      </section>
+
+      <section id="actions">
+        <h2>Standard Action Library</h2>
+        <p>
+          Developers should connect these ready-made actions to their real services. Custom actions are
+          allowed, but standard names make the bot easier to train and support.
+        </p>
+        <table>
+          <thead>
+            <tr>
+              <th>Group</th>
+              <th>Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>Products</td>
+              <td><code>search_product</code>, <code>get_product</code>, <code>create_product</code>, <code>update_product</code>, <code>update_product_price</code>, <code>update_product_quantity</code>, <code>disable_product</code></td>
+            </tr>
+            <tr>
+              <td>Stock</td>
+              <td><code>check_stock</code>, <code>low_stock_products</code>, <code>stock_adjustment_history</code></td>
+            </tr>
+            <tr>
+              <td>Customers</td>
+              <td><code>search_customer</code>, <code>create_customer</code>, <code>update_customer</code>, <code>update_customer_phone</code></td>
+            </tr>
+            <tr>
+              <td>Orders and Invoices</td>
+              <td><code>search_order</code>, <code>get_order_status</code>, <code>create_order</code>, <code>cancel_order</code>, <code>search_invoice</code>, <code>get_invoice</code></td>
+            </tr>
+            <tr>
+              <td>Reports</td>
+              <td><code>daily_sales_report</code>, <code>end_of_day_report</code>, <code>stock_value_report</code></td>
+            </tr>
+            <tr>
+              <td>Support</td>
+              <td><code>create_support_ticket</code>, <code>add_customer_note</code></td>
+            </tr>
+          </tbody>
+        </table>
+      </section>
+
+      <section id="navigation">
+        <h2>Clickable Paths</h2>
+        <p>
+          A path such as <strong>Inventory &gt; Products &gt; Add Product</strong> can become clickable
+          only when the app exposes a route, URL, command, URI, or deep link.
+        </p>
+        <pre><code>{
+  "label": "Open Add Product",
+  "routeId": "inventory.add_product",
+  "platformTargets": {
+    "android": { "route": "inventory/products/new", "deepLink": "mypos://inventory/products/new" },
+    "web": { "url": "/inventory/products/new" },
+    "dotnet": { "command": "OpenAddProductScreen", "uri": "mypos://inventory/products/new" }
+  }
+}</code></pre>
+      </section>
+
+      <section id="audit">
+        <h2>Audit Rules</h2>
+        <ul>
+          <li><span class="ok">Pass:</span> all required fields exist, names are unique, handlers are connected.</li>
+          <li><span class="warn">Warn:</span> short steps, missing navigation target, missing optional roles.</li>
+          <li><span class="bad">Block:</span> secret detected, no handler for enabled action, dangerous action enabled, write action without confirmation.</li>
+        </ul>
+        <p>
+          The connector should save locally first, then audit, then sync. Switch&amp;Save stores synced
+          docs as drafts until a company admin approves them.
+        </p>
+      </section>
+
+      <section id="platforms">
+        <h2>Platform Notes</h2>
+        <div class="grid cols">
+          <div class="card">
+            <h3>Android</h3>
+            <p>Use navigation routes or deep links. Store the token securely. Validate local staff role before write handlers.</p>
+          </div>
+          <div class="card">
+            <h3>Web</h3>
+            <p>Run the connector token on the backend. Frontend admin UI can show Connector Studio and call backend sync/audit routes.</p>
+          </div>
+          <div class="card">
+            <h3>.NET</h3>
+            <p>Prefer app commands/services over UI automation. External workers can use custom URI, named pipe, or localhost command bridge.</p>
+          </div>
+        </div>
+      </section>
+
+      <section id="ai-docs">
+        <h2>AI Agent Documentation</h2>
+        <p>Give these files to a coding agent with the customer app code:</p>
+        <ul>
+          <li><code>connectors/AI_AGENT_INTEGRATION_PROMPT.md</code></li>
+          <li><code>connectors/android/AI_AGENT_ANDROID.md</code></li>
+          <li><code>connectors/web/AI_AGENT_WEB.md</code></li>
+          <li><code>connectors/dotnet/AI_AGENT_DOTNET.md</code></li>
+        </ul>
+      </section>
+    </main>
+
+    <footer>
+      <div class="wrap">
+        Switch&amp;Save Help Desk Connector stores reviewed docs, action manifests, and event logs. Live customer software data stays in the customer system.
+      </div>
+    </footer>
+  </body>
+</html>

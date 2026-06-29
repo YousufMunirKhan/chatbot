@@ -10,12 +10,17 @@ export interface ToolContext {
   botId: string | null;
   conversationId: string | null;
   language: string;
+  actorUserId?: string | null;
+  currentRoute?: string | null;
+  staffRole?: string | null;
 }
 
 export interface AssistantTool {
   schema: ToolSchema;
   /** Bot capability flags that enable this tool. */
   capabilities: string[];
+  /** Restrict tools that should never be available to public/customer bots. */
+  audiences?: Array<'customer' | 'internal'>;
   execute(input: Record<string, unknown>, ctx: ToolContext): Promise<unknown>;
 }
 

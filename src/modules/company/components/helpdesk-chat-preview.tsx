@@ -17,7 +17,7 @@ import { testAssistantAction, type TestAssistantState } from '../test-assistant-
 
 const initial: TestAssistantState = {};
 
-const suggestions = [
+const fallbackSuggestions = [
   'How do I add a product?',
   'Check today sales report',
   'Where is stock adjustment?',
@@ -41,8 +41,9 @@ function AskButton() {
   );
 }
 
-export function HelpdeskChatPreview() {
+export function HelpdeskChatPreview({ suggestions = fallbackSuggestions }: { suggestions?: string[] }) {
   const [state, action] = useFormState(testAssistantAction, initial);
+  const visibleSuggestions = suggestions.length ? suggestions.slice(0, 5) : fallbackSuggestions;
 
   return (
     <section className="grid gap-6 lg:grid-cols-[minmax(320px,0.95fr)_1.05fr]">
@@ -88,7 +89,7 @@ export function HelpdeskChatPreview() {
           </div>
 
           <div className="space-y-1">
-            {suggestions.map((item) => (
+            {visibleSuggestions.map((item) => (
               <button
                 key={item}
                 type="button"

@@ -27,6 +27,7 @@ import { rateLimitDistributed } from '@/lib/ratelimit';
 import { logger } from '@/lib/logger';
 import { notify } from '@/lib/notify';
 import { createSupabaseServiceClient } from '@/lib/db/server';
+import { loadContextualQuickActions } from '@/lib/quick-actions';
 import { assignBestAvailableAgent } from '@/lib/agent-routing';
 import { getCachedAnswer, isAiBudgetExceeded, saveCachedAnswer } from '@/lib/ai/cost-controls';
 import {
@@ -252,14 +253,14 @@ export async function POST(req: Request) {
         // Fetch everything that doesn't depend on the message in ONE parallel
         // batch (history, fresh business facts, summary, provider, settings) to
         // cut sequential round-trips before the first token (latency win).
-        const toolSchemas = getToolSchemas(bot.capabilityFlags);
+        const toolSchemas = getToolSchemas(bot.capabilityFlags, bot.assistantAudience);
         const [history, businessContext, summary, resolved, settings, helpdeskActions] = await Promise.all([
           getRecentHistory(convo.id, bot.companyId),
           getCachedBusinessContext(bot.companyId),
           getConversationSummary(convo.id, bot.companyId),
           getChatProviderAsync(),
           getPlatformAiSettings(),
-          hasHelpdeskRuntime(bot.capabilityFlags)
+          hasHelpdeskRuntime(bot.capabilityFlags, bot.assistantAudience)
             ? listEnabledHelpdeskActions(bot.companyId)
             : Promise.resolve([]),
         ]);
@@ -338,6 +339,8 @@ export async function POST(req: Request) {
           body.text,
           6,
           searchQueries,
+          bot.assistantAudience,
+          replyLanguage,
         );
         const helpdeskActionCatalog = formatHelpdeskActionCatalog(helpdeskActions);
         send({ type: 'status', value: statusText('thinking', replyLanguage) });
@@ -529,6 +532,29 @@ export async function POST(req: Request) {
               : 'I’m not sure about that. Would you like the team to contact you?',
             actions: ctaActions,
           });
+        }
+        if (!actionsEmitted.has('quick_replies') && !actionsEmitted.has('fallback_cta')) {
+          const contextualPills = await loadContextualQuickActions({
+            companyId: bot.companyId,
+            botId: bot.id,
+            assistantAudience: bot.assistantAudience,
+            latestMessage: body.text,
+            contextText: `${contextText}\n${full}`,
+            capabilities: bot.capabilityFlags,
+            settings: {
+              enableDefaultPills: bot.appearance.enableDefaultPills !== false,
+              enableContextualPills: bot.appearance.enableContextualPills !== false,
+              enableConnectorGeneratedPills: bot.appearance.enableConnectorGeneratedPills !== false,
+            },
+            limit: 4,
+          });
+          const options = contextualPills.map((pill) => {
+            const text = typeof pill.config.message_text === 'string' ? pill.config.message_text : pill.label;
+            return text.trim();
+          }).filter(Boolean);
+          if (options.length > 0) {
+            emitAction('quick_replies', { options });
+          }
         }
         send({ type: 'done' });
         // Roll up long-chat memory after the visible reply is finished (Issue #9).

@@ -27,6 +27,9 @@ SQL migrations applied to the Supabase Postgres database, in order.
 | `0015_realtime_quality_agents.sql` | 11/20/25 | Company slugs, agent invites, `needs_human`, answer quality logs + RLS |
 | `0027_helpdesk_connectors.sql` | Help Desk | Connector registry, reviewed software docs, action manifests, and connector event logs |
 | `0028_helpdesk_connector_revisions.sql` | Help Desk | Connector manifest revision/resync tracking for installed SDKs |
+| `0036_quick_action_audience_context.sql` | Help Desk / Quick Actions | Audience-safe quick action metadata for customer vs Help Desk defaults, contextual pills, and connector-generated pills |
+| `0037_helpdesk_chat_surface.sql` | Help Desk | Staff-only Help Desk chat visibility rules for app roles, routes, blocked screens, and show mode |
+| `0038_helpdesk_enterprise_mvp.sql` | Help Desk | Editable connector preview metadata, simple action admin controls, and staff Help Desk audit logs |
 
 > Stripe (Module 19) reuses the `subscriptions` columns from `0004` — no extra
 > migration; the checkout/webhook routes live in `src/app/api/billing` & `…/webhooks/stripe`.

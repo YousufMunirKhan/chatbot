@@ -76,10 +76,20 @@ export function QueueConnectorEventForm({ actionId }: { actionId: string }) {
         className="w-full rounded-md border bg-background p-2 font-mono text-xs"
         defaultValue={'{"query":"Pepsi"}'}
       />
+      <div className="grid gap-2 text-xs">
+        <label className="flex items-center gap-2">
+          <input type="checkbox" name="dryRun" defaultChecked className="h-4 w-4" />
+          Dry-run sandbox test
+        </label>
+        <label className="flex items-center gap-2">
+          <input type="checkbox" name="confirmed" className="h-4 w-4" />
+          Confirm real write action
+        </label>
+      </div>
       {state.error ? <p className="text-xs text-destructive">{state.error}</p> : null}
-      {state.ok ? <p className="text-xs text-emerald-600">Queued. Connector can poll events now.</p> : null}
+      {state.ok ? <p className="text-xs text-emerald-600">Queued. Connector can receive it by WebSocket or polling.</p> : null}
       <Button type="submit" size="sm" variant="outline">
-        Queue test event
+        Queue sandbox event
       </Button>
     </form>
   );

@@ -3,8 +3,11 @@ import {
   authenticateHelpdeskConnector,
   connectorStatusPayload,
   eventResultSchema,
+  logConnectorHealth,
+  updateConnectorDeliveryState,
 } from '@/lib/helpdesk/connectors';
 import { createSupabaseServiceClient } from '@/lib/db/server';
+import { updateHelpdeskAuditLogForEvent } from '@/lib/helpdesk/audit';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -13,6 +16,7 @@ export async function GET(req: Request) {
   const connector = await authenticateHelpdeskConnector(req);
   if (!connector) return NextResponse.json({ error: 'unauthorized_connector' }, { status: 401 });
 
+  const startedAt = Date.now();
   const sb = createSupabaseServiceClient();
   const { data, error } = await sb
     .from('helpdesk_connector_events')
@@ -31,6 +35,20 @@ export async function GET(req: Request) {
       .eq('connector_id', connector.id)
       .in('id', ids);
   }
+
+  await updateConnectorDeliveryState(connector, {
+    activeDeliveryMode: 'polling_fallback',
+    connectionState: 'fallback',
+    lastPollAt: new Date().toISOString(),
+  });
+  await logConnectorHealth(connector, {
+    eventType: 'poll_success',
+    deliveryMode: 'polling_fallback',
+    status: 'success',
+    durationMs: Date.now() - startedAt,
+    eventsReturned: ids.length,
+    pollIntervalSeconds: connector.pollIntervalSeconds,
+  });
 
   return NextResponse.json({
     ok: true,
@@ -68,6 +86,28 @@ export async function POST(req: Request) {
     .eq('connector_id', connector.id)
     .eq('id', parsed.data.eventId);
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+
+  await logConnectorHealth(connector, {
+    eventType: parsed.data.status === 'completed' ? 'event_completed' : 'event_failed',
+    deliveryMode: parsed.data.deliveryMode,
+    status: parsed.data.status === 'completed' ? 'success' : 'error',
+    eventId: parsed.data.eventId,
+    durationMs: parsed.data.durationMs,
+    message: parsed.data.error,
+  });
+
+  await updateHelpdeskAuditLogForEvent({
+    companyId: connector.companyId,
+    eventId: parsed.data.eventId,
+    status: parsed.data.status,
+    response: parsed.data.response ?? null,
+    errorMessage: parsed.data.error ?? null,
+    deliveryMode: parsed.data.deliveryMode,
+    metadata: {
+      durationMs: parsed.data.durationMs ?? null,
+      source: 'connector_event_result',
+    },
+  });
 
   return NextResponse.json({ ok: true });
 }

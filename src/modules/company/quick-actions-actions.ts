@@ -9,6 +9,9 @@ import {
   normalizeList,
   parseFormSchema,
   parseQuickActionConfig,
+  type QuickActionAudience,
+  type QuickActionContextMode,
+  type QuickActionSource,
   type QuickActionType,
 } from '@/lib/quick-actions';
 import { getCompanyId } from './data';
@@ -27,6 +30,9 @@ const ACTION_TYPES = [
   'request_human',
   'tool_action',
 ] as const;
+const AUDIENCES = ['customer', 'internal', 'both'] as const;
+const SOURCES = ['manual', 'default', 'connector', 'ai_contextual'] as const;
+const CONTEXT_MODES = ['initial', 'contextual', 'follow_up', 'navigation', 'action'] as const;
 
 const optText = z.preprocess((x) => (x === '' || x == null ? undefined : x), z.string().optional());
 const optUuid = z.preprocess((x) => (x === '' || x == null ? undefined : x), z.string().uuid().optional());
@@ -37,6 +43,11 @@ const schema = z.object({
   label: z.string().min(1, 'Label is required').max(80),
   description: optText,
   actionType: z.enum(ACTION_TYPES),
+  audience: z.enum(AUDIENCES).default('customer'),
+  source: z.enum(SOURCES).default('manual'),
+  contextMode: z.enum(CONTEXT_MODES).default('initial'),
+  connectorDocumentId: optUuid,
+  connectorActionId: optUuid,
   messageText: optText,
   directAnswer: optText,
   url: optText,
@@ -62,6 +73,11 @@ function payload(companyId: string, v: z.infer<typeof schema>) {
     label: v.label,
     description: v.description ?? null,
     action_type: actionType,
+    audience: v.audience as QuickActionAudience,
+    source: v.source as QuickActionSource,
+    context_mode: v.contextMode as QuickActionContextMode,
+    connector_document_id: v.connectorDocumentId ?? null,
+    connector_action_id: v.connectorActionId ?? null,
     action_config_json: parseQuickActionConfig({
       actionType,
       customConfig: v.customConfig,

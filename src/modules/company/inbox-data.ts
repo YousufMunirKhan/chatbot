@@ -20,6 +20,7 @@ export interface ConversationRow {
   aiEnabled: boolean;
   assignedAgentId: string | null;
   firstAgentReplyAt: string | null;
+  csatRating: number | null;
 }
 
 export interface InboxMessage {
@@ -27,6 +28,19 @@ export interface InboxMessage {
   senderType: string;
   content: string;
   createdAt: string;
+}
+
+export interface InternalNote {
+  id: string;
+  note: string;
+  author: string;
+  createdAt: string;
+}
+
+export interface CannedResponse {
+  id: string;
+  title: string;
+  body: string;
 }
 
 export interface ConversationDetail {
@@ -37,7 +51,28 @@ export interface ConversationDetail {
   visitorId: string | null;
   aiEnabled: boolean;
   assignedAgentId: string | null;
+  priority: string;
+  tags: string[];
+  csatRating: number | null;
+  csatComment: string | null;
   messages: InboxMessage[];
+  notes: InternalNote[];
+  cannedResponses: CannedResponse[];
+}
+
+export async function listCannedResponses(): Promise<CannedResponse[]> {
+  const companyId = await getCompanyId();
+  const sb = createSupabaseServiceClient();
+  const { data } = await sb
+    .from('canned_responses')
+    .select('id,title,body')
+    .eq('company_id', companyId)
+    .order('title', { ascending: true })
+    .limit(200);
+  return (data ?? []).map((r) => {
+    const x = r as Record<string, unknown>;
+    return { id: x.id as string, title: x.title as string, body: x.body as string };
+  });
 }
 
 export async function listConversations(): Promise<ConversationRow[]> {
@@ -45,7 +80,7 @@ export async function listConversations(): Promise<ConversationRow[]> {
   const sb = createSupabaseServiceClient();
   const { data, error } = await sb
     .from('conversations')
-    .select('id,status,channel,language,visitor_id,unread_count,last_message_at,ai_enabled,assigned_agent_id,first_agent_reply_at')
+    .select('id,status,channel,language,visitor_id,unread_count,last_message_at,ai_enabled,assigned_agent_id,first_agent_reply_at,csat_rating')
     .eq('company_id', companyId)
     .order('last_message_at', { ascending: false })
     .limit(100);
@@ -63,8 +98,17 @@ export async function listConversations(): Promise<ConversationRow[]> {
       aiEnabled: Boolean(c.ai_enabled),
       assignedAgentId: (c.assigned_agent_id as string) ?? null,
       firstAgentReplyAt: (c.first_agent_reply_at as string) ?? null,
+      csatRating: (c.csat_rating as number) ?? null,
     };
   });
+}
+
+/** Average CSAT (1–5) and response count across the loaded conversations. */
+export function summarizeCsat(conversations: ConversationRow[]) {
+  const rated = conversations.filter((c) => typeof c.csatRating === 'number' && c.csatRating! > 0);
+  const responses = rated.length;
+  const average = responses ? rated.reduce((sum, c) => sum + (c.csatRating ?? 0), 0) / responses : null;
+  return { responses, average };
 }
 
 export async function getInboxSlaSummary() {
@@ -72,13 +116,19 @@ export async function getInboxSlaSummary() {
   return summarizeInboxSla(conversations);
 }
 
-export function summarizeInboxSla(conversations: ConversationRow[]) {
+/** A conversation is overdue when it has waited on a human past the SLA window. */
+export function isConversationOverdue(c: ConversationRow, slaMinutes: number): boolean {
+  if (c.status !== 'needs_human' || !c.lastMessageAt) return false;
+  return Date.now() - new Date(c.lastMessageAt).getTime() > slaMinutes * 60 * 1000;
+}
+
+export function summarizeInboxSla(conversations: ConversationRow[], slaMinutes = 5) {
   const needsHuman = conversations.filter((c) => c.status === 'needs_human');
-  const now = Date.now();
   return {
     needsHuman: needsHuman.length,
-    missed: needsHuman.filter((c) => c.lastMessageAt && now - new Date(c.lastMessageAt).getTime() > 5 * 60 * 1000).length,
+    missed: needsHuman.filter((c) => isConversationOverdue(c, slaMinutes)).length,
     unassigned: needsHuman.filter((c) => !c.assignedAgentId).length,
+    slaMinutes,
   };
 }
 
@@ -90,7 +140,7 @@ export async function getConversationDetail(id: string): Promise<ConversationDet
 
   const { data: convo, error } = await sb
     .from('conversations')
-    .select('id,company_id,status,channel,language,visitor_id,ai_enabled,assigned_agent_id')
+    .select('id,company_id,status,channel,language,visitor_id,ai_enabled,assigned_agent_id,priority,tags,csat_rating,csat_comment')
     .eq('company_id', companyId) // scope prevents cross-company access
     .eq('id', id)
     .maybeSingle();
@@ -100,13 +150,33 @@ export async function getConversationDetail(id: string): Promise<ConversationDet
   const c = convo as Record<string, unknown>;
   if ((c.company_id as string) !== companyId) return null;
 
-  const { data: messages, error: mErr } = await sb
-    .from('messages')
-    .select('id,sender_type,content_text,created_at')
-    .eq('company_id', companyId)
-    .eq('conversation_id', id)
-    .order('created_at', { ascending: true });
+  const [{ data: messages, error: mErr }, { data: noteRows }, cannedResponses] = await Promise.all([
+    sb
+      .from('messages')
+      .select('id,sender_type,content_text,created_at')
+      .eq('company_id', companyId)
+      .eq('conversation_id', id)
+      .order('created_at', { ascending: true }),
+    sb
+      .from('conversation_internal_notes')
+      .select('id,note,created_at,users(full_name,email)')
+      .eq('company_id', companyId)
+      .eq('conversation_id', id)
+      .order('created_at', { ascending: true }),
+    listCannedResponses(),
+  ]);
   if (mErr) throw mErr;
+
+  const notes: InternalNote[] = (noteRows ?? []).map((n) => {
+    const x = n as Record<string, unknown>;
+    const u = x.users as { full_name?: string; email?: string } | null;
+    return {
+      id: x.id as string,
+      note: (x.note as string) ?? '',
+      author: u?.full_name || u?.email || 'Agent',
+      createdAt: x.created_at as string,
+    };
+  });
 
   return {
     id: c.id as string,
@@ -116,6 +186,10 @@ export async function getConversationDetail(id: string): Promise<ConversationDet
     visitorId: (c.visitor_id as string) ?? null,
     aiEnabled: Boolean(c.ai_enabled),
     assignedAgentId: (c.assigned_agent_id as string) ?? null,
+    priority: (c.priority as string) ?? 'normal',
+    tags: (c.tags as string[]) ?? [],
+    csatRating: (c.csat_rating as number) ?? null,
+    csatComment: (c.csat_comment as string) ?? null,
     messages: (messages ?? []).map((m) => {
       const x = m as Record<string, unknown>;
       return {
@@ -125,5 +199,7 @@ export async function getConversationDetail(id: string): Promise<ConversationDet
         createdAt: x.created_at as string,
       };
     }),
+    notes,
+    cannedResponses,
   };
 }

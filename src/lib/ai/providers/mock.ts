@@ -5,6 +5,7 @@ import type {
   EmbeddingProvider,
   TokenUsage,
 } from '@/lib/ai/types';
+import { CACHE_BREAKPOINT } from '@/lib/ai/types';
 
 export const EMBEDDING_DIM = 1536;
 
@@ -20,7 +21,7 @@ function lastUserMessage(options: ChatCompletionOptions): string {
 }
 
 function contextFromSystem(options: ChatCompletionOptions): string | null {
-  const sys = options.messages.find((m) => m.role === 'system')?.content ?? '';
+  const sys = (options.messages.find((m) => m.role === 'system')?.content ?? '').split(CACHE_BREAKPOINT).join('\n\n');
   const marker = sys.indexOf('KNOWLEDGE CONTEXT');
   if (marker === -1) return null;
   const ctx = sys.slice(marker + 'KNOWLEDGE CONTEXT'.length).trim();

@@ -41,6 +41,20 @@ const CONTEXT_OPTIONS = [
   { value: 'support_page', label: 'Support pages' },
 ];
 
+const AUDIENCE_OPTIONS = [
+  { value: 'customer', label: 'Customer bot' },
+  { value: 'internal', label: 'Help desk bot' },
+  { value: 'both', label: 'Both' },
+] as const;
+
+const CONTEXT_MODE_OPTIONS = [
+  { value: 'initial', label: 'Initial' },
+  { value: 'contextual', label: 'Contextual' },
+  { value: 'follow_up', label: 'Follow-up' },
+  { value: 'navigation', label: 'Navigation' },
+  { value: 'action', label: 'Action' },
+] as const;
+
 const FIELD_TYPES = [
   { value: 'text', label: 'Text' },
   { value: 'email', label: 'Email' },
@@ -178,6 +192,9 @@ export function QuickActionForm({ bots, action, compact }: { bots: BotRow[]; act
     <form action={formAction} className="space-y-6">
       {action ? <input type="hidden" name="id" value={action.id} /> : null}
       <input type="hidden" name="actionType" value={actionType} />
+      <input type="hidden" name="source" value={action?.source ?? 'manual'} />
+      <input type="hidden" name="connectorDocumentId" value={action?.connectorDocumentId ?? ''} />
+      <input type="hidden" name="connectorActionId" value={action?.connectorActionId ?? ''} />
       <input type="hidden" name="contexts" value={contexts.join(',')} />
       <input type="hidden" name="formSchema" value={formSchema} />
       <input type="hidden" name="customConfig" value="{}" />
@@ -242,6 +259,16 @@ export function QuickActionForm({ bots, action, compact }: { bots: BotRow[]; act
                   {bots.map((bot) => (
                     <option key={bot.id} value={bot.id}>
                       {bot.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div className="space-y-1.5">
+                <Label>Audience</Label>
+                <select name="audience" className={selectCls} defaultValue={action?.audience ?? 'customer'}>
+                  {AUDIENCE_OPTIONS.map((option) => (
+                    <option key={option.value} value={option.value}>
+                      {option.label}
                     </option>
                   ))}
                 </select>
@@ -352,6 +379,16 @@ export function QuickActionForm({ bots, action, compact }: { bots: BotRow[]; act
               <div className="space-y-1.5">
                 <Label>Keyword triggers</Label>
                 <Input name="keywordTriggers" value={keywordTriggers} onChange={(event) => setKeywordTriggers(event.target.value)} placeholder="price, booking, demo" />
+              </div>
+              <div className="space-y-1.5">
+                <Label>Context mode</Label>
+                <select name="contextMode" className={selectCls} defaultValue={action?.contextMode ?? 'initial'}>
+                  {CONTEXT_MODE_OPTIONS.map((option) => (
+                    <option key={option.value} value={option.value}>
+                      {option.label}
+                    </option>
+                  ))}
+                </select>
               </div>
               <label className="flex items-center gap-2 pt-7 text-sm">
                 <input type="checkbox" name="isActive" defaultChecked={action?.isActive ?? true} className="h-4 w-4" />

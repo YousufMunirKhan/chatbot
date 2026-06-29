@@ -1,6 +1,7 @@
 import { createSupabaseServiceClient } from '@/lib/db/server';
 import { getEmbeddingProviderAsync } from './providers';
 import { logAiUsage } from './usage';
+import { detectLanguage } from './lang';
 import { logger } from '@/lib/logger';
 
 /** Split text into overlapping chunks for embedding (Module 10 pipeline). */
@@ -23,6 +24,9 @@ export interface IngestInput {
   title: string;
   text: string;
   sourceType?: 'text' | 'url' | 'pdf' | 'docx' | 'txt' | 'faq' | 'csv';
+  audience?: 'customer' | 'internal' | 'both';
+  /** Explicit language tag; auto-detected from the text when omitted. */
+  language?: string;
 }
 
 /**
@@ -32,6 +36,7 @@ export interface IngestInput {
 export async function ingestText(input: IngestInput): Promise<{ documentId: string; chunks: number }> {
   const sb = createSupabaseServiceClient();
   const { companyId, botId, title } = input;
+  const language = input.language ?? detectLanguage(`${title}\n${input.text}`);
 
   const { data: doc, error: docErr } = await sb
     .from('documents')
@@ -40,6 +45,8 @@ export async function ingestText(input: IngestInput): Promise<{ documentId: stri
       bot_id: botId,
       title,
       source_type: input.sourceType ?? 'text',
+      audience: input.audience ?? 'customer',
+      language,
       status: 'processing',
       char_count: input.text.length,
     })
@@ -84,6 +91,8 @@ export async function ingestText(input: IngestInput): Promise<{ documentId: stri
       text: p,
       contextual_text: contextualPieces[idx],
       embedding: JSON.stringify(vectors[idx]), // pgvector accepts the '[..]' literal
+      audience: input.audience ?? 'customer',
+      language,
       metadata_json: { chunk_index: idx },
     }));
 

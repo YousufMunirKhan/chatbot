@@ -1,8 +1,11 @@
 import type { AIProvider, ChatCompletionOptions, ChatCompletionResult } from '@/lib/ai/types';
+import { CACHE_BREAKPOINT } from '@/lib/ai/types';
 import { fetchWithRetry } from '@/lib/ai/http';
 
 const ANTHROPIC_API = 'https://api.anthropic.com/v1/messages';
 const ANTHROPIC_VERSION = '2023-06-01';
+
+type SystemBlock = { type: 'text'; text: string; cache_control?: { type: 'ephemeral' } };
 
 /**
  * Anthropic requires the first message to be a `user` turn and roles to
@@ -22,18 +25,30 @@ export function normalizeAnthropicTurns(
   return out;
 }
 
-/** Split system messages out; Anthropic takes `system` separately. */
+/**
+ * Split system messages out (Anthropic takes `system` separately) and turn the
+ * CACHE_BREAKPOINT marker into prompt-cache blocks: the stable prefix is cached
+ * (~90% cheaper on a hit), the volatile tail (knowledge/summary) is not.
+ */
 function split(options: ChatCompletionOptions) {
-  const system = options.messages
+  const systemRaw = options.messages
     .filter((m) => m.role === 'system')
     .map((m) => m.content)
     .join('\n\n');
+  const [stable, volatile] = systemRaw.split(CACHE_BREAKPOINT);
+  const systemBlocks: SystemBlock[] = [];
+  if (stable && stable.trim()) {
+    systemBlocks.push({ type: 'text', text: stable, cache_control: { type: 'ephemeral' } });
+  }
+  if (volatile && volatile.trim()) {
+    systemBlocks.push({ type: 'text', text: volatile });
+  }
   const messages = normalizeAnthropicTurns(
     options.messages
       .filter((m) => m.role === 'user' || m.role === 'assistant')
       .map((m) => ({ role: m.role as 'user' | 'assistant', content: m.content })),
   );
-  return { system, messages };
+  return { system: systemBlocks.length ? systemBlocks : undefined, messages };
 }
 
 /** Anthropic (Claude) chat provider — fetch-based. */
@@ -49,6 +64,7 @@ export function createAnthropicProvider(apiKey: string): AIProvider {
           headers: {
             'x-api-key': apiKey,
             'anthropic-version': ANTHROPIC_VERSION,
+            'anthropic-beta': 'prompt-caching-2024-07-31',
             'Content-Type': 'application/json',
           },
           body: JSON.stringify({
@@ -80,6 +96,7 @@ export function createAnthropicProvider(apiKey: string): AIProvider {
           headers: {
             'x-api-key': apiKey,
             'anthropic-version': ANTHROPIC_VERSION,
+            'anthropic-beta': 'prompt-caching-2024-07-31',
             'Content-Type': 'application/json',
           },
           body: JSON.stringify({

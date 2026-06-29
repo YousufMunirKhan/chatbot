@@ -2,6 +2,7 @@ import { z } from 'zod';
 import { loadBotByPublicId, isOriginAllowed } from '@/lib/ai/engine';
 import { createSupabaseServiceClient } from '@/lib/db/server';
 import { loadPublicQuickActions } from '@/lib/quick-actions';
+import { getActiveWebProactiveRules } from '@/modules/company/campaigns-data';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -51,13 +52,22 @@ export async function GET(req: Request) {
     .eq('company_id', bot.companyId)
     .maybeSingle();
   const appearance = (data?.appearance_json as Record<string, unknown> | null) ?? {};
-  const quickActions = await loadPublicQuickActions({
-    companyId: bot.companyId,
-    botId: bot.id,
-    capabilities: bot.capabilityFlags,
-    context: parsed.data.context,
-    pageUrl: parsed.data.pageUrl,
-  });
+  const [quickActions, proactiveRules] = await Promise.all([
+    loadPublicQuickActions({
+      companyId: bot.companyId,
+      botId: bot.id,
+      capabilities: bot.capabilityFlags,
+      context: parsed.data.context,
+      pageUrl: parsed.data.pageUrl,
+      audience: 'customer',
+      settings: {
+        enableDefaultPills: appearance.enableDefaultPills !== false,
+        enableContextualPills: appearance.enableContextualPills !== false,
+        enableConnectorGeneratedPills: appearance.enableConnectorGeneratedPills !== false,
+      },
+    }),
+    getActiveWebProactiveRules(bot.companyId, bot.id),
+  ]);
 
   return json(
     {
@@ -111,8 +121,14 @@ export async function GET(req: Request) {
         bottomOffset: Number(appearance.bottomOffset ?? 20),
         sideOffset: Number(appearance.sideOffset ?? 20),
         zIndex: Number(appearance.zIndex ?? 2147483000),
+        // CSAT: post-conversation 1–5 rating. Off unless the company enables it.
+        csatEnabled: Boolean(appearance.csatEnabled),
+        csatPrompt: (appearance.csatPrompt as string) || 'How would you rate this conversation?',
+        csatThanks: (appearance.csatThanks as string) || 'Thanks for your feedback!',
+        csatCommentEnabled: appearance.csatCommentEnabled !== false,
       },
       quickActions,
+      proactiveRules,
     },
     200,
     headers,

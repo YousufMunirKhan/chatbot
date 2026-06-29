@@ -55,6 +55,10 @@ const schema = z.object({
   showOnDesktop: z.preprocess((x) => x === 'on', z.boolean()),
   bottomOffset: optNum,
   sideOffset: optNum,
+  csatEnabled: z.preprocess((x) => x === 'on', z.boolean()),
+  csatCommentEnabled: z.preprocess((x) => x === 'on', z.boolean()),
+  csatPrompt: optText,
+  csatThanks: optText,
 });
 
 function clamp(value: number | undefined, fallback: number, min: number, max: number): number {
@@ -126,6 +130,10 @@ export async function updateWidgetDesignAction(
     showOnDesktop: v.showOnDesktop,
     bottomOffset: clamp(v.bottomOffset, 20, 0, 120),
     sideOffset: clamp(v.sideOffset, 20, 0, 120),
+    csatEnabled: v.csatEnabled,
+    csatCommentEnabled: v.csatCommentEnabled,
+    csatPrompt: textOrNull(v.csatPrompt) ?? 'How would you rate this conversation?',
+    csatThanks: textOrNull(v.csatThanks) ?? 'Thanks for your feedback!',
     widgetVersion: Date.now(),
   };
 

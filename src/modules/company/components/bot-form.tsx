@@ -151,6 +151,9 @@ export function BotForm({
       : `${companyName ?? 'Website'} Assistant`;
   const capabilityOptions =
     assistantAudience === 'internal' ? INTERNAL_CAPABILITIES : CUSTOMER_CAPABILITIES;
+  const enableDefaultPills = appearance.enableDefaultPills !== false;
+  const enableContextualPills = appearance.enableContextualPills !== false;
+  const enableConnectorGeneratedPills = appearance.enableConnectorGeneratedPills !== false;
 
   return (
     <form action={formAction} className="space-y-8">
@@ -276,6 +279,60 @@ export function BotForm({
             to go and how to update things. The assistant will answer from those facts and will say
             when something is missing.
           </p>
+        </div>
+      </section>
+
+      <section className="space-y-3">
+        <h2 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground">
+          Quick pills
+        </h2>
+        <div className="grid gap-2 sm:grid-cols-3">
+          <label className="flex items-start gap-2 rounded-md border p-3 text-sm">
+            <input type="hidden" name="enableDefaultPills" value="off" />
+            <input
+              type="checkbox"
+              name="enableDefaultPills"
+              defaultChecked={enableDefaultPills}
+              className="mt-0.5 h-4 w-4"
+            />
+            <span>
+              <span className="block font-medium">Default pills</span>
+              <span className="block text-xs text-muted-foreground">
+                Seed safe starter buttons for this assistant.
+              </span>
+            </span>
+          </label>
+          <label className="flex items-start gap-2 rounded-md border p-3 text-sm">
+            <input type="hidden" name="enableContextualPills" value="off" />
+            <input
+              type="checkbox"
+              name="enableContextualPills"
+              defaultChecked={enableContextualPills}
+              className="mt-0.5 h-4 w-4"
+            />
+            <span>
+              <span className="block font-medium">Contextual pills</span>
+              <span className="block text-xs text-muted-foreground">
+                Show relevant follow-ups from keywords/context.
+              </span>
+            </span>
+          </label>
+          <label className="flex items-start gap-2 rounded-md border p-3 text-sm">
+            <input type="hidden" name="enableConnectorGeneratedPills" value="off" />
+            <input
+              type="checkbox"
+              name="enableConnectorGeneratedPills"
+              defaultChecked={enableConnectorGeneratedPills}
+              disabled={assistantAudience !== 'internal'}
+              className="mt-0.5 h-4 w-4"
+            />
+            <span>
+              <span className="block font-medium">Connector pills</span>
+              <span className="block text-xs text-muted-foreground">
+                Generate helpdesk buttons from synced screens/actions.
+              </span>
+            </span>
+          </label>
         </div>
       </section>
 

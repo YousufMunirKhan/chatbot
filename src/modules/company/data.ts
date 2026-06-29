@@ -92,19 +92,26 @@ export interface BotRow {
 }
 
 function mapBot(b: Record<string, unknown>): BotRow {
+  const appearance = (b.appearance_json as Record<string, unknown> | null) ?? {};
+  const caps = (b.capability_flags as string[]) ?? [];
+  const assistantAudience =
+    appearance.assistantAudience === 'internal' ||
+    b.bot_type === 'help_desk' ||
+    caps.some((cap) => String(cap).startsWith('internal_'))
+      ? 'internal'
+      : 'customer';
+
   return {
     id: b.id as string,
     name: b.name as string,
     botType: b.bot_type as string,
     languageDefault: b.language_default as string,
     aiEnabled: Boolean(b.ai_enabled),
-    capabilityFlags: (b.capability_flags as string[]) ?? [],
-    assistantAudience:
-      ((b.appearance_json as Record<string, unknown> | null)?.assistantAudience as 'customer' | 'internal' | undefined) ??
-      'customer',
+    capabilityFlags: caps,
+    assistantAudience,
     publicBotId: b.public_bot_id as string,
     domainAllowlist: (b.domain_allowlist as string[]) ?? [],
-    appearance: (b.appearance_json as Record<string, unknown>) ?? {},
+    appearance,
     createdAt: b.created_at as string,
   };
 }

@@ -5,6 +5,7 @@ import type {
   EmbeddingProvider,
   TokenUsage,
 } from '@/lib/ai/types';
+import { CACHE_BREAKPOINT } from '@/lib/ai/types';
 import { fetchWithRetry } from '@/lib/ai/http';
 
 /**
@@ -19,6 +20,8 @@ function toGeminiContents(options: ChatCompletionOptions) {
   const system = options.messages
     .filter((m) => m.role === 'system')
     .map((m) => m.content)
+    .join('\n\n')
+    .split(CACHE_BREAKPOINT)
     .join('\n\n');
   const turns = options.messages
     .filter((m) => m.role === 'user' || m.role === 'assistant' || m.role === 'tool')

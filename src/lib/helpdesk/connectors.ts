@@ -3,8 +3,20 @@ import { z } from 'zod';
 import { createSupabaseServiceClient } from '@/lib/db/server';
 
 export const CONNECTOR_TOKEN_PREFIX = 'hdk_';
+export const DELIVERY_MODES = ['direct_api', 'websocket', 'polling_fallback', 'manual'] as const;
+export type ConnectorDeliveryMode = (typeof DELIVERY_MODES)[number];
+
+const deliveryModeSchema = z.enum(DELIVERY_MODES);
 
 const stringArray = z.array(z.string().min(1).max(120)).max(50).default([]);
+
+const navigationSchema = z
+  .object({
+    label: z.string().min(1).max(120).optional(),
+    routeId: z.string().min(1).max(160).optional(),
+    platformTargets: z.record(z.unknown()).optional(),
+  })
+  .passthrough();
 
 export const connectorDocumentSchema = z.object({
   externalKey: z.string().min(1).max(240),
@@ -25,6 +37,8 @@ export const connectorDocumentSchema = z.object({
     .default([]),
   commonErrors: z.array(z.string().min(1).max(500)).max(40).default([]),
   actions: stringArray,
+  navigation: navigationSchema.optional(),
+  needsReview: z.boolean().default(false),
   content: z.string().max(12000).optional(),
 });
 
@@ -51,6 +65,21 @@ export const eventResultSchema = z.object({
   status: z.enum(['completed', 'failed']),
   response: z.record(z.unknown()).optional(),
   error: z.string().max(2000).optional(),
+  deliveryMode: deliveryModeSchema.default('polling_fallback'),
+  durationMs: z.coerce.number().int().min(0).max(3_600_000).optional(),
+});
+
+export const connectorHealthSchema = z.object({
+  eventType: z.string().min(2).max(120).regex(/^[a-z][a-z0-9_]*$/),
+  deliveryMode: deliveryModeSchema.default('polling_fallback'),
+  status: z.enum(['info', 'success', 'warning', 'error']).default('info'),
+  message: z.string().max(1000).optional(),
+  eventId: z.string().uuid().optional(),
+  actionName: z.string().min(2).max(120).optional(),
+  durationMs: z.coerce.number().int().min(0).max(3_600_000).optional(),
+  pollIntervalSeconds: z.coerce.number().int().min(5).max(86_400).optional(),
+  eventsReturned: z.coerce.number().int().min(0).max(1000).optional(),
+  metadata: z.record(z.unknown()).default({}),
 });
 
 export type ConnectorSyncPayload = z.infer<typeof connectorSyncSchema>;
@@ -64,6 +93,11 @@ export interface AuthenticatedConnector {
   manifestRevision: number;
   lastSyncAt: string | null;
   resyncRequestedAt: string | null;
+  preferredDeliveryMode: ConnectorDeliveryMode;
+  activeDeliveryMode: ConnectorDeliveryMode;
+  connectionState: string;
+  pollIntervalSeconds: number;
+  fallbackReason: string | null;
 }
 
 export function createConnectorToken(): string {
@@ -86,7 +120,9 @@ export async function authenticateHelpdeskConnector(req: Request): Promise<Authe
   const sb = createSupabaseServiceClient();
   const { data, error } = await sb
     .from('helpdesk_connectors')
-    .select('id,company_id,platform,name,status,manifest_revision,last_sync_at,resync_requested_at')
+    .select(
+      'id,company_id,platform,name,status,manifest_revision,last_sync_at,resync_requested_at,preferred_delivery_mode,active_delivery_mode,connection_state,poll_interval_seconds,fallback_reason',
+    )
     .eq('token_hash', hashConnectorToken(token))
     .maybeSingle();
   if (error || !data || data.status !== 'active') return null;
@@ -103,6 +139,11 @@ export async function authenticateHelpdeskConnector(req: Request): Promise<Authe
     manifestRevision: Number(data.manifest_revision ?? 1),
     lastSyncAt: (data.last_sync_at as string | null) ?? null,
     resyncRequestedAt: (data.resync_requested_at as string | null) ?? null,
+    preferredDeliveryMode: (data.preferred_delivery_mode as ConnectorDeliveryMode | null) ?? 'websocket',
+    activeDeliveryMode: (data.active_delivery_mode as ConnectorDeliveryMode | null) ?? 'polling_fallback',
+    connectionState: (data.connection_state as string | null) ?? 'unknown',
+    pollIntervalSeconds: Number(data.poll_interval_seconds ?? 60),
+    fallbackReason: (data.fallback_reason as string | null) ?? null,
   };
 }
 
@@ -117,6 +158,15 @@ export function connectorStatusPayload(connector: AuthenticatedConnector) {
   return {
     manifestRevision: connector.manifestRevision,
     syncRequired,
+    delivery: {
+      preferredMode: connector.preferredDeliveryMode,
+      activeMode: connector.activeDeliveryMode,
+      connectionState: connector.connectionState,
+      pollIntervalSeconds: connector.pollIntervalSeconds,
+      fallbackReason: connector.fallbackReason,
+      websocketAvailable: false,
+      fallbackPollingAvailable: true,
+    },
     commands: syncRequired
       ? [
           {
@@ -128,6 +178,61 @@ export function connectorStatusPayload(connector: AuthenticatedConnector) {
         ]
       : [],
   };
+}
+
+export async function logConnectorHealth(
+  connector: Pick<AuthenticatedConnector, 'id' | 'companyId'>,
+  input: z.input<typeof connectorHealthSchema>,
+): Promise<void> {
+  const parsed = connectorHealthSchema.parse(input);
+  const sb = createSupabaseServiceClient();
+  await sb.from('helpdesk_connector_health_logs').insert({
+    company_id: connector.companyId,
+    connector_id: connector.id,
+    event_type: parsed.eventType,
+    delivery_mode: parsed.deliveryMode,
+    status: parsed.status,
+    message: parsed.message ?? null,
+    event_id: parsed.eventId ?? null,
+    action_name: parsed.actionName ?? null,
+    duration_ms: parsed.durationMs ?? null,
+    poll_interval_seconds: parsed.pollIntervalSeconds ?? null,
+    events_returned: parsed.eventsReturned ?? null,
+    metadata_json: parsed.metadata ?? {},
+  });
+}
+
+export async function updateConnectorDeliveryState(
+  connector: Pick<AuthenticatedConnector, 'id' | 'companyId'>,
+  params: {
+    activeDeliveryMode?: ConnectorDeliveryMode;
+    connectionState?: 'unknown' | 'connected' | 'degraded' | 'fallback' | 'offline';
+    pollIntervalSeconds?: number;
+    fallbackReason?: string | null;
+    lastConnectedAt?: string | null;
+    lastDisconnectedAt?: string | null;
+    lastPollAt?: string | null;
+    lastError?: string | null;
+  },
+): Promise<void> {
+  const update: Record<string, unknown> = {
+    last_health_at: new Date().toISOString(),
+  };
+  if (params.activeDeliveryMode) update.active_delivery_mode = params.activeDeliveryMode;
+  if (params.connectionState) update.connection_state = params.connectionState;
+  if (params.pollIntervalSeconds != null) update.poll_interval_seconds = params.pollIntervalSeconds;
+  if ('fallbackReason' in params) update.fallback_reason = params.fallbackReason;
+  if ('lastConnectedAt' in params) update.last_connected_at = params.lastConnectedAt;
+  if ('lastDisconnectedAt' in params) update.last_disconnected_at = params.lastDisconnectedAt;
+  if ('lastPollAt' in params) update.last_poll_at = params.lastPollAt;
+  if ('lastError' in params) update.last_error = params.lastError;
+
+  const sb = createSupabaseServiceClient();
+  await sb
+    .from('helpdesk_connectors')
+    .update(update)
+    .eq('company_id', connector.companyId)
+    .eq('id', connector.id);
 }
 
 export async function requestConnectorResync(params: {
@@ -178,6 +283,41 @@ function fieldList(fields: z.infer<typeof connectorDocumentSchema>['fields']): s
     .join('\n');
 }
 
+function navigationText(nav: z.infer<typeof connectorDocumentSchema>['navigation']): string {
+  if (!nav) return 'Not provided.';
+  const parts = [
+    nav.label ? `Button label: ${nav.label}` : null,
+    nav.routeId ? `Route ID: ${nav.routeId}` : null,
+  ].filter(Boolean);
+  if (nav.platformTargets && typeof nav.platformTargets === 'object') {
+    parts.push(`Platform targets: ${JSON.stringify(nav.platformTargets)}`);
+  }
+  return parts.length ? parts.join('\n') : 'Not provided.';
+}
+
+function titleFromKey(value: string): string {
+  return value
+    .replace(/[_-]+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .replace(/\b\w/g, (char) => char.toUpperCase());
+}
+
+function keywordsFor(...values: Array<string | null | undefined>): string[] {
+  const words = new Set<string>();
+  for (const value of values) {
+    for (const part of String(value ?? '').split(/[^a-zA-Z0-9]+/)) {
+      const word = part.trim().toLowerCase();
+      if (word.length >= 3) words.add(word);
+    }
+  }
+  return [...words].slice(0, 16);
+}
+
+function stableHash(value: unknown): string {
+  return crypto.createHash('sha256').update(JSON.stringify(value)).digest('hex');
+}
+
 export function buildConnectorDocumentContent(doc: z.infer<typeof connectorDocumentSchema>): string {
   if (doc.content?.trim()) return doc.content.trim();
   return [
@@ -199,6 +339,12 @@ export function buildConnectorDocumentContent(doc: z.infer<typeof connectorDocum
     '',
     'Related actions:',
     doc.actions.length ? doc.actions.map((action) => `- ${action}`).join('\n') : 'Not provided.',
+    '',
+    'Navigation:',
+    navigationText(doc.navigation),
+    '',
+    'Review status:',
+    doc.needsReview ? 'Needs developer/admin review.' : 'Ready for admin review.',
   ].join('\n');
 }
 
@@ -210,21 +356,43 @@ export async function syncConnectorPayload(
   const now = new Date().toISOString();
 
   if (payload.documents.length) {
-    const docs = payload.documents.map((doc) => ({
-      company_id: connector.companyId,
-      connector_id: connector.id,
-      external_key: doc.externalKey,
-      status: 'draft',
-      platform: connector.platform,
-      module: doc.module,
-      screen: doc.screen,
-      path: doc.path ?? null,
-      purpose: doc.purpose ?? null,
-      content: buildConnectorDocumentContent(doc),
-      source_json: doc,
-      reviewed_by: null,
-      reviewed_at: null,
-    }));
+    const keys = payload.documents.map((doc) => doc.externalKey);
+    const { data: existingDocs } = await sb
+      .from('helpdesk_connector_documents')
+      .select('external_key,status,source_json,content,reviewed_by,reviewed_at')
+      .eq('company_id', connector.companyId)
+      .eq('connector_id', connector.id)
+      .in('external_key', keys);
+    const existingByKey = new Map(
+      ((existingDocs ?? []) as Array<Record<string, unknown>>).map((row) => [row.external_key as string, row]),
+    );
+
+    const docs = payload.documents.map((doc) => {
+      const content = buildConnectorDocumentContent(doc);
+      const existing = existingByKey.get(doc.externalKey);
+      const previousHash = existing ? stableHash({ source: existing.source_json, content: existing.content }) : null;
+      const nextHash = stableHash({ source: doc, content });
+      const changed = !existing || previousHash !== nextHash;
+      const currentStatus = String(existing?.status ?? 'draft');
+      return {
+        company_id: connector.companyId,
+        connector_id: connector.id,
+        external_key: doc.externalKey,
+        status: changed ? 'draft' : currentStatus,
+        platform: connector.platform,
+        module: doc.module,
+        screen: doc.screen,
+        path: doc.path ?? null,
+        purpose: doc.purpose ?? null,
+        content,
+        source_json: doc,
+        previous_source_json: changed && existing ? existing.source_json : null,
+        change_type: existing ? (changed ? 'updated' : 'unchanged') : 'new',
+        reviewed_by: changed ? null : existing?.reviewed_by ?? null,
+        reviewed_at: changed ? null : existing?.reviewed_at ?? null,
+        ignored_at: null,
+      };
+    });
     const { error } = await sb
       .from('helpdesk_connector_documents')
       .upsert(docs, { onConflict: 'connector_id,external_key' });
@@ -232,25 +400,44 @@ export async function syncConnectorPayload(
   }
 
   if (payload.actions.length) {
-    const actions = payload.actions.map((action) => ({
-      company_id: connector.companyId,
-      connector_id: connector.id,
-      name: action.name,
-      description: action.description,
-      action_type: action.type,
-      risk: action.risk,
-      required_fields: action.requiredFields,
-      optional_fields: action.optionalFields,
-      allowed_roles: action.allowedRoles,
-      needs_confirmation: action.needsConfirmation || action.risk !== 'low' || action.type !== 'read',
-      is_enabled: action.type !== 'danger',
-      schema_json: action,
-    }));
+    const names = payload.actions.map((action) => action.name);
+    const { data: existingActions } = await sb
+      .from('helpdesk_connector_actions')
+      .select('name,is_enabled,needs_confirmation,admin_label,admin_note')
+      .eq('company_id', connector.companyId)
+      .eq('connector_id', connector.id)
+      .in('name', names);
+    const existingByName = new Map(
+      ((existingActions ?? []) as Array<Record<string, unknown>>).map((row) => [row.name as string, row]),
+    );
+
+    const actions = payload.actions.map((action) => {
+      const existing = existingByName.get(action.name);
+      const writeOrRisky = action.risk !== 'low' || action.type === 'create' || action.type === 'update' || action.type === 'danger';
+      return {
+        company_id: connector.companyId,
+        connector_id: connector.id,
+        name: action.name,
+        description: action.description,
+        action_type: action.type,
+        risk: action.risk,
+        required_fields: action.requiredFields,
+        optional_fields: action.optionalFields,
+        allowed_roles: action.allowedRoles,
+        needs_confirmation: writeOrRisky ? true : existing?.needs_confirmation ?? action.needsConfirmation,
+        is_enabled: existing ? Boolean(existing.is_enabled) : action.type !== 'danger',
+        admin_label: existing?.admin_label ?? null,
+        admin_note: existing?.admin_note ?? null,
+        schema_json: action,
+      };
+    });
     const { error } = await sb
       .from('helpdesk_connector_actions')
       .upsert(actions, { onConflict: 'connector_id,name' });
     if (error) throw error;
   }
+
+  await syncConnectorGeneratedQuickActions(connector);
 
   await sb
     .from('helpdesk_connectors')
@@ -268,4 +455,190 @@ export async function syncConnectorPayload(
     actionsReceived: payload.actions.length,
     manifestRevision: connector.manifestRevision,
   };
+}
+
+type ConnectorQuickActionDraft = {
+  connectorKey: string;
+  row: Record<string, unknown> & { priority: number };
+};
+
+async function syncConnectorGeneratedQuickActions(connector: AuthenticatedConnector): Promise<void> {
+  const sb = createSupabaseServiceClient();
+  const { data: bots } = await sb
+    .from('bots')
+    .select('id,appearance_json,bot_type,capability_flags')
+    .eq('company_id', connector.companyId);
+
+  const internalBots = ((bots ?? []) as Array<Record<string, unknown>>).filter((bot) => {
+    const appearance = (bot.appearance_json as Record<string, unknown> | null) ?? {};
+    const caps = Array.isArray(bot.capability_flags) ? (bot.capability_flags as string[]) : [];
+    return (
+      appearance.assistantAudience === 'internal' ||
+      bot.bot_type === 'help_desk' ||
+      caps.some((cap) => cap.startsWith('internal_'))
+    );
+  });
+  if (internalBots.length === 0) return;
+
+  const [{ data: docs }, { data: actions }] = await Promise.all([
+    sb
+      .from('helpdesk_connector_documents')
+      .select('id,module,screen,path,purpose,source_json')
+      .eq('company_id', connector.companyId)
+      .eq('connector_id', connector.id)
+      .limit(80),
+    sb
+      .from('helpdesk_connector_actions')
+      .select('id,name,description,action_type,risk,needs_confirmation,is_enabled')
+      .eq('company_id', connector.companyId)
+      .eq('connector_id', connector.id)
+      .eq('is_enabled', true)
+      .limit(80),
+  ]);
+
+  for (const bot of internalBots) {
+    const botId = bot.id as string;
+    const { data: existing } = await sb
+      .from('bot_quick_actions')
+      .select('id,connector_document_id,connector_action_id,action_config_json,is_active,priority')
+      .eq('company_id', connector.companyId)
+      .eq('bot_id', botId)
+      .eq('source', 'connector');
+
+    const existingByKey = new Map<string, Record<string, unknown>>();
+    for (const row of (existing ?? []) as Array<Record<string, unknown>>) {
+      const config = (row.action_config_json as Record<string, unknown> | null) ?? {};
+      const key = typeof config.connectorKey === 'string' ? config.connectorKey : null;
+      if (key) existingByKey.set(key, row);
+    }
+
+    const desired: ConnectorQuickActionDraft[] = [];
+    for (const doc of (docs ?? []) as Array<Record<string, unknown>>) {
+      const source = (doc.source_json as Record<string, unknown> | null) ?? {};
+      const nav = (source.navigation as Record<string, unknown> | null) ?? null;
+      const screen = String(doc.screen ?? 'screen');
+      const path = String(doc.path ?? screen);
+      const routeId = typeof nav?.routeId === 'string' ? nav.routeId : null;
+      const docId = doc.id as string;
+      desired.push({
+        connectorKey: `doc:${docId}:howto`,
+        row: {
+          company_id: connector.companyId,
+          bot_id: botId,
+          label: `How to ${screen}`,
+          description: String(doc.purpose ?? `Show the steps for ${path}.`).slice(0, 240),
+          action_type: 'send_message',
+          action_config_json: {
+            connectorKey: `doc:${docId}:howto`,
+            message_text: `How do I use ${path}?`,
+            connectorDocumentId: docId,
+          },
+          form_schema_json: [],
+          contexts: ['initial', 'contextual', 'after_answer'],
+          keyword_triggers: keywordsFor(doc.module as string, screen, path, doc.purpose as string),
+          required_capabilities: [],
+          business_hours_mode: 'any',
+          conversation_statuses: [],
+          priority: 200,
+          is_active: true,
+          starts_new_message: true,
+          audience: 'internal',
+          source: 'connector',
+          context_mode: 'contextual',
+          connector_document_id: docId,
+          connector_action_id: null,
+        },
+      });
+      if (routeId) {
+        desired.push({
+          connectorKey: `doc:${docId}:open`,
+          row: {
+            company_id: connector.companyId,
+            bot_id: botId,
+            label: `Open ${screen}`,
+            description: `Open ${path} in the connected software when supported.`,
+            action_type: 'tool_action',
+            action_config_json: {
+              connectorKey: `doc:${docId}:open`,
+              tool: 'helpdesk_navigation',
+              routeId,
+              message_text: `Open ${screen}`,
+              connectorDocumentId: docId,
+            },
+            form_schema_json: [],
+            contexts: ['initial', 'contextual', 'after_answer'],
+            keyword_triggers: keywordsFor('open', doc.module as string, screen, path, routeId),
+            required_capabilities: [],
+            business_hours_mode: 'any',
+            conversation_statuses: [],
+            priority: 210,
+            is_active: true,
+            starts_new_message: true,
+            audience: 'internal',
+            source: 'connector',
+            context_mode: 'navigation',
+            connector_document_id: docId,
+            connector_action_id: null,
+          },
+        });
+      }
+    }
+
+    for (const action of (actions ?? []) as Array<Record<string, unknown>>) {
+      const name = action.name as string;
+      const actionId = action.id as string;
+      const label = titleFromKey(name);
+      const type = String(action.action_type ?? 'read');
+      const writeLike = ['create', 'update', 'danger'].includes(type);
+      desired.push({
+        connectorKey: `action:${actionId}`,
+        row: {
+          company_id: connector.companyId,
+          bot_id: botId,
+          label,
+          description: String(action.description ?? `Start ${label}.`).slice(0, 240),
+          action_type: 'send_message',
+          action_config_json: {
+            connectorKey: `action:${actionId}`,
+            message_text: writeLike ? `I want to ${label.toLowerCase()}` : label,
+            connectorActionId: actionId,
+            actionName: name,
+            needsConfirmation: Boolean(action.needs_confirmation) || writeLike,
+          },
+          form_schema_json: [],
+          contexts: ['initial', 'contextual', 'after_answer'],
+          keyword_triggers: keywordsFor(name, label, action.description as string),
+          required_capabilities: [],
+          business_hours_mode: 'any',
+          conversation_statuses: [],
+          priority: writeLike ? 240 : 220,
+          is_active: true,
+          starts_new_message: true,
+          audience: 'internal',
+          source: 'connector',
+          context_mode: 'action',
+          connector_document_id: null,
+          connector_action_id: actionId,
+        },
+      });
+    }
+
+    for (const item of desired.slice(0, 80)) {
+      const current = existingByKey.get(item.connectorKey);
+      if (current?.id) {
+        await sb
+          .from('bot_quick_actions')
+          .update({
+            ...item.row,
+            is_active: current.is_active,
+            priority: current.priority ?? item.row.priority,
+          })
+          .eq('company_id', connector.companyId)
+          .eq('bot_id', botId)
+          .eq('id', current.id as string);
+      } else {
+        await sb.from('bot_quick_actions').insert(item.row);
+      }
+    }
+  }
 }

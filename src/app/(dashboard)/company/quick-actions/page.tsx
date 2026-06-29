@@ -21,6 +21,27 @@ const TYPE_LABELS: Record<string, string> = {
   tool_action: 'Tool',
 };
 
+const AUDIENCE_LABELS: Record<string, string> = {
+  customer: 'Customer',
+  internal: 'Help desk',
+  both: 'Both',
+};
+
+const SOURCE_LABELS: Record<string, string> = {
+  manual: 'Manual',
+  default: 'Default',
+  connector: 'Connector',
+  ai_contextual: 'AI contextual',
+};
+
+const CONTEXT_MODE_LABELS: Record<string, string> = {
+  initial: 'Initial',
+  contextual: 'Contextual',
+  follow_up: 'Follow-up',
+  navigation: 'Navigation',
+  action: 'Action',
+};
+
 function prettyList(values: string[]) {
   if (!values.length) return 'Not targeted';
   return values
@@ -95,6 +116,9 @@ export default async function QuickActionsPage() {
                       <CardTitle className="text-base">{action.label}</CardTitle>
                       <Badge variant={action.isActive ? 'success' : 'secondary'}>{action.isActive ? 'Active' : 'Off'}</Badge>
                       <Badge variant="outline">{TYPE_LABELS[action.actionType] ?? action.actionType}</Badge>
+                      <Badge variant="outline">{AUDIENCE_LABELS[action.audience] ?? action.audience}</Badge>
+                      <Badge variant="secondary">{SOURCE_LABELS[action.source] ?? action.source}</Badge>
+                      <Badge variant="outline">{CONTEXT_MODE_LABELS[action.contextMode] ?? action.contextMode}</Badge>
                     </div>
                     <p className="mt-1 text-sm text-muted-foreground">
                       {botName.get(action.botId ?? '') ?? 'All assistants'} - {prettyList(action.contexts)}

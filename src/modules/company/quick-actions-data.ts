@@ -1,9 +1,20 @@
 import { createSupabaseServiceClient } from '@/lib/db/server';
-import { mapQuickAction, serializeFormSchema, type QuickActionPublic, type QuickActionType } from '@/lib/quick-actions';
+import {
+  mapQuickAction,
+  serializeFormSchema,
+  type QuickActionAudience,
+  type QuickActionContextMode,
+  type QuickActionPublic,
+  type QuickActionSource,
+  type QuickActionType,
+} from '@/lib/quick-actions';
 import { getCompanyId, listBots } from './data';
 
 export interface QuickActionRow extends QuickActionPublic {
   botId: string | null;
+  audience: QuickActionAudience;
+  source: QuickActionSource;
+  contextMode: QuickActionContextMode;
   contexts: string[];
   keywordTriggers: string[];
   pageUrlPatterns: string[];
@@ -21,6 +32,9 @@ function mapRow(row: Record<string, unknown>): QuickActionRow {
     ...publicRow,
     actionType: row.action_type as QuickActionType,
     botId: (row.bot_id as string) ?? null,
+    audience: publicRow.audience,
+    source: publicRow.source,
+    contextMode: publicRow.contextMode,
     contexts: (row.contexts as string[]) ?? [],
     keywordTriggers: (row.keyword_triggers as string[]) ?? [],
     pageUrlPatterns: (row.page_url_patterns as string[]) ?? [],

@@ -5,14 +5,34 @@ These starters are for the first Help Desk Bot MVP:
 - `.NET` for Windows POS/local business software.
 - `Android` for Android POS/mobile apps.
 - `Web` for SaaS dashboards and browser-based admin software.
+- `Node` and `Laravel` guides for backend integrations.
 
 Read `PROTOCOL.md` for the full cross-platform data flow.
+
+For developer onboarding:
+
+- Start with `HELPDESK_DEVELOPER_HANDOFF.md`.
+- Use `DEVELOPMENT_TASK_LIST.md` as the implementation roadmap for WebSocket-first delivery, polling fallback, Connector Studio, audits, monitoring, and Android/.NET/Web connector tracks.
+- Open `docs/helpdesk-connector-guide.html` for the human-readable connector guide.
+- Read `docs/UI_COMPONENT_GUIDE.md` for embedding the staff chat UI.
+- Read `docs/CONNECTOR_TEST_PLAN.md` before going live.
+- Give `AI_AGENT_INTEGRATION_PROMPT.md` plus the platform-specific AI guide to Codex, Cursor, Claude Code, or another coding agent.
+- Platform AI guides:
+  - `android/AI_AGENT_ANDROID.md`
+  - `android/ANDROID_UI_GUIDE.md`
+  - `web/AI_AGENT_WEB.md`
+  - `dotnet/AI_AGENT_DOTNET.md`
+  - `dotnet/WINFORMS_WPF_UI.md`
+  - `node/AI_AGENT_NODE.md`
+  - `laravel/AI_AGENT_LARAVEL.md`
+  - `react/HELPDESK_REACT_COMPONENT.md`
+  - `vue/HELPDESK_VUE_COMPONENT.md`
 
 The connector does three jobs:
 
 1. Sync editable help documentation drafts.
 2. Sync an approved action manifest.
-3. Poll and execute queued events from the bot platform.
+3. Receive queued events by WebSocket, with polling fallback, and execute local handlers.
 
 The platform stores docs/actions/events only. Live POS data stays in the client app/system.
 
@@ -57,6 +77,8 @@ GET  /api/helpdesk/connectors/status
 POST /api/helpdesk/connectors/sync
 GET  /api/helpdesk/connectors/events
 POST /api/helpdesk/connectors/events
+POST /api/helpdesk/chat
+WS   /api/helpdesk/connectors/socket
 ```
 
 `status` and `events` include:
@@ -75,7 +97,7 @@ When `syncRequired` is true, the SDK sends the latest documents/actions again.
 
 ## Required Action Format
 
-Every action must be named in snake_case and declare risk, roles, fields, and confirmation needs:
+Every action must be named in snake_case and declare risk, fields, confirmation needs, and optional local role hints:
 
 ```json
 {
@@ -101,4 +123,4 @@ Start with these safe actions:
 - `end_of_day_report`
 - `update_product_quantity`
 
-Keep dangerous actions like refunds, deletes, and invoice edits disabled until role checks and confirmations are fully mature.
+Keep dangerous actions like refunds, deletes, and invoice edits disabled until local safety checks, confirmations, and audit logs are mature.

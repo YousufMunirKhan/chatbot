@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
 import { sendAgentReplyAction, type ActionState } from '../inbox-actions';
+import type { CannedResponse } from '../inbox-data';
 
 const initial: ActionState = {};
 
@@ -18,10 +19,24 @@ function SubmitButton() {
   );
 }
 
-export function AgentReplyForm({ conversationId }: { conversationId: string }) {
+export function AgentReplyForm({
+  conversationId,
+  cannedResponses = [],
+}: {
+  conversationId: string;
+  cannedResponses?: CannedResponse[];
+}) {
   const [state, action] = useFormState(sendAgentReplyAction, initial);
   const formRef = useRef<HTMLFormElement>(null);
   const textRef = useRef<HTMLTextAreaElement>(null);
+
+  function insertCanned(id: string) {
+    const canned = cannedResponses.find((c) => c.id === id);
+    if (!canned || !textRef.current) return;
+    const existing = textRef.current.value;
+    textRef.current.value = existing ? `${existing}\n${canned.body}` : canned.body;
+    textRef.current.focus();
+  }
 
   // Clear the box after the form data has been captured for the action.
   function clearSoon() {
@@ -43,7 +58,27 @@ export function AgentReplyForm({ conversationId }: { conversationId: string }) {
       <p className="text-sm text-muted-foreground">Replying pauses the AI for this conversation.</p>
       <input type="hidden" name="conversationId" value={conversationId} />
       <div className="space-y-1.5">
-        <Label htmlFor="text">Your reply</Label>
+        <div className="flex items-center justify-between gap-2">
+          <Label htmlFor="text">Your reply</Label>
+          {cannedResponses.length > 0 ? (
+            <select
+              aria-label="Insert canned response"
+              defaultValue=""
+              onChange={(e) => {
+                if (e.target.value) insertCanned(e.target.value);
+                e.target.value = '';
+              }}
+              className="h-8 rounded-md border bg-background px-2 text-xs"
+            >
+              <option value="">Insert saved reply…</option>
+              {cannedResponses.map((c) => (
+                <option key={c.id} value={c.id}>
+                  {c.title}
+                </option>
+              ))}
+            </select>
+          ) : null}
+        </div>
         <Textarea
           id="text"
           name="text"

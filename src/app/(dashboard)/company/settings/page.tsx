@@ -8,6 +8,10 @@ import { createSupabaseServiceClient } from '@/lib/db/server';
 import { getCompanyId } from '@/modules/company/data';
 import { RetentionForm } from '@/modules/company/components/retention-form';
 import { DataRequestForm } from '@/modules/company/components/data-request-form';
+import { Badge } from '@/components/ui/badge';
+import { formatDate } from '@/lib/format';
+import { listDataRequests } from '@/modules/company/gdpr-data';
+import { processDataRequestAction } from '@/modules/company/gdpr-actions';
 
 async function getRetentionDays(): Promise<number> {
   const companyId = await getCompanyId();
@@ -24,9 +28,15 @@ async function getRetentionDays(): Promise<number> {
   return Number.isFinite(n) && n > 0 ? n : DEFAULT_CHAT_RETENTION_DAYS;
 }
 
+async function processRequest(formData: FormData) {
+  'use server';
+  await processDataRequestAction(formData);
+}
+
 export default async function CompanySettingsPage() {
   await requireRole([ROLES.COMPANY_ADMIN]);
-  const retentionDays = await getRetentionDays();
+  const [retentionDays, dataRequests] = await Promise.all([getRetentionDays(), listDataRequests()]);
+  const openRequests = dataRequests.filter((r) => r.status === 'open' || r.status === 'processing');
 
   return (
     <div className="space-y-6">
@@ -87,6 +97,51 @@ export default async function CompanySettingsPage() {
         </CardHeader>
         <CardContent>
           <DataRequestForm />
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Pending data requests</CardTitle>
+          <CardDescription>
+            Execute a deletion to permanently erase a person&apos;s leads, appointments, and linked chats — or reject it.
+            Every erasure is logged.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          {openRequests.length === 0 ? (
+            <p className="text-sm text-muted-foreground">No pending requests.</p>
+          ) : (
+            <ul className="divide-y">
+              {openRequests.map((r) => (
+                <li key={r.id} className="flex flex-wrap items-center justify-between gap-3 py-3">
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-2">
+                      <Badge variant={r.requestType === 'delete' ? 'destructive' : 'secondary'}>{r.requestType}</Badge>
+                      <span className="truncate font-medium">{r.requesterEmail}</span>
+                    </div>
+                    <p className="text-xs text-muted-foreground">Requested {formatDate(r.createdAt)}</p>
+                  </div>
+                  <div className="flex gap-2">
+                    <form action={processRequest}>
+                      <input type="hidden" name="requestId" value={r.id} />
+                      <input type="hidden" name="decision" value="execute" />
+                      <Button type="submit" size="sm" variant={r.requestType === 'delete' ? 'destructive' : 'default'}>
+                        {r.requestType === 'delete' ? 'Erase data' : 'Mark done'}
+                      </Button>
+                    </form>
+                    <form action={processRequest}>
+                      <input type="hidden" name="requestId" value={r.id} />
+                      <input type="hidden" name="decision" value="reject" />
+                      <Button type="submit" size="sm" variant="ghost">
+                        Reject
+                      </Button>
+                    </form>
+                  </div>
+                </li>
+              ))}
+            </ul>
+          )}
         </CardContent>
       </Card>
 

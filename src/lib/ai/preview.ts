@@ -36,17 +36,19 @@ export async function previewAnswer(params: {
       return (
         appearance.assistantAudience === 'internal' ||
         row.bot_type === 'help_desk' ||
-        caps.some((cap) => cap === 'help_desk' || cap.startsWith('internal_'))
+        caps.some((cap) => cap.startsWith('internal_'))
       );
     }) ?? rows[0];
 
   const language = detectLanguage(params.question);
   const capabilityFlags = Array.isArray(bot?.capability_flags) ? bot.capability_flags.map(String) : [];
+  const appearance = (bot?.appearance_json as Record<string, unknown> | null) ?? {};
+  const assistantAudience = appearance.assistantAudience === 'internal' ? 'internal' : 'customer';
   const [{ contextText }, businessContext, resolved, helpdeskActions] = await Promise.all([
-    retrieveContext(params.companyId, (bot?.id as string) ?? null, params.question, 6),
+    retrieveContext(params.companyId, (bot?.id as string) ?? null, params.question, 6, undefined, assistantAudience),
     getCachedBusinessContext(params.companyId),
     getChatProviderAsync(),
-    hasHelpdeskRuntime(capabilityFlags)
+    hasHelpdeskRuntime(capabilityFlags, assistantAudience)
       ? listEnabledHelpdeskActions(params.companyId)
       : Promise.resolve([]),
   ]);
@@ -62,7 +64,7 @@ export async function previewAnswer(params: {
   });
   messages.push({ role: 'user', content: params.question });
 
-  const toolSchemas = getToolSchemas(capabilityFlags);
+  const toolSchemas = getToolSchemas(capabilityFlags, assistantAudience);
   const toolApiType =
     resolved.apiType === 'openai' || resolved.apiType === 'anthropic'
       ? resolved.apiType

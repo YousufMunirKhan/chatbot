@@ -32,6 +32,45 @@ export async function updateRetentionAction(_prev: ActionState, formData: FormDa
   return { ok: true };
 }
 
+const timeRe = /^([01]\d|2[0-3]):[0-5]\d$/;
+
+export async function updateSupportSettingsAction(_prev: ActionState, formData: FormData): Promise<ActionState> {
+  await requireRole([ROLES.COMPANY_ADMIN]);
+  const companyId = await getCompanyId();
+
+  const slaMinutes = Math.min(1440, Math.max(1, Number(formData.get('slaResponseMinutes')) || 5));
+  const routingStrategy = formData.get('routingStrategy') === 'round_robin' ? 'round_robin' : 'most_recent';
+  const days = formData
+    .getAll('days')
+    .map((d) => Number(d))
+    .filter((d) => Number.isInteger(d) && d >= 0 && d <= 6);
+  const start = String(formData.get('start') ?? '09:00');
+  const end = String(formData.get('end') ?? '17:00');
+  const timezone = String(formData.get('timezone') ?? 'UTC').slice(0, 64);
+  const businessHours = {
+    enabled: formData.get('businessHoursEnabled') === 'on',
+    days: days.length ? days : [1, 2, 3, 4, 5],
+    start: timeRe.test(start) ? start : '09:00',
+    end: timeRe.test(end) ? end : '17:00',
+    timezone,
+  };
+
+  const sb = createSupabaseServiceClient();
+  const { error } = await sb.from('company_settings').upsert(
+    [
+      { company_id: companyId, key: 'sla_response_minutes', value_json: slaMinutes },
+      { company_id: companyId, key: 'routing_strategy', value_json: routingStrategy },
+      { company_id: companyId, key: 'business_hours', value_json: businessHours },
+    ],
+    { onConflict: 'company_id,key' },
+  );
+  if (error) return { error: error.message };
+
+  revalidatePath('/company/support-settings');
+  revalidatePath('/company/inbox');
+  return { ok: true };
+}
+
 const requestSchema = z.object({
   requesterEmail: z.string().email('Valid email required'),
   requestType: z.enum(['export', 'delete']),

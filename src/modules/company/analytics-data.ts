@@ -18,6 +18,13 @@ export interface CompanyAnalytics {
   conversations: number;
   aiHandled: number;
   humanHandled: number;
+  closed: number;
+  /** Share of conversations the AI handled without escalating to a human (0–1). */
+  deflectionRate: number | null;
+  /** Share of conversations that reached a closed/resolved state (0–1). */
+  resolutionRate: number | null;
+  csatAverage: number | null;
+  csatResponses: number;
 }
 
 function monthStartIso(): string {
@@ -57,6 +64,23 @@ export async function getCompanyAnalytics(): Promise<CompanyAnalytics> {
     return count ?? 0;
   };
 
+  const loadCsat = async (): Promise<{ csatAverage: number | null; csatResponses: number }> => {
+    const { data } = await sb
+      .from('conversations')
+      .select('csat_rating')
+      .eq('company_id', companyId)
+      .not('csat_rating', 'is', null)
+      .limit(2000);
+    const ratings = (data ?? [])
+      .map((r) => (r as Record<string, unknown>).csat_rating as number)
+      .filter((n) => typeof n === 'number' && n > 0);
+    if (!ratings.length) return { csatAverage: null, csatResponses: 0 };
+    return {
+      csatAverage: ratings.reduce((sum, n) => sum + n, 0) / ratings.length,
+      csatResponses: ratings.length,
+    };
+  };
+
   const [
     replyUsage,
     totalChatMessagesThisMonth,
@@ -66,6 +90,9 @@ export async function getCompanyAnalytics(): Promise<CompanyAnalytics> {
     conversations,
     aiHandled,
     humanHandled,
+    closed,
+    escalated,
+    csat,
   ] = await Promise.all([
     getReplyAllowanceUsage(companyId),
     countMonthlyMessages(),
@@ -75,7 +102,14 @@ export async function getCompanyAnalytics(): Promise<CompanyAnalytics> {
     countWhere('conversations'),
     countConversationsByStatus(['ai_active', 'closed']),
     countConversationsByStatus(['human_active']),
+    countConversationsByStatus(['closed']),
+    countConversationsByStatus(['needs_human', 'human_active']),
+    loadCsat(),
   ]);
+
+  // Deflection = conversations the AI carried without ever escalating to a human.
+  const deflectionRate = conversations > 0 ? Math.max(0, conversations - escalated) / conversations : null;
+  const resolutionRate = conversations > 0 ? closed / conversations : null;
 
   return {
     messagesThisMonth: replyUsage.used,
@@ -88,5 +122,10 @@ export async function getCompanyAnalytics(): Promise<CompanyAnalytics> {
     conversations,
     aiHandled,
     humanHandled,
+    closed,
+    deflectionRate,
+    resolutionRate,
+    csatAverage: csat.csatAverage,
+    csatResponses: csat.csatResponses,
   };
 }

@@ -1,4 +1,5 @@
 import type { ChatMessage, ToolSchema } from '@/lib/ai/types';
+import { CACHE_BREAKPOINT } from '@/lib/ai/types';
 import { executeTool, type ToolContext } from '@/lib/tools';
 import { fetchWithRetry } from '@/lib/ai/http';
 import { normalizeAnthropicTurns } from '@/lib/ai/providers/anthropic';
@@ -95,9 +96,10 @@ function openaiEndpoint(params: ToolLoopParams): string {
 
 async function runOpenAIToolLoop(params: ToolLoopParams): Promise<ToolLoopResult> {
   const endpoint = openaiEndpoint(params);
+  // OpenAI auto-caches stable prefixes; just drop the Anthropic-only marker.
   const messages: Array<Record<string, unknown>> = params.messages.map((m) => ({
     role: m.role,
-    content: m.content,
+    content: m.content.split(CACHE_BREAKPOINT).join('\n\n'),
   }));
   const tools = params.tools.map((t) => ({
     type: 'function',
@@ -272,10 +274,16 @@ interface AnthropicBlock {
 }
 
 async function runAnthropicToolLoop(params: ToolLoopParams): Promise<ToolLoopResult> {
-  const system = params.messages
+  const systemRaw = params.messages
     .filter((m) => m.role === 'system')
     .map((m) => m.content)
     .join('\n\n');
+  // Prompt caching: cache the stable prefix (before CACHE_BREAKPOINT), leave the
+  // volatile knowledge/summary tail uncached.
+  const [stableSys, volatileSys] = systemRaw.split(CACHE_BREAKPOINT);
+  const system: Array<{ type: 'text'; text: string; cache_control?: { type: 'ephemeral' } }> = [];
+  if (stableSys && stableSys.trim()) system.push({ type: 'text', text: stableSys, cache_control: { type: 'ephemeral' } });
+  if (volatileSys && volatileSys.trim()) system.push({ type: 'text', text: volatileSys });
   const messages: Array<{ role: 'user' | 'assistant'; content: string | AnthropicBlock[] }> = normalizeAnthropicTurns(
     params.messages
       .filter((m) => m.role === 'user' || m.role === 'assistant')
@@ -301,11 +309,12 @@ async function runAnthropicToolLoop(params: ToolLoopParams): Promise<ToolLoopRes
         headers: {
           'x-api-key': params.apiKey,
           'anthropic-version': ANTHROPIC_VERSION,
+          'anthropic-beta': 'prompt-caching-2024-07-31',
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
           model: params.model,
-          system,
+          system: system.length ? system : undefined,
           messages,
           tools: isFinal ? undefined : tools,
           max_tokens: 1024,

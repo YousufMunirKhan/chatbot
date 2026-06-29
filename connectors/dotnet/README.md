@@ -40,3 +40,13 @@ LLM chooses approved event -> connector validates -> POS executes locally
 ```
 
 Do not let the LLM write SQL directly.
+
+## Embedded Staff Chat
+
+Also read:
+
+- `HelpdeskChatController.cs`
+- `WINFORMS_WPF_UI.md`
+- `../docs/UI_COMPONENT_GUIDE.md`
+
+Your app decides where the Help Desk chat appears using role + current form/screen. Hide it on login, payment, checkout, and customer-display screens.

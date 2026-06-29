@@ -8,16 +8,18 @@ import { env } from '@/lib/env';
 import { formatDate } from '@/lib/format';
 import { getHelpdeskConnectorWorkspace } from '@/modules/company/helpdesk-data';
 import {
-  approveConnectorDocumentAction,
-  rejectConnectorDocumentAction,
   requestConnectorResyncAction,
   setConnectorActionEnabledAction,
+  testConnectorAction,
 } from '@/modules/company/helpdesk-actions';
 import {
   HelpdeskConnectorForm,
   QueueConnectorEventForm,
 } from '@/modules/company/components/helpdesk-connector-form';
 import { HelpdeskChatPreview } from '@/modules/company/components/helpdesk-chat-preview';
+import { HelpdeskInternalChat } from '@/modules/company/components/helpdesk-internal-chat';
+import { HelpdeskChatSettingsForm } from '@/modules/company/components/helpdesk-chat-settings-form';
+import { HelpdeskDocumentReview } from '@/modules/company/components/helpdesk-document-review';
 
 function platformLabel(platform: string) {
   if (platform === 'dotnet') return '.NET';
@@ -121,6 +123,23 @@ function ConnectorResyncButton({ connectorId }: { connectorId: string }) {
   );
 }
 
+function ConnectorTestButton({ connectorId }: { connectorId: string }) {
+  return (
+    <form action={testConnectorAction}>
+      <input type="hidden" name="connectorId" value={connectorId} />
+      <Button type="submit" size="sm" variant="ghost" className="gap-2">
+        Test
+      </Button>
+    </form>
+  );
+}
+
+function latencyVariant(ms: number): 'success' | 'warning' | 'destructive' {
+  if (ms < 1500) return 'success';
+  if (ms < 5000) return 'warning';
+  return 'destructive';
+}
+
 function ConnectorPowerMap() {
   const steps = [
     {
@@ -174,6 +193,7 @@ export default async function HelpDeskPage() {
   const workspace = await getHelpdeskConnectorWorkspace();
   const draftCount = workspace.draftDocuments.length;
   const enabledActionCount = workspace.actions.filter((action) => action.isEnabled).length;
+  const onlineCount = workspace.connectors.filter((connector) => connector.connectionState === 'connected').length;
 
   return (
     <div className="mx-auto max-w-7xl space-y-6">
@@ -210,14 +230,84 @@ export default async function HelpDeskPage() {
         </Card>
         <Card>
           <CardContent className="p-4">
-            <p className="text-xs uppercase tracking-wider text-muted-foreground">Recent events</p>
-            <p className="mt-1 text-2xl font-semibold">{workspace.events.length}</p>
+            <p className="text-xs uppercase tracking-wider text-muted-foreground">Online connectors</p>
+            <p className="mt-1 text-2xl font-semibold">{onlineCount}</p>
           </CardContent>
         </Card>
       </div>
 
-      <HelpdeskChatPreview />
+      <HelpdeskInternalChat initialPills={workspace.quickPills} />
+      <HelpdeskChatPreview suggestions={workspace.quickPills} />
       <ConnectorPowerMap />
+
+      <div className="grid gap-6 lg:grid-cols-[0.95fr_1.05fr]">
+        <Card>
+          <CardHeader>
+            <CardTitle>Where the Help Desk chat appears</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <HelpdeskChatSettingsForm settings={workspace.chatSettings} />
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader>
+            <CardTitle>Connector monitoring</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            <div className="grid gap-3 sm:grid-cols-3">
+              <div className="rounded-md border p-3">
+                <p className="text-xs uppercase tracking-wider text-muted-foreground">Recent health logs</p>
+                <p className="mt-1 text-2xl font-semibold">{workspace.healthLogs.length}</p>
+              </div>
+              <div className="rounded-md border p-3">
+                <p className="text-xs uppercase tracking-wider text-muted-foreground">Generated pills</p>
+                <p className="mt-1 text-2xl font-semibold">{workspace.connectorGeneratedPills}</p>
+              </div>
+              <div className="rounded-md border p-3">
+                <p className="text-xs uppercase tracking-wider text-muted-foreground">Recent events</p>
+                <p className="mt-1 text-2xl font-semibold">{workspace.events.length}</p>
+              </div>
+            </div>
+            <div className="max-h-80 overflow-auto rounded-md border">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Time</TableHead>
+                    <TableHead>Connector</TableHead>
+                    <TableHead>Event</TableHead>
+                    <TableHead>Status</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {workspace.healthLogs.length ? (
+                    workspace.healthLogs.map((log) => (
+                      <TableRow key={log.id}>
+                        <TableCell className="text-xs">{formatDate(log.createdAt)}</TableCell>
+                        <TableCell>{log.connectorName}</TableCell>
+                        <TableCell>
+                          <div className="font-mono text-xs">{log.eventType}</div>
+                          {log.message ? <div className="max-w-xs truncate text-xs text-muted-foreground">{log.message}</div> : null}
+                        </TableCell>
+                        <TableCell>
+                          <Badge variant={log.status === 'success' ? 'success' : log.status === 'error' ? 'destructive' : 'secondary'}>
+                            {log.status}
+                          </Badge>
+                        </TableCell>
+                      </TableRow>
+                    ))
+                  ) : (
+                    <TableRow>
+                      <TableCell colSpan={4} className="py-6 text-center text-sm text-muted-foreground">
+                        No health logs yet.
+                      </TableCell>
+                    </TableRow>
+                  )}
+                </TableBody>
+              </Table>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
 
       <div className="grid gap-6 lg:grid-cols-[0.9fr_1.1fr]">
         <Card>
@@ -282,6 +372,7 @@ export default async function HelpDeskPage() {
                   <TableHead>Docs</TableHead>
                   <TableHead>Actions</TableHead>
                   <TableHead>Revision</TableHead>
+                  <TableHead>Delivery</TableHead>
                   <TableHead>Last seen</TableHead>
                   <TableHead>Sync</TableHead>
                 </TableRow>
@@ -309,9 +400,22 @@ export default async function HelpDeskPage() {
                         <div className="text-xs text-muted-foreground">requested {formatDate(connector.resyncRequestedAt)}</div>
                       ) : null}
                     </TableCell>
+                    <TableCell>
+                      <div className="text-sm">{connector.activeDeliveryMode ?? 'unknown'}</div>
+                      <div className="text-xs text-muted-foreground">{connector.connectionState ?? 'unknown'}</div>
+                      {connector.lastEventLatencyMs != null ? (
+                        <Badge variant={latencyVariant(connector.lastEventLatencyMs)} className="mt-1">
+                          {connector.lastEventLatencyMs} ms
+                        </Badge>
+                      ) : null}
+                      {connector.lastError ? <div className="max-w-40 truncate text-xs text-destructive">{connector.lastError}</div> : null}
+                    </TableCell>
                     <TableCell>{connector.lastSeenAt ? formatDate(connector.lastSeenAt) : 'Never'}</TableCell>
                     <TableCell>
-                      <ConnectorResyncButton connectorId={connector.id} />
+                      <div className="flex items-center gap-1">
+                        <ConnectorTestButton connectorId={connector.id} />
+                        <ConnectorResyncButton connectorId={connector.id} />
+                      </div>
                     </TableCell>
                   </TableRow>
                 ))}
@@ -330,33 +434,7 @@ export default async function HelpDeskPage() {
             <p className="text-sm text-muted-foreground">No draft docs waiting. Run connector sync to generate editable help drafts.</p>
           ) : (
             workspace.draftDocuments.map((doc) => (
-              <div key={doc.id} className="rounded-md border p-4">
-                <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
-                  <div>
-                    <div className="flex flex-wrap items-center gap-2">
-                      <h2 className="font-semibold">{doc.module} / {doc.screen}</h2>
-                      <Badge variant="secondary">{platformLabel(doc.platform)}</Badge>
-                      <Badge variant="warning">Draft</Badge>
-                    </div>
-                    <p className="mt-1 text-sm text-muted-foreground">
-                      {doc.path ?? 'No menu path'} - {doc.connectorName}
-                    </p>
-                  </div>
-                  <div className="flex flex-wrap gap-2">
-                    <form action={approveConnectorDocumentAction}>
-                      <input type="hidden" name="documentId" value={doc.id} />
-                      <Button type="submit" size="sm">Approve and index</Button>
-                    </form>
-                    <form action={rejectConnectorDocumentAction}>
-                      <input type="hidden" name="documentId" value={doc.id} />
-                      <Button type="submit" size="sm" variant="outline">Reject</Button>
-                    </form>
-                  </div>
-                </div>
-                <pre className="mt-3 max-h-72 overflow-auto rounded-md bg-muted p-3 whitespace-pre-wrap text-xs">
-                  {doc.content}
-                </pre>
-              </div>
+              <HelpdeskDocumentReview key={doc.id} doc={doc} platformLabel={platformLabel(doc.platform)} />
             ))
           )}
         </CardContent>
@@ -403,7 +481,26 @@ export default async function HelpDeskPage() {
                     <TableCell>
                       <form action={setConnectorActionEnabledAction} className="flex items-center gap-2">
                         <input type="hidden" name="actionId" value={action.id} />
-                        <input name="enabled" type="checkbox" defaultChecked={action.isEnabled} className="h-4 w-4" />
+                        <label className="flex items-center gap-1 text-xs">
+                          <input name="enabled" type="checkbox" defaultChecked={action.isEnabled} className="h-4 w-4" />
+                          Enabled
+                        </label>
+                        {action.actionType === 'read' || action.actionType === 'report' ? (
+                          <label className="flex items-center gap-1 text-xs">
+                            <input
+                              name="confirmationRequired"
+                              type="checkbox"
+                              defaultChecked={action.needsConfirmation}
+                              className="h-4 w-4"
+                            />
+                            Confirm
+                          </label>
+                        ) : (
+                          <>
+                            <input type="hidden" name="confirmationRequired" value="on" />
+                            <span className="text-xs text-muted-foreground">Confirm always</span>
+                          </>
+                        )}
                         <Button type="submit" size="sm" variant="outline">Save</Button>
                       </form>
                     </TableCell>
@@ -420,11 +517,57 @@ export default async function HelpDeskPage() {
 
       <Card>
         <CardHeader>
+          <CardTitle>Help Desk audit trail</CardTitle>
+        </CardHeader>
+        <CardContent>
+          {workspace.auditLogs.length === 0 ? (
+            <p className="text-sm text-muted-foreground">No Help Desk chat or action audit logs yet.</p>
+          ) : (
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Time</TableHead>
+                  <TableHead>Source</TableHead>
+                  <TableHead>Action / Question</TableHead>
+                  <TableHead>Connector</TableHead>
+                  <TableHead>Status</TableHead>
+                  <TableHead>Safety</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {workspace.auditLogs.map((log) => (
+                  <TableRow key={log.id}>
+                    <TableCell className="text-xs">{formatDate(log.createdAt)}</TableCell>
+                    <TableCell>{log.source}</TableCell>
+                    <TableCell>
+                      <div className="font-mono text-xs">{log.actionName ?? 'chat'}</div>
+                      {log.question ? <div className="max-w-md truncate text-xs text-muted-foreground">{log.question}</div> : null}
+                      {log.errorMessage ? <div className="max-w-md truncate text-xs text-destructive">{log.errorMessage}</div> : null}
+                    </TableCell>
+                    <TableCell>{log.connectorName ?? '-'}</TableCell>
+                    <TableCell>
+                      <Badge variant={statusVariant(log.status)}>{log.status}</Badge>
+                    </TableCell>
+                    <TableCell className="space-x-1">
+                      {log.confirmationRequired ? <Badge variant="warning">confirm</Badge> : null}
+                      {log.confirmed ? <Badge variant="success">confirmed</Badge> : null}
+                      {log.dryRun ? <Badge variant="secondary">dry-run</Badge> : null}
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          )}
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
           <CardTitle>Recent connector events</CardTitle>
         </CardHeader>
         <CardContent>
           {workspace.events.length === 0 ? (
-            <p className="text-sm text-muted-foreground">No events yet. Queue a test event after actions sync.</p>
+            <p className="text-sm text-muted-foreground">No events yet. Queue a sandbox event after actions sync.</p>
           ) : (
             <Table>
               <TableHeader>

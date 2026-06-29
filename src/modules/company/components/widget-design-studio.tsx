@@ -132,6 +132,10 @@ export function WidgetDesignStudio({
   const [showOnDesktop, setShowOnDesktop] = useState(readBool(a.showOnDesktop, true));
   const [bottomOffset, setBottomOffset] = useState(String(readNum(a.bottomOffset, 20)));
   const [sideOffset, setSideOffset] = useState(String(readNum(a.sideOffset, 20)));
+  const [csatEnabled, setCsatEnabled] = useState(readBool(a.csatEnabled, false));
+  const [csatCommentEnabled, setCsatCommentEnabled] = useState(readBool(a.csatCommentEnabled, true));
+  const [csatPrompt, setCsatPrompt] = useState(readString(a.csatPrompt, 'How would you rate this conversation?'));
+  const [csatThanks, setCsatThanks] = useState(readString(a.csatThanks, 'Thanks for your feedback!'));
 
   const headerBackground = useMemo(
     () => (headerStyle === 'gradient' ? `linear-gradient(135deg, ${primaryColor}, #1d4ed8)` : primaryColor),
@@ -400,6 +404,30 @@ export function WidgetDesignStudio({
               </Field>
               <Field label="Footer text">
                 <Textarea name="footerBranding" rows={2} value={footerBranding} onChange={(e) => setFooterBranding(e.target.value)} />
+              </Field>
+            </div>
+          </section>
+
+          <section className="rounded-md border bg-card p-4">
+            <h2 className="mb-1 text-base font-semibold">Customer satisfaction (CSAT)</h2>
+            <p className="mb-4 text-sm text-muted-foreground">
+              Ask visitors to rate the conversation (1–5 stars) when they finish or close the chat. Scores show in the
+              Inbox and Analytics.
+            </p>
+            <div className="grid gap-3">
+              <label className="flex items-center gap-2 rounded-md border p-2.5 text-sm">
+                <input type="checkbox" name="csatEnabled" checked={csatEnabled} onChange={(e) => setCsatEnabled(e.target.checked)} className="h-4 w-4" />
+                Ask for a rating after the conversation
+              </label>
+              <label className="flex items-center gap-2 rounded-md border p-2.5 text-sm">
+                <input type="checkbox" name="csatCommentEnabled" checked={csatCommentEnabled} onChange={(e) => setCsatCommentEnabled(e.target.checked)} className="h-4 w-4" />
+                Allow an optional comment
+              </label>
+              <Field label="Rating prompt">
+                <Input name="csatPrompt" value={csatPrompt} onChange={(e) => setCsatPrompt(e.target.value)} />
+              </Field>
+              <Field label="Thank-you message">
+                <Input name="csatThanks" value={csatThanks} onChange={(e) => setCsatThanks(e.target.value)} />
               </Field>
             </div>
           </section>

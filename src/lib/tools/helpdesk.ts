@@ -2,6 +2,7 @@ import type { AssistantTool } from './types';
 import { runHelpdeskConnectorAction } from '@/lib/helpdesk/runtime';
 
 export const runHelpdeskAction: AssistantTool = {
+  audiences: ['internal'],
   capabilities: [
     'help_desk',
     'internal_process_guide',

@@ -5,14 +5,17 @@ import type {
   EmbeddingProvider,
   TokenUsage,
 } from '@/lib/ai/types';
+import { CACHE_BREAKPOINT } from '@/lib/ai/types';
 import { fetchWithRetry } from '@/lib/ai/http';
 
 const OPENAI_API = 'https://api.openai.com/v1';
 
+// OpenAI auto-caches long stable prefixes — no markup needed; just drop the
+// Anthropic-only cache marker so it never reaches the model.
 function toOpenAIMessages(options: ChatCompletionOptions) {
   return options.messages.map((m) => ({
     role: m.role === 'tool' ? 'assistant' : m.role,
-    content: m.content,
+    content: m.content.split(CACHE_BREAKPOINT).join('\n\n'),
   }));
 }
 
