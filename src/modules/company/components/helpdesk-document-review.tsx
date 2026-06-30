@@ -1,7 +1,8 @@
 'use client';
 
 import { useFormState, useFormStatus } from 'react-dom';
-import { CheckCircle2, XCircle } from 'lucide-react';
+import type { ReactNode } from 'react';
+import { CheckCircle2, Loader2, XCircle } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -22,6 +23,26 @@ function SaveButton() {
   return (
     <Button type="submit" size="sm" variant="outline" disabled={pending}>
       {pending ? 'Saving...' : 'Save edits'}
+    </Button>
+  );
+}
+
+function ReviewActionButton({
+  children,
+  icon,
+  pendingLabel,
+  variant = 'default',
+}: {
+  children: ReactNode;
+  icon: ReactNode;
+  pendingLabel: string;
+  variant?: 'default' | 'outline';
+}) {
+  const { pending } = useFormStatus();
+  return (
+    <Button type="submit" size="sm" variant={variant} className="gap-2" disabled={pending}>
+      {pending ? <Loader2 className="h-4 w-4 animate-spin" /> : icon}
+      {pending ? pendingLabel : children}
     </Button>
   );
 }
@@ -61,17 +82,15 @@ export function HelpdeskDocumentReview({ doc, platformLabel }: { doc: HelpdeskCo
         <div className="flex flex-wrap gap-2">
           <form action={approveConnectorDocumentAction}>
             <input type="hidden" name="documentId" value={doc.id} />
-            <Button type="submit" size="sm" className="gap-2">
-              <CheckCircle2 className="h-4 w-4" />
+            <ReviewActionButton icon={<CheckCircle2 className="h-4 w-4" />} pendingLabel="Indexing...">
               Approve and index
-            </Button>
+            </ReviewActionButton>
           </form>
           <form action={rejectConnectorDocumentAction}>
             <input type="hidden" name="documentId" value={doc.id} />
-            <Button type="submit" size="sm" variant="outline" className="gap-2">
-              <XCircle className="h-4 w-4" />
+            <ReviewActionButton icon={<XCircle className="h-4 w-4" />} pendingLabel="Ignoring..." variant="outline">
               Ignore
-            </Button>
+            </ReviewActionButton>
           </form>
         </div>
       </div>

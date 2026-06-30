@@ -263,8 +263,9 @@ export async function getHelpdeskConnectorWorkspace(): Promise<HelpdeskConnector
         .order('created_at', { ascending: false }),
       sb
         .from('helpdesk_connector_documents')
-        .select('id,connector_id,platform,module,screen,path,purpose,content,status,change_type,source_json,review_note,updated_at')
+        .select('id,connector_id,platform,module,screen,path,purpose,content,status,change_type,source_json,review_note,ignored_at,updated_at')
         .eq('company_id', companyId)
+        .is('ignored_at', null)
         .order('updated_at', { ascending: false })
         .limit(50),
       sb
@@ -376,7 +377,10 @@ export async function getHelpdeskConnectorWorkspace(): Promise<HelpdeskConnector
       };
     }),
     draftDocuments: (docs ?? [])
-      .filter((row) => (row as { status?: string }).status === 'draft')
+      .filter((row) => {
+        const x = row as { status?: string; ignored_at?: string | null };
+        return x.status === 'draft' && !x.ignored_at;
+      })
       .map((row) => {
         const x = row as Record<string, unknown>;
         const connectorId = x.connector_id as string;

@@ -359,7 +359,7 @@ export async function syncConnectorPayload(
     const keys = payload.documents.map((doc) => doc.externalKey);
     const { data: existingDocs } = await sb
       .from('helpdesk_connector_documents')
-      .select('external_key,status,source_json,content,reviewed_by,reviewed_at')
+      .select('external_key,status,source_json,content,reviewed_by,reviewed_at,ignored_at')
       .eq('company_id', connector.companyId)
       .eq('connector_id', connector.id)
       .in('external_key', keys);
@@ -390,7 +390,7 @@ export async function syncConnectorPayload(
         change_type: existing ? (changed ? 'updated' : 'unchanged') : 'new',
         reviewed_by: changed ? null : existing?.reviewed_by ?? null,
         reviewed_at: changed ? null : existing?.reviewed_at ?? null,
-        ignored_at: null,
+        ignored_at: changed ? null : existing?.ignored_at ?? null,
       };
     });
     const { error } = await sb
