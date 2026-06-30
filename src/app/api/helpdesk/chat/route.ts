@@ -78,24 +78,72 @@ function safeActions(rows: Array<Record<string, unknown>>) {
   }));
 }
 
-function navigationTargets(rows: Array<Record<string, unknown>>) {
-  return rows
+// Words too generic to signal which screen the user wants.
+const NAV_STOPWORDS = new Set([
+  'how', 'what', 'where', 'when', 'why', 'who', 'the', 'and', 'for', 'you', 'can', 'does', 'with',
+  'please', 'show', 'see', 'this', 'that', 'from', 'into', 'are', 'get', 'got', 'need', 'want', 'add',
+  'new', 'set', 'use', 'all', 'any', 'help', 'open', 'tell', 'about', 'screen', 'page', 'button',
+]);
+
+function queryTerms(text: string): string[] {
+  return Array.from(
+    new Set(
+      (text.toLowerCase().match(/[a-z0-9]+/g) ?? []).filter((t) => t.length > 2 && !NAV_STOPWORDS.has(t)),
+    ),
+  );
+}
+
+/**
+ * Only surface navigation buttons that actually match what the staffer asked.
+ * Previously this dumped the first ~8 connector screens regardless of the
+ * question, so "how do I add a category?" showed Settings, Dashboard, Printer,
+ * Orders… — noise. We score each screen by term overlap with the question and
+ * keep just the top matches (or none, which the UI handles cleanly).
+ */
+function navigationTargets(rows: Array<Record<string, unknown>>, query: string) {
+  const terms = queryTerms(query);
+  if (terms.length === 0) return [];
+  const scored = rows
     .map((row) => {
       const source = (row.source_json as Record<string, unknown> | null) ?? {};
       const navigation = (source.navigation as Record<string, unknown> | null) ?? null;
       const routeId = navigation && typeof navigation.routeId === 'string' ? navigation.routeId : null;
       if (!routeId) return null;
+      const haystack = `${row.module ?? ''} ${row.screen ?? ''} ${row.path ?? ''} ${navigation?.label ?? ''}`.toLowerCase();
+      const score = terms.reduce((sum, t) => (haystack.includes(t) ? sum + 1 : sum), 0);
+      if (score === 0) return null;
       return {
-        documentId: row.id as string,
-        label: (navigation?.label as string | undefined) ?? `Open ${row.screen}`,
-        routeId,
-        path: (row.path as string | null) ?? null,
-        module: row.module as string,
-        screen: row.screen as string,
+        score,
+        target: {
+          documentId: row.id as string,
+          label: (navigation?.label as string | undefined) ?? `Open ${row.screen}`,
+          routeId,
+          path: (row.path as string | null) ?? null,
+          module: row.module as string,
+          screen: row.screen as string,
+        },
       };
     })
-    .filter(Boolean)
-    .slice(0, 8);
+    .filter((x): x is NonNullable<typeof x> => x !== null)
+    .sort((a, b) => b.score - a.score)
+    .slice(0, 4);
+  return scored.map((s) => s.target);
+}
+
+/**
+ * Help Desk / connector chat clients render answers as plain text (textContent),
+ * so markdown emphasis shows up as literal `**asterisks**`. The customer widget
+ * renders markdown and keeps its bold — this strip is help-desk-only. We remove
+ * bold/italic markers, heading hashes, and inline-code backticks; list markers
+ * and numbering are left intact since they read fine as plain text.
+ */
+function toPlainText(text: string): string {
+  return text
+    .replace(/`{1,3}([^`]+)`{1,3}/g, '$1')
+    .replace(/\*\*(.+?)\*\*/g, '$1')
+    .replace(/__(.+?)__/g, '$1')
+    .replace(/^\s{0,3}#{1,6}\s+/gm, '')
+    .trim();
 }
 
 export async function POST(req: Request) {
@@ -253,6 +301,11 @@ export async function POST(req: Request) {
     outputTokens = approxTokens(answer);
   }
 
+  // Help-desk clients render plain text — strip markdown so bold doesn't show
+  // up as literal **asterisks**. Done once here so the reply, stored history,
+  // and audit log are all consistent.
+  answer = toPlainText(answer);
+
   await logAiUsage({
     companyId,
     botId,
@@ -333,7 +386,10 @@ export async function POST(req: Request) {
     toolsCalled,
     uiActions,
     pills,
-    navigationTargets: navigationTargets(((docs as { data?: unknown[] }).data ?? []) as Array<Record<string, unknown>>),
+    navigationTargets: navigationTargets(
+      ((docs as { data?: unknown[] }).data ?? []) as Array<Record<string, unknown>>,
+      parsed.data.text,
+    ),
     guidedActions: safeActions(((connectorActions ?? []) as Array<Record<string, unknown>>)),
     settings,
   });

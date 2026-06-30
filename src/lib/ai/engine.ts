@@ -325,10 +325,46 @@ const CHAT_FORMATTING =
   'When asked something broad (e.g. "what do you sell"), give a brief overview and ask what they need — do not dump everything.';
 
 /**
+ * Tell the model what "today" is and that it owns date math. Without this the
+ * model has no clock, so it punts relative ranges back to the user ("what is
+ * today's date? give me YYYY-MM-DD") — which reads as broken. Given the date,
+ * it resolves "last 3 months" itself and formats dates for whatever a tool/
+ * action expects. `timezone` (IANA, e.g. the company's) keeps day boundaries
+ * correct; falls back to the runtime zone when omitted.
+ */
+function buildDateContext(now: Date, timezone?: string): string {
+  let iso: string;
+  let weekday: string;
+  try {
+    const fmt = new Intl.DateTimeFormat('en-CA', {
+      timeZone: timezone || undefined,
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+    });
+    iso = fmt.format(now); // en-CA yields YYYY-MM-DD
+    weekday = new Intl.DateTimeFormat('en-US', {
+      timeZone: timezone || undefined,
+      weekday: 'long',
+    }).format(now);
+  } catch {
+    // Invalid timezone string — fall back to UTC rather than failing the turn.
+    iso = now.toISOString().slice(0, 10);
+    weekday = new Intl.DateTimeFormat('en-US', { timeZone: 'UTC', weekday: 'long' }).format(now);
+  }
+  return [
+    'CURRENT DATE',
+    `Today is ${weekday}, ${iso} (ISO 8601, YYYY-MM-DD)${timezone ? ` in ${timezone}` : ''}.`,
+    'You know the current date. When the user uses relative dates ("today", "yesterday", "last week", "the past 3 months", "this quarter"), compute the exact calendar dates yourself and pass them to tools/actions in the format each one requires (usually YYYY-MM-DD).',
+    'Never ask the user what today’s date is, and never ask them to reformat a date you can convert yourself. Only ask for a date when it is genuinely ambiguous (e.g. "the 5th" with no month).',
+  ].join('\n');
+}
+
+/**
  * Compose the final message array (Issues #3 + #12 + #18):
- *   system persona  →  injection guard  →  fresh business facts  →  fenced
- *   knowledge excerpts (unified grounding, no "use ONLY … or refuse")  →
- *   rolling summary  →  recent history.
+ *   system persona  →  current date  →  injection guard  →  fresh business facts
+ *   →  fenced knowledge excerpts (unified grounding, no "use ONLY … or refuse")
+ *   →  rolling summary  →  recent history.
  * Untrusted content (KB excerpts, business facts) is fenced so the model treats
  * it as reference data, not instructions.
  */
@@ -340,12 +376,20 @@ export function buildMessages(params: {
   summary?: string | null;
   history: ChatMessage[];
   language: 'ar' | 'en';
+  /** Injected for testability; defaults to the current time. */
+  now?: Date;
+  /** IANA timezone (e.g. the company's) for correct day boundaries. */
+  timezone?: string | null;
 }): ChatMessage[] {
   // STABLE prefix: persona, formatting, injection guard, business facts. These
   // are identical across turns for a company → cacheable. VOLATILE tail:
   // knowledge + summary, which change per query. A CACHE_BREAKPOINT marker
   // separates them so prompt-caching providers cache the prefix (others strip it).
-  const stableParts: string[] = [params.systemPrompt?.trim() || 'You are a helpful business assistant.', CHAT_FORMATTING];
+  const stableParts: string[] = [
+    params.systemPrompt?.trim() || 'You are a helpful business assistant.',
+    CHAT_FORMATTING,
+    buildDateContext(params.now ?? new Date(), params.timezone ?? undefined),
+  ];
   const volatileParts: string[] = [];
 
   const businessContext = params.businessContext?.trim();
