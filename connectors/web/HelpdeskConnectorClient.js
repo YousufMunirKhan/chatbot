@@ -335,6 +335,7 @@ export function standardActionLibrary() {
     action('get_order_status', 'Return order status.', 'read', 'low', ['order_id']),
     action('create_order', 'Create an order.', 'create', 'medium', ['customer_id', 'items'], ['notes'], true),
     action('cancel_order', 'Cancel an order.', 'danger', 'high', ['order_id'], ['reason'], true),
+    action('create_purchase_order', 'Create a supplier purchase order.', 'create', 'medium', ['supplier_id', 'items'], ['expected_date', 'notes'], true),
     action('search_invoice', 'Search invoices.', 'read', 'low', ['query']),
     action('get_invoice', 'Return invoice summary.', 'read', 'low', ['invoice_id']),
     action('daily_sales_report', 'Return sales summary for a date.', 'report', 'low', ['date'], ['branch_id']),

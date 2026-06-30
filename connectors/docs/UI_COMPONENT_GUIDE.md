@@ -34,8 +34,7 @@ From `/company/help-desk`:
 
 - enabled/disabled
 - floating, embedded, or hidden mode
-- allowed staff roles
-- allowed routes/screens
+- optional route targeting
 - blocked routes/screens
 - auto-open
 - position
@@ -53,7 +52,7 @@ The developer places the UI in the app once:
 The developer passes:
 
 - current route/screen
-- current staff role
+- current staff role for audit/action checks
 - connector token or backend proxy
 - navigation callback
 - optional theme
@@ -156,10 +155,12 @@ shouldShow(settings, route, role)
 Rules:
 
 - If disabled or hidden, do not show.
-- If role not allowed, do not show.
 - If route is blocked, do not show.
-- If route is allowed, show.
+- If route targeting is empty, show on staff screens.
+- If route targeting is configured, show only on those routes.
 - Blocked route wins over allowed route.
+
+Staff role does not hide the chat itself. Use staff role inside local action handlers for update/create/danger permissions.
 
 ## Safety
 

@@ -123,7 +123,7 @@ function WhatIsChecked() {
   const checks = [
     {
       title: 'Chat visibility',
-      body: 'The chat checks enabled/hidden mode, staff role, current route, allowed routes, and blocked routes. Blocked routes always win.',
+      body: 'The chat checks enabled/hidden mode, current route, optional route targeting, and blocked routes. Staff role is for audit/action safety, not opening chat.',
     },
     {
       title: 'Preview',
@@ -430,6 +430,12 @@ export default async function HelpDeskPage({ searchParams }: { searchParams?: { 
   const assistantHref = internalBot ? `/company/bots/${internalBot.id}/settings` : '/company/bots/new';
   const assistantLabel = internalBot ? 'Edit help desk bot' : 'Create help desk bot';
   const activeTab = normalizeTab(searchParams?.tab);
+  const draftGroups = workspace.connectors
+    .map((connector) => ({
+      connector,
+      documents: workspace.draftDocuments.filter((doc) => doc.connectorId === connector.id),
+    }))
+    .filter((group) => group.documents.length > 0);
 
   return (
     <div className="mx-auto max-w-7xl space-y-6">
@@ -493,15 +499,17 @@ export default async function HelpDeskPage({ searchParams }: { searchParams?: { 
             </CardHeader>
             <CardContent className="grid gap-3 md:grid-cols-3">
               <div className="rounded-md border p-3">
-                <p className="text-sm font-semibold">Role check</p>
+                <p className="text-sm font-semibold">Staff access</p>
                 <p className="mt-1 text-xs text-muted-foreground">
-                  Allowed roles are currently: {workspace.chatSettings.allowedRoles.join(', ') || 'none'}.
+                  Chat visibility does not block by staff role. The customer app decides where to mount it; individual actions can still enforce role safety.
                 </p>
               </div>
               <div className="rounded-md border p-3">
-                <p className="text-sm font-semibold">Allowed routes</p>
+                <p className="text-sm font-semibold">Route targeting</p>
                 <p className="mt-1 text-xs text-muted-foreground">
-                  Current test route must match one of these: {workspace.chatSettings.allowedRoutes.join(', ') || 'all routes'}.
+                  {workspace.chatSettings.allowedRoutes.length
+                    ? `Only these routes show chat: ${workspace.chatSettings.allowedRoutes.join(', ')}.`
+                    : 'No route allow-list. Chat can show on every staff route unless blocked.'}
                 </p>
               </div>
               <div className="rounded-md border p-3">
@@ -545,12 +553,16 @@ export default async function HelpDeskPage({ searchParams }: { searchParams?: { 
                 <p className="text-muted-foreground">{workspace.chatSettings.enabled ? 'Yes' : 'No'} / {workspace.chatSettings.showMode}</p>
               </div>
               <div className="rounded-md border p-3">
-                <p className="font-semibold">Roles that can see chat</p>
-                <p className="text-muted-foreground">{workspace.chatSettings.allowedRoles.join(', ') || 'No role restriction'}</p>
+                <p className="font-semibold">Staff access</p>
+                <p className="text-muted-foreground">Any staff role can open chat when the customer app shows it. Action permissions are checked separately.</p>
               </div>
               <div className="rounded-md border p-3">
                 <p className="font-semibold">Route rule</p>
-                <p className="text-muted-foreground">Allowed routes are checked first, then blocked routes override them.</p>
+                <p className="text-muted-foreground">
+                  {workspace.chatSettings.allowedRoutes.length
+                    ? `Only selected routes show chat: ${workspace.chatSettings.allowedRoutes.join(', ')}. Blocked routes still override.`
+                    : 'All staff routes can show chat unless they match a blocked route.'}
+                </p>
               </div>
             </CardContent>
           </Card>
@@ -678,14 +690,32 @@ export default async function HelpDeskPage({ searchParams }: { searchParams?: { 
 
       <Card>
         <CardHeader>
-          <CardTitle>Draft documentation review</CardTitle>
+          <CardTitle>Connector review queue</CardTitle>
+          <p className="text-sm text-muted-foreground">
+            One row is kept for each stable screen key. Resync updates these rows; it should not create copies unless the connector sends a new key.
+          </p>
         </CardHeader>
         <CardContent className="space-y-4">
-          {workspace.draftDocuments.length === 0 ? (
+          {draftGroups.length === 0 ? (
             <p className="text-sm text-muted-foreground">No draft docs waiting. Run connector sync to generate editable help drafts.</p>
           ) : (
-            workspace.draftDocuments.map((doc) => (
-              <HelpdeskDocumentReview key={doc.id} doc={doc} platformLabel={platformLabel(doc.platform)} />
+            draftGroups.map((group) => (
+              <div key={group.connector.id} className="rounded-md border bg-muted/20 p-3">
+                <div className="mb-3 flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
+                  <div>
+                    <p className="font-medium">{group.connector.name}</p>
+                    <p className="text-xs text-muted-foreground">
+                      {group.documents.length} draft item{group.documents.length === 1 ? '' : 's'} - resync updates the same stable keys.
+                    </p>
+                  </div>
+                  <ConnectorResyncButton connectorId={group.connector.id} />
+                </div>
+                <div className="space-y-3">
+                  {group.documents.map((doc) => (
+                    <HelpdeskDocumentReview key={doc.id} doc={doc} platformLabel={platformLabel(doc.platform)} />
+                  ))}
+                </div>
+              </div>
             ))
           )}
         </CardContent>

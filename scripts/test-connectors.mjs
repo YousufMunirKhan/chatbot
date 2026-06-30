@@ -35,7 +35,7 @@ async function testWebConnectorAudit() {
 
   check('Web manifest audit has no blockers', audit.ok, audit.blocked.map((x) => x.message).join('; '));
   check('Preview is human readable', preview.includes('Screens') && preview.includes('Actions'));
-  check('Standard action library has 25 actions', actions.length === 25, `${actions.length} action(s)`);
+  check('Standard action library has 26 actions', actions.length === 26, `${actions.length} action(s)`);
   check('Price update action requires confirmation', actions.find((a) => a.name === 'update_product_price')?.needsConfirmation === true);
   check('Danger action is flagged danger/high', actions.find((a) => a.name === 'cancel_order')?.type === 'danger');
 }
@@ -51,7 +51,7 @@ function testAndroidConnectorKit() {
   check('Android navigation registry exists', client.includes('class HelpdeskNavigationRegistry') && client.includes('openNavigationTarget'));
   check('Android manifest audit and diff exist', client.includes('auditManifest') && client.includes('diffManifest'));
   check('Android result safety exists', client.includes('safeResult') && client.includes('redactObject') && client.includes('maxResultBytes'));
-  check('Android standard action library has 25 templates', (client.match(/HelpdeskActionDefinition\("/g) || []).length === 25);
+  check('Android standard action library has 26 templates', (client.match(/HelpdeskActionDefinition\("/g) || []).length === 26);
   check('Android encrypted token store exists', existsSync('connectors/android/HelpdeskEncryptedTokenStore.kt'));
   check('Android lifecycle observer exists', existsSync('connectors/android/HelpdeskConnectorLifecycleObserver.kt'));
   check('Android preview activity exists', existsSync('connectors/android/HelpdeskConnectorPreviewActivity.kt'));
@@ -70,7 +70,7 @@ function testQuickActionKit() {
 function testHelpdeskChatSurfaceKit() {
   const chatRoute = readFileSync('src/app/api/helpdesk/chat/route.ts', 'utf8');
   const settings = readFileSync('src/lib/helpdesk/chat-settings.ts', 'utf8');
-  check('Staff-only Help Desk chat endpoint exists', chatRoute.includes('/api/helpdesk/chat') || chatRoute.includes('helpdesk_chat_not_available_here'));
+  check('Staff-only Help Desk chat endpoint exists', chatRoute.includes('/api/helpdesk/chat') || chatRoute.includes('helpdesk_chat_hidden_by_visibility_rules'));
   check('Help Desk chat enforces visibility settings', chatRoute.includes('canShowHelpdeskChat') && settings.includes('allowedRoutes') && settings.includes('blockedRoutes'));
   check('Help Desk chat supports connector token auth', chatRoute.includes('authenticateHelpdeskConnector'));
   check('Dashboard internal chat component exists', existsSync('src/modules/company/components/helpdesk-internal-chat.tsx'));
@@ -85,6 +85,7 @@ function testHelpdeskChatSurfaceKit() {
 function testDeveloperDocumentationPack() {
   const requiredDocs = [
     'connectors/HELPDESK_DEVELOPER_HANDOFF.md',
+    'connectors/docs/AUTO_DISCOVERY_PLAYBOOK.md',
     'connectors/docs/UI_COMPONENT_GUIDE.md',
     'connectors/docs/CONNECTOR_TEST_PLAN.md',
     'connectors/laravel/AI_AGENT_LARAVEL.md',
@@ -98,7 +99,7 @@ function testDeveloperDocumentationPack() {
     check(`Developer doc exists: ${file}`, existsSync(file));
   }
   const downloadRoute = readFileSync('src/app/api/helpdesk/connectors/download/[platform]/route.ts', 'utf8');
-  check('Connector downloads include shared handoff docs', downloadRoute.includes('HELPDESK_DEVELOPER_HANDOFF.md') && downloadRoute.includes('CONNECTOR_TEST_PLAN.md'));
+  check('Connector downloads include shared handoff docs', downloadRoute.includes('HELPDESK_DEVELOPER_HANDOFF.md') && downloadRoute.includes('AUTO_DISCOVERY_PLAYBOOK.md') && downloadRoute.includes('CONNECTOR_TEST_PLAN.md'));
   check('Connector downloads include platform UI helpers', downloadRoute.includes('HelpdeskChatController.kt') && downloadRoute.includes('HelpdeskChatController.cs') && downloadRoute.includes('HelpdeskEmbeddedChat.js'));
   const actions = readFileSync('src/modules/company/helpdesk-actions.ts', 'utf8');
   const queueForm = readFileSync('src/modules/company/components/helpdesk-connector-form.tsx', 'utf8');

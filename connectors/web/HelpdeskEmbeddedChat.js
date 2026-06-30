@@ -1,8 +1,8 @@
 export const defaultHelpdeskChatSettings = {
   enabled: true,
   showMode: 'floating',
-  allowedRoles: ['admin', 'manager', 'staff'],
-  allowedRoutes: ['dashboard', 'inventory/*', 'purchase/*', 'reports/*', 'customers/*', 'orders/*'],
+  allowedRoles: [],
+  allowedRoutes: [],
   blockedRoutes: ['login', 'payment', 'checkout', 'customer-facing/*', 'customer-display/*'],
   autoOpen: false,
   position: 'right',
@@ -24,10 +24,6 @@ function routeMatches(pattern, route) {
 export function shouldShowHelpdeskChat(settings, { route, role }) {
   const cfg = { ...defaultHelpdeskChatSettings, ...(settings || {}) };
   if (!cfg.enabled || cfg.showMode === 'hidden') return false;
-  const userRole = String(role || '').toLowerCase();
-  if (cfg.allowedRoles?.length && userRole && !cfg.allowedRoles.map((x) => x.toLowerCase()).includes(userRole)) {
-    return false;
-  }
   const currentRoute = normalizeRoute(route);
   if (!currentRoute) return true;
   if ((cfg.blockedRoutes || []).some((pattern) => routeMatches(pattern, currentRoute))) return false;
@@ -62,7 +58,7 @@ export class HelpdeskEmbeddedChatClient {
       }),
     });
     const data = await res.json();
-    if (!res.ok) throw new Error(data.error || 'Help Desk chat failed');
+    if (!res.ok) throw new Error(data.message || data.error || 'Help Desk chat failed');
     return data;
   }
 

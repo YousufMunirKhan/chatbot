@@ -15,8 +15,8 @@ public sealed record HelpdeskChatSettings(
     public static HelpdeskChatSettings Default { get; } = new(
         true,
         "floating",
-        new[] { "admin", "manager", "staff" },
-        new[] { "dashboard", "inventory/*", "purchase/*", "reports/*", "customers/*", "orders/*" },
+        Array.Empty<string>(),
+        Array.Empty<string>(),
         new[] { "login", "payment", "checkout", "customer-facing/*", "customer-display/*" },
         false,
         "right"
@@ -41,9 +41,7 @@ public sealed class HelpdeskChatController
     public bool ShouldShow(HelpdeskChatSettings settings)
     {
         var route = Normalize(_currentRoute());
-        var role = (_staffRole() ?? "").ToLowerInvariant();
         if (!settings.Enabled || settings.ShowMode == "hidden") return false;
-        if (settings.AllowedRoles.Length > 0 && !settings.AllowedRoles.Select(x => x.ToLowerInvariant()).Contains(role)) return false;
         if (string.IsNullOrWhiteSpace(route)) return true;
         if (settings.BlockedRoutes.Any(pattern => RouteMatches(pattern, route))) return false;
         if (settings.AllowedRoutes.Length == 0) return true;
@@ -64,7 +62,7 @@ public sealed class HelpdeskChatController
         };
         using var response = await _http.SendAsync(request, cancellationToken);
         var body = await response.Content.ReadAsStringAsync(cancellationToken);
-        if (!response.IsSuccessStatusCode) throw new InvalidOperationException($"Help Desk chat failed {(int)response.StatusCode}: {body}");
+        if (!response.IsSuccessStatusCode) throw new InvalidOperationException(ReadErrorMessage(body) ?? $"Help Desk chat failed {(int)response.StatusCode}");
         return JsonDocument.Parse(body);
     }
 
@@ -78,5 +76,18 @@ public sealed class HelpdeskChatController
         if (p == "*") return true;
         if (p.EndsWith("/*")) return route == p[..^2] || route.StartsWith(p[..^1]);
         return route == p || route.Contains(p);
+    }
+
+    private static string? ReadErrorMessage(string body)
+    {
+        try
+        {
+            using var json = JsonDocument.Parse(body);
+            return json.RootElement.TryGetProperty("message", out var message) ? message.GetString() : null;
+        }
+        catch
+        {
+            return null;
+        }
     }
 }

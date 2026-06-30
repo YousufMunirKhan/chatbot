@@ -2,7 +2,6 @@
 
 import { useFormState, useFormStatus } from 'react-dom';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import type { HelpdeskChatSettings } from '@/lib/helpdesk/chat-settings';
@@ -47,20 +46,16 @@ export function HelpdeskChatSettingsForm({ settings }: { settings: HelpdeskChatS
           </select>
         </div>
       </div>
-      <div className="space-y-1.5">
-        <Label>Allowed app roles</Label>
-        <Input name="allowedRoles" defaultValue={settings.allowedRoles.join(', ')} placeholder="admin, manager, staff" />
-      </div>
       <div className="grid gap-4 md:grid-cols-2">
         <div className="space-y-1.5">
-          <Label>Allowed routes/screens</Label>
+          <Label>Only these routes/screens</Label>
           <Textarea name="allowedRoutes" rows={5} defaultValue={settings.allowedRoutes.join('\n')} />
-          <p className="text-xs text-muted-foreground">Supports wildcards like inventory/* and reports/*.</p>
+          <p className="text-xs text-muted-foreground">Optional. Leave empty to show Help Desk on every staff route except blocked routes.</p>
         </div>
         <div className="space-y-1.5">
           <Label>Blocked routes/screens</Label>
           <Textarea name="blockedRoutes" rows={5} defaultValue={settings.blockedRoutes.join('\n')} />
-          <p className="text-xs text-muted-foreground">Blocked routes always win over allowed routes.</p>
+          <p className="text-xs text-muted-foreground">Use this for screens where Help Desk should never appear, like login, payment, or customer display.</p>
         </div>
       </div>
       {state.error ? <p className="text-sm text-destructive">{state.error}</p> : null}

@@ -13,8 +13,8 @@ export interface HelpdeskChatSettings {
 export const DEFAULT_HELPDESK_CHAT_SETTINGS: HelpdeskChatSettings = {
   enabled: true,
   showMode: 'floating',
-  allowedRoles: ['admin', 'manager', 'staff'],
-  allowedRoutes: ['dashboard', 'inventory/*', 'purchase/*', 'reports/*', 'customers/*', 'orders/*'],
+  allowedRoles: [],
+  allowedRoutes: [],
   blockedRoutes: ['login', 'payment', 'checkout', 'customer-facing/*', 'customer-display/*'],
   autoOpen: false,
   position: 'right',
@@ -64,10 +64,6 @@ export function canShowHelpdeskChat(
   params: { route?: string | null; role?: string | null },
 ): boolean {
   if (!settings.enabled || settings.showMode === 'hidden') return false;
-  const role = String(params.role ?? '').toLowerCase();
-  if (settings.allowedRoles.length && role && !settings.allowedRoles.map((r) => r.toLowerCase()).includes(role)) {
-    return false;
-  }
   const route = normalizeRoute(params.route);
   if (!route) return true;
   if (settings.blockedRoutes.some((pattern) => routeMatches(pattern, route))) return false;

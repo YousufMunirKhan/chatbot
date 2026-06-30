@@ -137,6 +137,7 @@ export interface HelpdeskConnectorRow {
 export interface HelpdeskConnectorDocumentRow {
   id: string;
   connectorId: string;
+  externalKey: string;
   connectorName: string;
   platform: string;
   module: string;
@@ -263,7 +264,7 @@ export async function getHelpdeskConnectorWorkspace(): Promise<HelpdeskConnector
         .order('created_at', { ascending: false }),
       sb
         .from('helpdesk_connector_documents')
-        .select('id,connector_id,platform,module,screen,path,purpose,content,status,change_type,source_json,review_note,ignored_at,updated_at')
+        .select('id,connector_id,external_key,platform,module,screen,path,purpose,content,status,change_type,source_json,review_note,ignored_at,updated_at')
         .eq('company_id', companyId)
         .is('ignored_at', null)
         .order('updated_at', { ascending: false })
@@ -389,6 +390,7 @@ export async function getHelpdeskConnectorWorkspace(): Promise<HelpdeskConnector
         return {
           id: x.id as string,
           connectorId,
+          externalKey: x.external_key as string,
           connectorName: connectorName.get(connectorId) ?? 'Connector',
           platform: x.platform as string,
           module: x.module as string,

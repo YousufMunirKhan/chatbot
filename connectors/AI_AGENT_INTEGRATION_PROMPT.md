@@ -10,6 +10,8 @@ If this file came from a downloaded connector zip, read `AI_IMPLEMENTATION_BRIEF
 
 Those files are the intended integration surface for real screens, actions, routes, and service handlers.
 
+Before writing code, also read `docs/AUTO_DISCOVERY_PLAYBOOK.md`. The starter manifest is intentionally small. Do not ship it as the production POS map.
+
 ## Goal
 
 Integrate the Switch&Save Help Desk Connector into this software so an internal staff assistant can:
@@ -25,17 +27,24 @@ The connector must not upload full database tables, customer records, invoices, 
 
 ## Build These Pieces
 
-1. A platform details file filled with the real app screens/pages/forms.
-2. A local software map builder.
-3. A connector manifest with `documents` and `actions`.
-4. Local action handlers for supported actions.
-5. Navigation handlers for clickable paths where the app supports them.
-6. A staff-only Help Desk UI entry point.
-7. The default chat/settings UI design.
-8. Route verification for every clickable routeId.
-9. A preview/editor surface or readable local preview output.
-10. An audit step that blocks unsafe or incomplete syncs.
-11. A sync step that sends only reviewed docs/actions to Switch&Save.
+1. A discovered screen map from the real app menu/router/forms.
+2. A platform details file filled with the real app screens/pages/forms.
+3. A local software map builder.
+4. A connector manifest with `documents` and `actions`.
+5. Local action handlers for supported actions.
+6. Navigation handlers for clickable paths where the app supports them.
+7. A staff-only Help Desk UI entry point.
+8. The default chat/settings UI design.
+9. Route verification for every clickable routeId.
+10. A preview/editor surface or readable local preview output.
+11. An audit step that blocks unsafe or incomplete syncs.
+12. A sync step that sends only reviewed docs/actions to Switch&Save.
+
+## Discovery Requirement
+
+Scan the real app's menu/router/screen files and generate one document for each staff workflow. A POS should normally include docs for products, add product, stock, orders, customers, purchase orders, reports, settings, terminal/printer/sync setup, and any other visible staff menu.
+
+If only the starter screens appear in Preview, integration is incomplete.
 
 ## Manifest Shape
 
@@ -139,6 +148,7 @@ Prefer these action names so the Help Desk Bot can learn consistent behavior acr
 | Orders | `get_order_status` | read | low | no |
 | Orders | `create_order` | create | medium | yes |
 | Orders | `cancel_order` | danger | high | yes |
+| Purchase | `create_purchase_order` | create | medium | yes |
 | Invoices | `search_invoice` | read | low | no |
 | Invoices | `get_invoice` | read | low | no |
 | Reports | `daily_sales_report` | report | low | no |

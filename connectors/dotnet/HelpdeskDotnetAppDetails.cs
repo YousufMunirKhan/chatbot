@@ -8,6 +8,9 @@
  * Keep secrets, database rows, customer lists, payment data, and connector
  * tokens out of this manifest. Only sync software help docs and approved
  * action metadata.
+ *
+ * The starter manifest is a POS example. Use docs/AUTO_DISCOVERY_PLAYBOOK.md to
+ * scan the real menu/forms/routes and replace these samples before production.
  */
 static class HelpdeskDotnetAppDetails
 {
@@ -48,6 +51,87 @@ static class HelpdeskDotnetAppDetails
                     navigation: DotnetRoute("Open Products", "inventory.products", "OpenProducts", "mypos://inventory/products")
                 ),
                 Screen(
+                    externalKey: "inventory.add_product",
+                    module: "Inventory",
+                    screen: "Add Product",
+                    path: "Inventory > Products > Add Product",
+                    purpose: "Create a new product with name, SKU, barcode, sale price, tax, category, and opening stock.",
+                    steps: ["Open Inventory.", "Open Products.", "Click Add Product.", "Enter product details.", "Save the product."],
+                    fields:
+                    [
+                        new("Product name", true, "Name shown in search, receipts, and reports."),
+                        new("SKU/barcode", false, "Unique SKU or barcode."),
+                        new("Sale price", true, "Selling price used at checkout.")
+                    ],
+                    commonErrors: ["SKU or barcode already exists.", "Price is required before saving."],
+                    actions: ["search_product", "create_product"],
+                    navigation: DotnetRoute("Open Add Product", "inventory.add_product", "OpenAddProduct", "mypos://inventory/products/new")
+                ),
+                Screen(
+                    externalKey: "orders.list",
+                    module: "Orders",
+                    screen: "Order List",
+                    path: "Orders > Order List",
+                    purpose: "Search, review, print, refund, or check payment and fulfilment status for orders.",
+                    steps: ["Open Orders.", "Search by order number, customer, date, or status.", "Open an order.", "Review items, totals, payment state, and fulfilment status."],
+                    fields:
+                    [
+                        new("Search", false, "Order number, customer, or receipt reference."),
+                        new("Date range", false, "Filter orders by date.")
+                    ],
+                    commonErrors: ["Offline orders may appear after sync completes.", "Refund actions may require manager approval."],
+                    actions: ["search_order", "get_order_status"],
+                    navigation: DotnetRoute("Open Orders", "orders.list", "OpenOrders", "mypos://orders")
+                ),
+                Screen(
+                    externalKey: "orders.create",
+                    module: "Orders",
+                    screen: "Create Order",
+                    path: "Orders > New Order",
+                    purpose: "Create a POS order by adding products, customer details, discounts, payment, and fulfilment information.",
+                    steps: ["Open Orders.", "Choose New Order.", "Add products.", "Attach customer if required.", "Take payment or save the order."],
+                    fields:
+                    [
+                        new("Product search", true, "Products to add to the order."),
+                        new("Customer", false, "Optional customer linked to the order.")
+                    ],
+                    commonErrors: ["Product is out of stock.", "Payment terminal is offline."],
+                    actions: ["search_product", "create_order"],
+                    navigation: DotnetRoute("Open New Order", "orders.create", "OpenNewOrder", "mypos://orders/new")
+                ),
+                Screen(
+                    externalKey: "customers.list",
+                    module: "Customers",
+                    screen: "Customer Management",
+                    path: "Customers > Customer Management",
+                    purpose: "Find, create, or update customer records used for delivery, collection, account sales, and history.",
+                    steps: ["Open Customers.", "Search by name, phone, or email.", "Open the customer record.", "Review details, notes, and order history."],
+                    fields:
+                    [
+                        new("Search", false, "Name, phone, email, or customer code."),
+                        new("Phone", false, "Customer phone number.")
+                    ],
+                    commonErrors: ["Duplicate customers may exist with similar phone numbers."],
+                    actions: ["search_customer", "create_customer", "update_customer_phone"],
+                    navigation: DotnetRoute("Open Customers", "customers.list", "OpenCustomers", "mypos://customers")
+                ),
+                Screen(
+                    externalKey: "purchase_orders.create",
+                    module: "Purchase",
+                    screen: "Create Purchase Order",
+                    path: "Purchase > Purchase Orders > New",
+                    purpose: "Create a supplier purchase order with products, quantities, costs, and expected receiving dates.",
+                    steps: ["Open Purchase.", "Open Purchase Orders.", "Choose New Purchase Order.", "Select supplier.", "Add products and quantities.", "Save or send the order."],
+                    fields:
+                    [
+                        new("Supplier", true, "Supplier receiving the purchase order."),
+                        new("Products", true, "Products and quantities to order.")
+                    ],
+                    commonErrors: ["Supplier is required.", "Product cost may be missing."],
+                    actions: ["create_purchase_order", "search_product"],
+                    navigation: DotnetRoute("Open Purchase Order", "purchase_orders.create", "OpenPurchaseOrder", "mypos://purchase/orders/new")
+                ),
+                Screen(
                     externalKey: "reports.daily_sales",
                     module: "Reports",
                     screen: "Daily Sales",
@@ -63,6 +147,18 @@ static class HelpdeskDotnetAppDetails
                     commonErrors: ["Report is empty if no completed sales exist for selected filters."],
                     actions: ["daily_sales_report", "end_of_day_report"],
                     navigation: DotnetRoute("Open Daily Sales", "reports.daily_sales", "OpenDailySalesReport", "mypos://reports/daily-sales")
+                ),
+                Screen(
+                    externalKey: "settings.main",
+                    module: "Settings",
+                    screen: "Settings",
+                    path: "Settings",
+                    purpose: "Configure POS, printers, payment terminals, tax, sync, staff, branch, and application settings.",
+                    steps: ["Open Settings.", "Choose the setting category.", "Review current values.", "Save changes if permitted."],
+                    fields: [new("Setting category", false, "Printer, payment, tax, sync, staff, or branch settings.")],
+                    commonErrors: ["Some settings require admin permission.", "Printer/payment settings may require network or device connectivity."],
+                    actions: [],
+                    navigation: DotnetRoute("Open Settings", "settings.main", "OpenSettings", "mypos://settings")
                 )
             ],
             Actions: StandardActions.All.Where(a => new[]
@@ -74,7 +170,15 @@ static class HelpdeskDotnetAppDetails
                 "daily_sales_report",
                 "end_of_day_report",
                 "update_product_quantity",
-                "update_product_price"
+                "update_product_price",
+                "create_product",
+                "search_customer",
+                "create_customer",
+                "update_customer_phone",
+                "search_order",
+                "get_order_status",
+                "create_order",
+                "create_purchase_order"
             }.Contains(a.Name)).ToArray()
         );
     }
@@ -92,7 +196,13 @@ static class HelpdeskDotnetAppDetails
         {
             "dashboard.main" => RunCommand("OpenDashboard"),
             "inventory.products" => RunCommand("OpenProducts"),
+            "inventory.add_product" => RunCommand("OpenAddProduct"),
+            "orders.list" => RunCommand("OpenOrders"),
+            "orders.create" => RunCommand("OpenNewOrder"),
+            "customers.list" => RunCommand("OpenCustomers"),
+            "purchase_orders.create" => RunCommand("OpenPurchaseOrder"),
             "reports.daily_sales" => RunCommand("OpenDailySalesReport"),
+            "settings.main" => RunCommand("OpenSettings"),
             _ => false
         };
     }

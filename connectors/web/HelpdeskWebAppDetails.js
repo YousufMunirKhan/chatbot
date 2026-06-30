@@ -7,6 +7,9 @@ import { HelpdeskConnectorClient, standardActionLibrary } from './HelpdeskConnec
  * Keep the hdk_ connector token on the backend. Do not import this file into a
  * public browser bundle unless the page is fully staff-authenticated and the
  * token is injected only server-side.
+ *
+ * The starter manifest is a POS example. Use docs/AUTO_DISCOVERY_PLAYBOOK.md to
+ * scan the real app menus/routes and replace these samples before production.
  */
 
 export function createHelpdeskConnector({
@@ -61,6 +64,82 @@ export function buildManifest() {
         navigation: webRoute('Open Products', 'inventory.products', '/inventory/products'),
       }),
       screenDoc({
+        externalKey: 'inventory.add_product',
+        module: 'Inventory',
+        screen: 'Add Product',
+        path: 'Dashboard > Inventory > Products > Add Product',
+        purpose: 'Create a new product with name, SKU, barcode, sale price, tax, category, and opening stock.',
+        steps: ['Open Dashboard.', 'Open Inventory.', 'Choose Products.', 'Click Add Product.', 'Enter details and save.'],
+        fields: [
+          { name: 'Product name', required: true, description: 'Name shown in search, receipts, and reports.' },
+          { name: 'SKU/barcode', required: false, description: 'Unique SKU or barcode.' },
+          { name: 'Sale price', required: true, description: 'Selling price used at checkout.' },
+        ],
+        commonErrors: ['SKU or barcode already exists.', 'Price is required before saving.'],
+        actions: ['search_product', 'create_product'],
+        navigation: webRoute('Open Add Product', 'inventory.add_product', '/inventory/products/new'),
+      }),
+      screenDoc({
+        externalKey: 'orders.list',
+        module: 'Orders',
+        screen: 'Order List',
+        path: 'Dashboard > Orders',
+        purpose: 'Search, review, print, refund, or check payment and fulfilment status for orders.',
+        steps: ['Open Dashboard.', 'Open Orders.', 'Search by order number, customer, date, or status.', 'Open an order to review details.'],
+        fields: [
+          { name: 'Search', required: false, description: 'Order number, customer, or receipt reference.' },
+          { name: 'Date range', required: false, description: 'Filter orders by date.' },
+        ],
+        commonErrors: ['Offline orders may appear after sync completes.', 'Refund actions may require manager approval.'],
+        actions: ['search_order', 'get_order_status'],
+        navigation: webRoute('Open Orders', 'orders.list', '/orders'),
+      }),
+      screenDoc({
+        externalKey: 'orders.create',
+        module: 'Orders',
+        screen: 'Create Order',
+        path: 'Dashboard > Orders > New Order',
+        purpose: 'Create a POS order by adding products, customer details, discounts, payment, and fulfilment information.',
+        steps: ['Open Dashboard.', 'Open Orders.', 'Choose New Order.', 'Add products.', 'Take payment or save the order.'],
+        fields: [
+          { name: 'Product search', required: true, description: 'Products to add to the order.' },
+          { name: 'Customer', required: false, description: 'Optional customer linked to the order.' },
+        ],
+        commonErrors: ['Product is out of stock.', 'Payment terminal is offline.'],
+        actions: ['search_product', 'create_order'],
+        navigation: webRoute('Open New Order', 'orders.create', '/orders/new'),
+      }),
+      screenDoc({
+        externalKey: 'customers.list',
+        module: 'Customers',
+        screen: 'Customer Management',
+        path: 'Dashboard > Customers',
+        purpose: 'Find, create, or update customer records used for delivery, collection, account sales, and history.',
+        steps: ['Open Dashboard.', 'Open Customers.', 'Search by name, phone, or email.', 'Open the customer record.'],
+        fields: [
+          { name: 'Search', required: false, description: 'Name, phone, email, or customer code.' },
+          { name: 'Phone', required: false, description: 'Customer phone number.' },
+        ],
+        commonErrors: ['Duplicate customers may exist with similar phone numbers.'],
+        actions: ['search_customer', 'create_customer', 'update_customer_phone'],
+        navigation: webRoute('Open Customers', 'customers.list', '/customers'),
+      }),
+      screenDoc({
+        externalKey: 'purchase_orders.create',
+        module: 'Purchase',
+        screen: 'Create Purchase Order',
+        path: 'Dashboard > Purchase > Purchase Orders > New',
+        purpose: 'Create a supplier purchase order with products, quantities, costs, and expected receiving dates.',
+        steps: ['Open Dashboard.', 'Open Purchase.', 'Open Purchase Orders.', 'Choose New Purchase Order.', 'Select supplier and add products.', 'Save or send the order.'],
+        fields: [
+          { name: 'Supplier', required: true, description: 'Supplier receiving the purchase order.' },
+          { name: 'Products', required: true, description: 'Products and quantities to order.' },
+        ],
+        commonErrors: ['Supplier is required.', 'Product cost may be missing.'],
+        actions: ['create_purchase_order', 'search_product'],
+        navigation: webRoute('Open Purchase Order', 'purchase_orders.create', '/purchase/orders/new'),
+      }),
+      screenDoc({
         externalKey: 'reports.daily_sales',
         module: 'Reports',
         screen: 'Daily Sales',
@@ -75,6 +154,18 @@ export function buildManifest() {
         actions: ['daily_sales_report', 'end_of_day_report'],
         navigation: webRoute('Open Daily Sales', 'reports.daily_sales', '/reports/daily-sales'),
       }),
+      screenDoc({
+        externalKey: 'settings.main',
+        module: 'Settings',
+        screen: 'Settings',
+        path: 'Dashboard > Settings',
+        purpose: 'Configure POS, printers, payment terminals, tax, sync, staff, branch, and application settings.',
+        steps: ['Open Dashboard.', 'Open Settings.', 'Choose a setting category.', 'Review current values.', 'Save changes if permitted.'],
+        fields: [{ name: 'Setting category', required: false, description: 'Printer, payment, tax, sync, staff, or branch settings.' }],
+        commonErrors: ['Some settings require admin permission.', 'Printer/payment settings may require network or device connectivity.'],
+        actions: [],
+        navigation: webRoute('Open Settings', 'settings.main', '/settings'),
+      }),
     ],
     actions: standardActionLibrary().filter((action) =>
       [
@@ -86,6 +177,14 @@ export function buildManifest() {
         'end_of_day_report',
         'update_product_quantity',
         'update_product_price',
+        'create_product',
+        'search_customer',
+        'create_customer',
+        'update_customer_phone',
+        'search_order',
+        'get_order_status',
+        'create_order',
+        'create_purchase_order',
       ].includes(action.name),
     ),
   };
@@ -143,7 +242,13 @@ export function openHelpdeskRoute(routeId, router) {
   const routes = {
     'dashboard.main': '/dashboard',
     'inventory.products': '/inventory/products',
+    'inventory.add_product': '/inventory/products/new',
+    'orders.list': '/orders',
+    'orders.create': '/orders/new',
+    'customers.list': '/customers',
+    'purchase_orders.create': '/purchase/orders/new',
     'reports.daily_sales': '/reports/daily-sales',
+    'settings.main': '/settings',
   };
   const url = routes[routeId];
   if (!url) return false;

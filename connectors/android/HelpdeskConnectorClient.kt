@@ -832,6 +832,7 @@ class HelpdeskConnectorClient(
                 HelpdeskActionDefinition("get_order_status", "Return order status.", "read", "low", listOf("order_id"), allowedRoles = listOf("admin", "manager", "cashier")),
                 HelpdeskActionDefinition("create_order", "Create an order.", "create", "medium", listOf("items"), listOf("customer_id"), needsConfirmation = true),
                 HelpdeskActionDefinition("cancel_order", "Cancel an order.", "danger", "high", listOf("order_id", "reason"), needsConfirmation = true, enabled = false),
+                HelpdeskActionDefinition("create_purchase_order", "Create a supplier purchase order.", "create", "medium", listOf("supplier_id", "items"), listOf("expected_date", "notes"), needsConfirmation = true),
                 HelpdeskActionDefinition("search_invoice", "Search invoices.", "read", "low", listOf("query"), allowedRoles = listOf("admin", "manager")),
                 HelpdeskActionDefinition("get_invoice", "Return invoice summary.", "read", "low", listOf("invoice_id"), allowedRoles = listOf("admin", "manager")),
                 HelpdeskActionDefinition("daily_sales_report", "Return sales summary for a date.", "report", "low", listOf("date"), listOf("branch_id"), allowedRoles = listOf("admin", "manager")),

@@ -113,7 +113,13 @@ export async function POST(req: Request) {
   const settings = await getHelpdeskChatSettings(companyId);
   const staffRole = appRole(user?.role ?? null, parsed.data.staffRole);
   if (!canShowHelpdeskChat(settings, { route: parsed.data.currentRoute, role: staffRole })) {
-    return json({ error: 'helpdesk_chat_not_available_here', settings }, 403);
+    return json(
+      {
+        error: 'helpdesk_chat_hidden_by_visibility_rules',
+        message: 'Help Desk chat is hidden for this screen by the visibility settings.',
+      },
+      403,
+    );
   }
 
   const sb = createSupabaseServiceClient();

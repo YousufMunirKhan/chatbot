@@ -354,9 +354,17 @@ export async function syncConnectorPayload(
 ) {
   const sb = createSupabaseServiceClient();
   const now = new Date().toISOString();
+  const uniqueDocumentsByKey = new Map<string, z.infer<typeof connectorDocumentSchema>>();
+  for (const doc of payload.documents) {
+    uniqueDocumentsByKey.set(doc.externalKey.trim(), {
+      ...doc,
+      externalKey: doc.externalKey.trim(),
+    });
+  }
+  const documentsForSync = [...uniqueDocumentsByKey.values()];
 
-  if (payload.documents.length) {
-    const keys = payload.documents.map((doc) => doc.externalKey);
+  if (documentsForSync.length) {
+    const keys = documentsForSync.map((doc) => doc.externalKey);
     const { data: existingDocs } = await sb
       .from('helpdesk_connector_documents')
       .select('external_key,status,source_json,content,reviewed_by,reviewed_at,ignored_at')
@@ -367,7 +375,7 @@ export async function syncConnectorPayload(
       ((existingDocs ?? []) as Array<Record<string, unknown>>).map((row) => [row.external_key as string, row]),
     );
 
-    const docs = payload.documents.map((doc) => {
+    const docs = documentsForSync.map((doc) => {
       const content = buildConnectorDocumentContent(doc);
       const existing = existingByKey.get(doc.externalKey);
       const previousHash = existing ? stableHash({ source: existing.source_json, content: existing.content }) : null;
@@ -451,7 +459,8 @@ export async function syncConnectorPayload(
     .eq('id', connector.id);
 
   return {
-    documentsReceived: payload.documents.length,
+    documentsReceived: documentsForSync.length,
+    duplicateDocumentsIgnored: payload.documents.length - documentsForSync.length,
     actionsReceived: payload.actions.length,
     manifestRevision: connector.manifestRevision,
   };

@@ -6,6 +6,19 @@ Use this with `connectors/AI_AGENT_INTEGRATION_PROMPT.md` when integrating an An
 
 Start with `HelpdeskAndroidAppDetails.kt`. Replace the sample screens, actions, route IDs, repositories, and staff role checks with the real Android app details. The preview activity is only a smoke-test surface until this file matches the customer app.
 
+Before editing, read `../docs/AUTO_DISCOVERY_PLAYBOOK.md`. The starter manifest is not enough for a real POS. If Preview only shows Dashboard, Products, Reports, Orders, Customers, Purchase, and Settings examples, the app menu has not been fully discovered yet.
+
+## Auto Discovery Pass
+
+Ask the AI agent to inspect the Android project and build a complete screen map from:
+
+- `nav_graph.xml`, Compose `NavHost`, route constants, Activity declarations, Fragment classes.
+- Drawer, bottom navigation, toolbar menu, dashboard tile, and settings menu definitions.
+- Screen title strings, button labels, validation strings, and empty-state messages.
+- ViewModels/repositories for products, stock, orders, customers, purchases, reports, printer, terminal, sync, tax, branch, and staff settings.
+
+Generate one `screenDoc(...)` per staff screen. Add matching `HelpdeskNavigationTarget` entries and test each `routeId` in `HelpdeskConnectorPreviewActivity` before Sync.
+
 ## What To Inspect
 
 Ask the developer to provide:

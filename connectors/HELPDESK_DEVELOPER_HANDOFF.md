@@ -37,7 +37,9 @@ Always read:
    - Laravel/PHP: `laravel/AI_AGENT_LARAVEL.md`
 6. UI guide:
    - `docs/UI_COMPONENT_GUIDE.md`
-7. Test guide:
+7. Auto discovery guide:
+   - `docs/AUTO_DISCOVERY_PLAYBOOK.md`
+8. Test guide:
    - `docs/CONNECTOR_TEST_PLAN.md`
 
 ## What The Developer Must Inspect
@@ -51,6 +53,28 @@ Ask the developer or AI agent to inspect:
 - validation schemas and error messages
 - navigation APIs or deep links
 - background job/queue setup
+
+## Discover The Real Menu First
+
+The downloaded connector contains starter examples only. Before syncing, replace
+the sample screens with a discovered map of the real POS/admin app.
+
+Ask the AI agent to scan every route/menu/form/page and generate one screen doc
+for each staff workflow, including common POS flows such as:
+
+- Dashboard and main menu
+- Products list and add/edit product
+- Stock check, low stock, stock adjustment, and stock history
+- Orders list, create order, order details, and order status
+- Customers list, create/edit customer, and customer history
+- Purchase orders and supplier screens
+- Invoices, payments, refunds, and receipts
+- Daily sales, end-of-day, stock value, and cashier reports
+- Settings, printer, terminal, sync, tax, staff, and branch setup
+
+Then test every `navigation.routeId` locally before Sync. If a route cannot be
+opened yet, keep it as review text but do not mark it as a verified navigation
+target.
 
 ## Build These Pieces
 
@@ -68,7 +92,7 @@ Ask the developer or AI agent to inspect:
    - Maps route IDs to app navigation.
 
 5. Embedded staff chat
-   - Shows only for allowed roles/routes.
+   - Shows where the customer app mounts it, unless disabled or blocked by route.
    - Uses the default card design with Chat/History tabs, greeting, quick questions, category chips, large input, and settings.
 
 6. Preview/audit/sync
@@ -102,8 +126,7 @@ Company admin controls visibility in Switch&Save:
 ```text
 enabled
 show mode: floating / embedded / hidden
-allowed roles
-allowed routes
+optional route targeting
 blocked routes
 auto-open
 position
@@ -118,7 +141,8 @@ else:
     hide chat
 ```
 
-Blocked routes always win.
+Chat is not blocked by staff role. Staff role still flows through requests for
+audit and local action permission checks. Blocked routes always win.
 
 ## Navigation Buttons
 
@@ -177,7 +201,7 @@ Start with:
 - `end_of_day_report`
 - `update_product_price`
 - `update_product_quantity`
-- `create_purchase_order` as a custom action if the app supports purchase orders
+- `create_purchase_order` if the app supports supplier purchase orders
 
 ## Done Checklist
 
@@ -185,7 +209,7 @@ Start with:
 - [ ] Software map previews correctly.
 - [ ] Audit has no blockers.
 - [ ] Docs/actions sync.
-- [ ] Staff chat appears only on allowed routes.
+- [ ] Staff chat appears only on staff screens and never on blocked/public/customer routes.
 - [ ] Customer/public pages never show Help Desk chat.
 - [ ] Navigation buttons open correct screens.
 - [ ] Read/report actions return small safe JSON.

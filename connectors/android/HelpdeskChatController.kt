@@ -9,8 +9,8 @@ import org.json.JSONObject
 data class HelpdeskChatSettings(
     val enabled: Boolean = true,
     val showMode: String = "floating",
-    val allowedRoles: List<String> = listOf("admin", "manager", "staff"),
-    val allowedRoutes: List<String> = listOf("dashboard", "inventory/*", "purchase/*", "reports/*", "customers/*", "orders/*"),
+    val allowedRoles: List<String> = emptyList(),
+    val allowedRoutes: List<String> = emptyList(),
     val blockedRoutes: List<String> = listOf("login", "payment", "checkout", "customer-facing/*", "customer-display/*"),
     val autoOpen: Boolean = false,
     val position: String = "right"
@@ -28,9 +28,7 @@ class HelpdeskChatController(
 
     fun shouldShow(settings: HelpdeskChatSettings): Boolean {
         val route = normalizeRoute(currentRouteProvider())
-        val role = staffRoleProvider().lowercase()
         if (!settings.enabled || settings.showMode == "hidden") return false
-        if (settings.allowedRoles.isNotEmpty() && role !in settings.allowedRoles.map { it.lowercase() }) return false
         if (route.isBlank()) return true
         if (settings.blockedRoutes.any { routeMatches(it, route) }) return false
         if (settings.allowedRoutes.isEmpty()) return true
@@ -49,7 +47,10 @@ class HelpdeskChatController(
             .build()
         httpClient.newCall(request).execute().use { response ->
             val responseText = response.body?.string().orEmpty()
-            if (!response.isSuccessful) error("Help Desk chat failed ${response.code}: $responseText")
+            if (!response.isSuccessful) {
+                val message = runCatching { JSONObject(responseText).optString("message") }.getOrNull()
+                error(message?.takeIf { it.isNotBlank() } ?: "Help Desk chat failed ${response.code}")
+            }
             return JSONObject(responseText)
         }
     }

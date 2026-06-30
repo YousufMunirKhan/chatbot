@@ -16,6 +16,10 @@ import org.json.JSONObject
  * 3. Actions: approved bot action -> real repository/service method.
  * 4. Roles: current staff role for permission checks.
  * 5. Staff Help Desk screen: where the chat bubble/panel appears.
+ *
+ * Important: the starter manifest below is a POS example. Use
+ * docs/AUTO_DISCOVERY_PLAYBOOK.md with your AI agent to scan the real app menus
+ * and replace these samples before production sync.
  */
 object HelpdeskAndroidAppDetails {
 
@@ -78,11 +82,65 @@ object HelpdeskAndroidAppDetails {
             )
             .register(
                 HelpdeskNavigationTarget(
+                    routeId = "inventory.add_product",
+                    label = "Open Add Product",
+                    route = "inventory/products/new",
+                    deepLink = "mypos://inventory/products/new",
+                    open = { openScreen("inventory/products/new") }
+                )
+            )
+            .register(
+                HelpdeskNavigationTarget(
+                    routeId = "orders.list",
+                    label = "Open Orders",
+                    route = "orders",
+                    deepLink = "mypos://orders",
+                    open = { openScreen("orders") }
+                )
+            )
+            .register(
+                HelpdeskNavigationTarget(
+                    routeId = "orders.create",
+                    label = "Open New Order",
+                    route = "orders/new",
+                    deepLink = "mypos://orders/new",
+                    open = { openScreen("orders/new") }
+                )
+            )
+            .register(
+                HelpdeskNavigationTarget(
+                    routeId = "customers.list",
+                    label = "Open Customers",
+                    route = "customers",
+                    deepLink = "mypos://customers",
+                    open = { openScreen("customers") }
+                )
+            )
+            .register(
+                HelpdeskNavigationTarget(
+                    routeId = "purchase_orders.create",
+                    label = "Open Purchase Order",
+                    route = "purchase/orders/new",
+                    deepLink = "mypos://purchase/orders/new",
+                    open = { openScreen("purchase/orders/new") }
+                )
+            )
+            .register(
+                HelpdeskNavigationTarget(
                     routeId = "reports.daily_sales",
                     label = "Open Daily Sales",
                     route = "reports/daily-sales",
                     deepLink = "mypos://reports/daily-sales",
                     open = { openScreen("reports/daily-sales") }
+                )
+            )
+            .register(
+                HelpdeskNavigationTarget(
+                    routeId = "settings.main",
+                    label = "Open Settings",
+                    route = "settings",
+                    deepLink = "mypos://settings",
+                    open = { openScreen("settings") }
                 )
             )
     }
@@ -206,6 +264,97 @@ object HelpdeskAndroidAppDetails {
                     )
                     .put(
                         screenDoc(
+                            externalKey = "inventory.add_product",
+                            module = "Inventory",
+                            screen = "Add Product",
+                            path = "Inventory > Products > Add Product",
+                            purpose = "Create a new POS product with name, SKU, barcode, sale price, tax, category, and opening stock.",
+                            steps = listOf("Open Inventory.", "Tap Products.", "Tap Add Product.", "Enter product details.", "Save the product and confirm it appears in search."),
+                            fields = listOf(
+                                field("Product name", true, "Name shown on receipts, reports, and search."),
+                                field("SKU/barcode", false, "Unique stock keeping unit or barcode."),
+                                field("Sale price", true, "Selling price used at checkout."),
+                                field("Opening stock", false, "Initial stock quantity.")
+                            ),
+                            commonErrors = listOf("SKU or barcode already exists.", "Price is required before saving.", "Tax/category may be required by the POS configuration."),
+                            actions = listOf("search_product", "create_product"),
+                            navigationTarget = navigation.all().first { it.routeId == "inventory.add_product" }
+                        )
+                    )
+                    .put(
+                        screenDoc(
+                            externalKey = "orders.list",
+                            module = "Orders",
+                            screen = "Order List",
+                            path = "Orders > Order List",
+                            purpose = "Search, review, print, refund, or check payment and fulfilment status for POS orders.",
+                            steps = listOf("Open Orders.", "Search by order number, customer, date, or status.", "Open an order.", "Review items, totals, payment state, and fulfilment status."),
+                            fields = listOf(
+                                field("Search", false, "Order number, customer, or receipt reference."),
+                                field("Date range", false, "Filter orders by date."),
+                                field("Status", false, "Payment or fulfilment status.")
+                            ),
+                            commonErrors = listOf("Offline orders may appear after sync completes.", "Refund actions may require manager approval."),
+                            actions = listOf("search_order", "get_order_status"),
+                            navigationTarget = navigation.all().first { it.routeId == "orders.list" }
+                        )
+                    )
+                    .put(
+                        screenDoc(
+                            externalKey = "orders.create",
+                            module = "Orders",
+                            screen = "Create Order",
+                            path = "Orders > New Order",
+                            purpose = "Create a POS order by adding products, customer details, discounts, payment, and fulfilment information.",
+                            steps = listOf("Open Orders.", "Choose New Order.", "Add products.", "Attach customer if required.", "Take payment or save the order."),
+                            fields = listOf(
+                                field("Product search", true, "Products to add to the order."),
+                                field("Customer", false, "Optional customer linked to the order."),
+                                field("Payment method", false, "Cash, card, account, or configured payment type.")
+                            ),
+                            commonErrors = listOf("Product is out of stock.", "Payment terminal is offline.", "Discount requires manager approval."),
+                            actions = listOf("search_product", "create_order"),
+                            navigationTarget = navigation.all().first { it.routeId == "orders.create" }
+                        )
+                    )
+                    .put(
+                        screenDoc(
+                            externalKey = "customers.list",
+                            module = "Customers",
+                            screen = "Customer Management",
+                            path = "Customers > Customer Management",
+                            purpose = "Find, create, or update customer records used for delivery, collection, account sales, and history.",
+                            steps = listOf("Open Customers.", "Search by name, phone, or email.", "Open the customer record.", "Review details, notes, and order history."),
+                            fields = listOf(
+                                field("Search", false, "Name, phone, email, or customer code."),
+                                field("Phone", false, "Customer phone number."),
+                                field("Email", false, "Customer email address.")
+                            ),
+                            commonErrors = listOf("Duplicate customers may exist with similar phone numbers.", "Some customer data may be hidden by local privacy settings."),
+                            actions = listOf("search_customer", "create_customer", "update_customer_phone"),
+                            navigationTarget = navigation.all().first { it.routeId == "customers.list" }
+                        )
+                    )
+                    .put(
+                        screenDoc(
+                            externalKey = "purchase_orders.create",
+                            module = "Purchase",
+                            screen = "Create Purchase Order",
+                            path = "Purchase > Purchase Orders > New",
+                            purpose = "Create a purchase order for suppliers, products, quantities, costs, and expected receiving dates.",
+                            steps = listOf("Open Purchase.", "Open Purchase Orders.", "Choose New Purchase Order.", "Select supplier.", "Add products and quantities.", "Save or send the order."),
+                            fields = listOf(
+                                field("Supplier", true, "Supplier receiving the purchase order."),
+                                field("Products", true, "Products and quantities to order."),
+                                field("Expected date", false, "Expected delivery or receiving date.")
+                            ),
+                            commonErrors = listOf("Supplier is required.", "Product cost may be missing.", "Only manager/admin roles may create purchase orders."),
+                            actions = listOf("create_purchase_order", "search_product"),
+                            navigationTarget = navigation.all().first { it.routeId == "purchase_orders.create" }
+                        )
+                    )
+                    .put(
+                        screenDoc(
                             externalKey = "reports.daily_sales",
                             module = "Reports",
                             screen = "Daily Sales",
@@ -219,6 +368,20 @@ object HelpdeskAndroidAppDetails {
                             commonErrors = listOf("Report is empty when no completed orders exist for the selected date."),
                             actions = listOf("daily_sales_report"),
                             navigationTarget = navigation.all().first { it.routeId == "reports.daily_sales" }
+                        )
+                    )
+                    .put(
+                        screenDoc(
+                            externalKey = "settings.main",
+                            module = "Settings",
+                            screen = "Settings",
+                            path = "Settings",
+                            purpose = "Configure POS, printers, payment terminals, tax, sync, staff, branch, and application settings.",
+                            steps = listOf("Open Settings.", "Choose the setting category.", "Review current values.", "Save changes if permitted."),
+                            fields = listOf(field("Setting category", false, "Printer, payment, tax, sync, staff, or branch settings.")),
+                            commonErrors = listOf("Some settings require admin or manager permission.", "Printer/payment settings may require network or device connectivity."),
+                            actions = emptyList(),
+                            navigationTarget = navigation.all().first { it.routeId == "settings.main" }
                         )
                     )
             )

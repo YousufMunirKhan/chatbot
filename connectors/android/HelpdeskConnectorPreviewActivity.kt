@@ -5,6 +5,7 @@ import android.content.Context
 import android.graphics.Color
 import android.graphics.Typeface
 import android.os.Bundle
+import android.util.TypedValue
 import android.view.ViewGroup
 import android.widget.Button
 import android.widget.EditText
@@ -182,6 +183,46 @@ class HelpdeskConnectorPreviewActivity : Activity() {
             )
             .register(
                 HelpdeskNavigationTarget(
+                    routeId = "inventory.add_product",
+                    label = "Open Add Product",
+                    route = "inventory/products/new",
+                    open = { output.text = "Route OK: inventory.add_product -> inventory/products/new" }
+                )
+            )
+            .register(
+                HelpdeskNavigationTarget(
+                    routeId = "orders.list",
+                    label = "Open Orders",
+                    route = "orders",
+                    open = { output.text = "Route OK: orders.list -> orders" }
+                )
+            )
+            .register(
+                HelpdeskNavigationTarget(
+                    routeId = "orders.create",
+                    label = "Open New Order",
+                    route = "orders/new",
+                    open = { output.text = "Route OK: orders.create -> orders/new" }
+                )
+            )
+            .register(
+                HelpdeskNavigationTarget(
+                    routeId = "customers.list",
+                    label = "Open Customers",
+                    route = "customers",
+                    open = { output.text = "Route OK: customers.list -> customers" }
+                )
+            )
+            .register(
+                HelpdeskNavigationTarget(
+                    routeId = "purchase_orders.create",
+                    label = "Open Purchase Order",
+                    route = "purchase/orders/new",
+                    open = { output.text = "Route OK: purchase_orders.create -> purchase/orders/new" }
+                )
+            )
+            .register(
+                HelpdeskNavigationTarget(
                     routeId = "inventory.stock_adjustment",
                     label = "Open Stock Adjustment",
                     route = "inventory/stock-adjustment",
@@ -194,6 +235,14 @@ class HelpdeskConnectorPreviewActivity : Activity() {
                     label = "Open Daily Sales",
                     route = "reports/daily-sales",
                     open = { output.text = "Route OK: reports.daily_sales -> reports/daily-sales" }
+                )
+            )
+            .register(
+                HelpdeskNavigationTarget(
+                    routeId = "settings.main",
+                    label = "Open Settings",
+                    route = "settings",
+                    open = { output.text = "Route OK: settings.main -> settings" }
                 )
             )
 
@@ -224,7 +273,14 @@ class HelpdeskConnectorPreviewActivity : Activity() {
             tokenProvider = tokenStore,
             actionRegistry = actions,
             navigationRegistry = navigation,
-            manifestStore = HelpdeskAndroidManifestStore(this)
+            manifestStore = HelpdeskAndroidManifestStore(this),
+            manifestProvider = { appVersion ->
+                HelpdeskAndroidAppDetails.buildManifest(
+                    appVersion = appVersion,
+                    actions = actions.definitions(),
+                    navigation = navigation
+                )
+            }
         )
     }
 
@@ -233,7 +289,22 @@ class HelpdeskConnectorPreviewActivity : Activity() {
     }
 
     private fun renderPreview() {
-        output.text = runCatching { connector().previewManifest() }
+        output.text = runCatching {
+            val preview = connector().previewManifest()
+            """
+                Manifest preview
+
+                This screen uses your app theme accent color and shows the staff Help Desk card UI.
+
+                Coverage check:
+                - If your POS has more menus than the screens below, integration is not complete yet.
+                - Ask your AI agent to read docs/AUTO_DISCOVERY_PLAYBOOK.md.
+                - Scan the real menu/router files and replace HelpdeskAndroidAppDetails.kt with every staff screen.
+                - Verify route IDs with Test route before Sync.
+
+                $preview
+            """.trimIndent()
+        }
             .getOrElse { "Preview failed: ${it.message}" }
     }
 
@@ -319,7 +390,7 @@ class HelpdeskConnectorPreviewActivity : Activity() {
             addView(TextView(this@HelpdeskConnectorPreviewActivity).apply {
                 text = "      *   >"
                 textSize = 22f
-                setTextColor(Color.rgb(99, 62, 243))
+                setTextColor(themeAccentColor())
             })
         }
     }
@@ -333,13 +404,13 @@ class HelpdeskConnectorPreviewActivity : Activity() {
                 textSize = 34f
                 gravity = android.view.Gravity.CENTER
                 setTextColor(Color.WHITE)
-                background = rounded(Color.rgb(99, 62, 243), 22f)
+                background = rounded(themeAccentColor(), 22f)
                 setPadding(20, 14, 20, 14)
             }, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply {
                 gravity = android.view.Gravity.CENTER_HORIZONTAL
             })
             addView(TextView(this@HelpdeskConnectorPreviewActivity).apply {
-                text = "Hello Aamir"
+                text = "Hello Staff"
                 textSize = 24f
                 typeface = Typeface.DEFAULT_BOLD
                 gravity = android.view.Gravity.CENTER
@@ -384,10 +455,10 @@ class HelpdeskConnectorPreviewActivity : Activity() {
         return TextView(this).apply {
             this.text = text
             textSize = 14f
-            setTextColor(if (selected) Color.rgb(99, 62, 243) else Color.rgb(71, 85, 105))
+            setTextColor(if (selected) themeAccentColor() else Color.rgb(71, 85, 105))
             typeface = if (selected) Typeface.DEFAULT_BOLD else Typeface.DEFAULT
             setPadding(20, 12, 20, 12)
-            background = rounded(Color.WHITE, 32f, if (selected) Color.rgb(124, 92, 255) else Color.rgb(226, 232, 240))
+            background = rounded(Color.WHITE, 32f, if (selected) themeAccentColor() else Color.rgb(226, 232, 240))
         }
     }
 
@@ -449,6 +520,15 @@ class HelpdeskConnectorPreviewActivity : Activity() {
             setColor(fill)
             cornerRadius = radius
             if (stroke != null) setStroke(2, stroke)
+        }
+    }
+
+    private fun themeAccentColor(): Int {
+        val typedValue = TypedValue()
+        return if (theme.resolveAttribute(android.R.attr.colorAccent, typedValue, true)) {
+            typedValue.data
+        } else {
+            Color.rgb(99, 62, 243)
         }
     }
 
