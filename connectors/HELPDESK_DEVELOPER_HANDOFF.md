@@ -69,11 +69,15 @@ Ask the developer or AI agent to inspect:
 
 5. Embedded staff chat
    - Shows only for allowed roles/routes.
+   - Uses the default card design with Chat/History tabs, greeting, quick questions, category chips, large input, and settings.
 
 6. Preview/audit/sync
    - Lets developer/admin check what will be sent before sync.
 
-7. Worker/WebSocket
+7. Route verification
+   - Tests each `routeId` locally before sync.
+
+8. Worker/WebSocket
    - WebSocket first when available.
    - Polling fallback when WebSocket is unavailable.
 
@@ -85,6 +89,7 @@ Connector previews/audits manifest
 Connector syncs safe docs/actions
 Admin reviews docs/actions
 Staff opens Help Desk chat inside app
+Staff sees default card design
 Bot answers from approved docs
 Bot shows navigation buttons or guided actions
 App opens routes locally or runs local handlers

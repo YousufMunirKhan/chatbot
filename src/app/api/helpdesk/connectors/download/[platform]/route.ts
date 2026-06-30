@@ -28,6 +28,7 @@ const packageFiles = {
     'connectors/dotnet/Program.cs',
     'connectors/dotnet/HelpdeskDotnetAppDetails.cs',
     'connectors/dotnet/HelpdeskChatController.cs',
+    'connectors/dotnet/HelpdeskDefaultChatViewModel.cs',
     'connectors/dotnet/SwitchSave.HelpdeskConnector.csproj',
   ],
   web: [
@@ -36,8 +37,41 @@ const packageFiles = {
     'connectors/web/HelpdeskConnectorClient.js',
     'connectors/web/HelpdeskWebAppDetails.js',
     'connectors/web/HelpdeskEmbeddedChat.js',
+    'connectors/web/HelpdeskDefaultChatUI.js',
+  ],
+  node: [
     'connectors/node/AI_AGENT_NODE.md',
+    'connectors/node/helpdesk-node-starter.mjs',
+    'connectors/web/HelpdeskConnectorClient.js',
+    'connectors/web/HelpdeskWebAppDetails.js',
+    'connectors/web/HelpdeskEmbeddedChat.js',
+    'connectors/web/HelpdeskDefaultChatUI.js',
+  ],
+  laravel: [
     'connectors/laravel/AI_AGENT_LARAVEL.md',
+    'connectors/laravel/HelpdeskLaravelStarter.php',
+  ],
+  react: [
+    'connectors/react/HELPDESK_REACT_COMPONENT.md',
+    'connectors/web/HelpdeskEmbeddedChat.js',
+    'connectors/web/HelpdeskDefaultChatUI.js',
+  ],
+  vue: [
+    'connectors/vue/HELPDESK_VUE_COMPONENT.md',
+    'connectors/web/HelpdeskEmbeddedChat.js',
+    'connectors/web/HelpdeskDefaultChatUI.js',
+  ],
+  fullstack: [
+    'connectors/web/README.md',
+    'connectors/web/AI_AGENT_WEB.md',
+    'connectors/web/HelpdeskConnectorClient.js',
+    'connectors/web/HelpdeskWebAppDetails.js',
+    'connectors/web/HelpdeskEmbeddedChat.js',
+    'connectors/web/HelpdeskDefaultChatUI.js',
+    'connectors/node/AI_AGENT_NODE.md',
+    'connectors/node/helpdesk-node-starter.mjs',
+    'connectors/laravel/AI_AGENT_LARAVEL.md',
+    'connectors/laravel/HelpdeskLaravelStarter.php',
     'connectors/react/HELPDESK_REACT_COMPONENT.md',
     'connectors/vue/HELPDESK_VUE_COMPONENT.md',
   ],
@@ -54,17 +88,31 @@ const sharedFiles = [
 type ConnectorPlatform = keyof typeof packageFiles;
 
 function isConnectorPlatform(platform: string): platform is ConnectorPlatform {
-  return platform === 'android' || platform === 'dotnet' || platform === 'web';
+  return platform in packageFiles;
 }
 
 function setupGuide(platform: ConnectorPlatform, baseUrl: string): string {
-  const title = platform === 'android' ? 'Android' : platform === 'dotnet' ? '.NET' : 'Web';
+  const title =
+    platform === 'android' ? 'Android'
+      : platform === 'dotnet' ? '.NET'
+        : platform === 'node' ? 'Node'
+          : platform === 'laravel' ? 'Laravel'
+            : platform === 'react' ? 'React'
+              : platform === 'vue' ? 'Vue'
+                : platform === 'fullstack' ? 'Full Web Stack'
+                  : 'Web';
   const runHint =
     platform === 'android'
       ? 'Copy the Kotlin files into your Android app. Open HelpdeskConnectorPreviewActivity, paste the hdk_ connector token, press Save key, then Preview/Audit/Sync. For production, wire HelpdeskQuickStart.setup(...) from your staff/admin Help Desk screen.'
-      : platform === 'web'
-        ? 'Use HelpdeskConnectorClient.js from your web app backend, or from a trusted authenticated admin page only.'
-      : 'Set HELPDESK_BASE_URL and HELPDESK_CONNECTOR_TOKEN, then run dotnet run --project SwitchSave.HelpdeskConnector.csproj.';
+      : platform === 'dotnet'
+        ? 'Set HELPDESK_BASE_URL and HELPDESK_CONNECTOR_TOKEN, then run dotnet run --project SwitchSave.HelpdeskConnector.csproj.'
+        : platform === 'node'
+          ? 'Set HELPDESK_BASE_URL and HELPDESK_CONNECTOR_TOKEN, then run npm run preview or npm run sync:once.'
+          : platform === 'laravel'
+            ? 'Copy HelpdeskLaravelStarter.php into app/Services/Helpdesk, set env vars, then call preview(), audit(), sync(), and runCycle() from an Artisan command/job.'
+            : platform === 'react' || platform === 'vue'
+              ? 'Use this UI package for the staff chat screen. Pair it with a backend connector package such as Node, Laravel, or Web.'
+              : 'Use HelpdeskConnectorClient.js from your web app backend, or from a trusted authenticated admin page only.';
   const platformSteps =
     platform === 'android'
       ? [
@@ -79,6 +127,7 @@ function setupGuide(platform: ConnectorPlatform, baseUrl: string): string {
           '6. Press Preview, Audit, then Sync.',
           '7. Edit HelpdeskAndroidAppDetails.kt with the real screens, route IDs, actions, and repository handlers.',
           '8. Replace starter preview handlers with HelpdeskAndroidAppDetails.createConnector(...) or HelpdeskQuickStartExample.kt wiring.',
+          '9. Use the default chat/setup screen in HelpdeskConnectorPreviewActivity as the staff Help Desk design baseline.',
           '',
           '## What The Android Developer Must Create',
           '',
@@ -86,6 +135,7 @@ function setupGuide(platform: ConnectorPlatform, baseUrl: string): string {
           '- Token entry: paste the hdk_ key or save it securely with HelpdeskEncryptedTokenStore.',
           '- Staff Help Desk Activity/Fragment: authenticated staff-only screen where the chat appears.',
           '- Navigation map: routeId -> navController.navigate(...), Activity, Fragment, or deep link.',
+          '- Route test: enter routeId in the preview screen and press Test route before Sync.',
           '- Action handlers: approved action names mapped to real repositories/services.',
           '- Lifecycle observer: attach HelpdeskConnectorLifecycleObserver while the Help Desk screen is open.',
           '',
@@ -104,6 +154,7 @@ function setupGuide(platform: ConnectorPlatform, baseUrl: string): string {
             '4. Run the connector from the POS machine or Windows service host.',
           '5. Confirm Preview/Audit passes, then let the connector sync and poll events.',
           '6. Edit HelpdeskDotnetAppDetails.cs with the real forms/screens, route commands, actions, and service methods.',
+          '7. Bind HelpdeskDefaultChatViewModel.cs to a WinForms/WPF/MAUI/Avalonia panel using the default card design.',
           '',
           '## What The .NET Developer Must Create',
           '',
@@ -111,6 +162,7 @@ function setupGuide(platform: ConnectorPlatform, baseUrl: string): string {
           '- Secure token config: HELPDESK_CONNECTOR_TOKEN in service environment, protected appsettings, or existing secret store.',
           '- Staff Help Desk form/panel: authenticated staff-only UI where the chat appears.',
           '- Navigation map: routeId -> WinForms/WPF command, form opener, shell route, or deep link.',
+          '- Route test: call HelpdeskDefaultChatViewModel.TestRoute(routeId) before Sync.',
           '- Action handlers: approved action names mapped to real POS/ERP services.',
           '- Worker/service lifecycle: WebSocket first, polling fallback when unavailable.',
           '',
@@ -118,7 +170,78 @@ function setupGuide(platform: ConnectorPlatform, baseUrl: string): string {
             '',
             'Add a staff-only Help Desk menu item in WinForms/WPF/admin UI. On that screen, create HelpdeskChatController with an authenticated HttpClient, show the panel only when ShouldShow(...) returns true, call AskAsync(text), and map route IDs to local forms/screens with OpenRoute(routeId).',
           ]
-        : platform === 'web'
+        : platform === 'node'
+          ? [
+              '',
+              '## Node First Run',
+              '',
+              '1. Create a connector in Switch&Save Help Desk and copy the one-time hdk_ token.',
+              `2. Set HELPDESK_BASE_URL=${baseUrl}`,
+              '3. Set HELPDESK_CONNECTOR_TOKEN=hdk_your_token_from_help_desk.',
+              '4. Run npm run preview to confirm the sample manifest and action handlers are clean.',
+              '5. Run npm run sync:once to sync docs/actions and poll one time.',
+              '6. Replace sampleProductService and sampleReportService in helpdesk-node-starter.mjs with real services.',
+              '',
+              '## What The Node Developer Must Create',
+              '',
+              '- Backend worker/job that runs connector.runCycle().',
+              '- Backend chat proxy for /api/helpdesk/chat.',
+              '- Real product/report/order/customer services.',
+              '- Route map in HelpdeskWebAppDetails.js.',
+              '- Staff-only admin Help Desk page.',
+            ]
+          : platform === 'laravel'
+            ? [
+                '',
+                '## Laravel First Run',
+                '',
+                '1. Create a connector in Switch&Save Help Desk and copy the one-time hdk_ token.',
+                `2. Set HELPDESK_BASE_URL=${baseUrl}`,
+                '3. Set HELPDESK_CONNECTOR_TOKEN=hdk_your_token_from_help_desk.',
+                '4. Copy HelpdeskLaravelStarter.php to app/Services/Helpdesk/HelpdeskLaravelStarter.php.',
+                '5. Call preview() and audit() from tinker or an Artisan command.',
+                '6. Call sync() from an Artisan command/job after audit passes.',
+                '7. Replace ProductService and ReportService with real Laravel services/Eloquent queries.',
+                '',
+                '## What The Laravel Developer Must Create',
+                '',
+                '- Artisan command or queue job for sync/runCycle.',
+                '- Backend chat proxy route protected by staff auth.',
+                '- Real ProductService and ReportService.',
+                '- Route URLs in manifest() and testRoute().',
+                '- Staff-only Blade/Livewire/Inertia Help Desk page.',
+              ]
+            : platform === 'react'
+              ? [
+                  '',
+                  '## React First Run',
+                  '',
+                  '1. Add the staff-only Help Desk page/component to your admin app.',
+                  '2. Render HelpdeskDefaultChatUI.js or adapt HELPDESK_REACT_COMPONENT.md.',
+                  '3. Call your backend chat proxy, not Switch&Save directly.',
+                  '4. Map routeId values to router.push(...).',
+                  '5. Test route IDs in the settings panel before Sync.',
+                  '',
+                  '## Backend Required',
+                  '',
+                  'Use Node, Laravel, Web, or another backend package for the connector token, sync, polling, and action handlers.',
+                ]
+              : platform === 'vue'
+                ? [
+                    '',
+                    '## Vue First Run',
+                    '',
+                    '1. Add the staff-only Help Desk page/component to your admin app.',
+                    '2. Render HelpdeskDefaultChatUI.js or adapt HELPDESK_VUE_COMPONENT.md.',
+                    '3. Call your backend chat proxy, not Switch&Save directly.',
+                    '4. Map routeId values to router.push(...).',
+                    '5. Test route IDs in the settings panel before Sync.',
+                    '',
+                    '## Backend Required',
+                    '',
+                    'Use Node, Laravel, Web, or another backend package for the connector token, sync, polling, and action handlers.',
+                  ]
+                : platform === 'web' || platform === 'fullstack'
           ? [
               '',
               '## Web First Run',
@@ -129,6 +252,10 @@ function setupGuide(platform: ConnectorPlatform, baseUrl: string): string {
               '4. Start a backend worker or controlled admin process that calls connector.runCycle().',
               '5. Keep the hdk_ token out of public browser bundles.',
               '6. Edit HelpdeskWebAppDetails.js with the real pages, route URLs, actions, and backend services.',
+              '7. Mount HelpdeskDefaultChatUI.js in the staff admin page for the default chat/settings design.',
+              '8. For Node, run helpdesk-node-starter.mjs for preview/audit/sync with sample services.',
+              '9. For Laravel, copy HelpdeskLaravelStarter.php into app/Services/Helpdesk and replace sample services.',
+              '10. The zip includes package.json scripts: npm run preview, npm run sync:once, npm start.',
               '',
               '## What The Web Developer Must Create',
               '',
@@ -137,8 +264,11 @@ function setupGuide(platform: ConnectorPlatform, baseUrl: string): string {
               '- Staff Help Desk page/component: authenticated staff-only admin UI.',
               '- Backend chat proxy: frontend calls your backend; backend calls /api/helpdesk/chat with the hdk_ token.',
               '- Navigation map: routeId -> router.push(...), redirect, or admin URL.',
+              '- Route test: use the Settings panel in HelpdeskDefaultChatUI.js before Sync.',
               '- Action handlers: approved action names mapped to real backend services.',
               '- Worker process: run connector.runCycle() on backend schedule/job/worker.',
+              '- Node starter: helpdesk-node-starter.mjs works immediately with sample data.',
+              '- Laravel starter: HelpdeskLaravelStarter.php gives manifest, audit, sync, runCycle, and route test methods.',
               '',
               '## How To Open Help Desk',
               '',
@@ -243,11 +373,14 @@ function aiImplementationBrief(platform: ConnectorPlatform, baseUrl: string): st
     '',
     '- Connector token storage.',
     '- Staff-only Help Desk UI entry point.',
+    '- Default chat/settings design: Chat/History tabs, greeting, quick questions, category chips, large rounded input, setup/settings panel, and route tester.',
     '- Software map manifest: modules, screens, paths, steps, fields, common errors.',
     '- Navigation map: routeId -> local app route/screen command.',
+    '- Default chat/settings UI using the included platform UI helper.',
     '- Action handlers: approved action name -> local service method.',
     '- Preview, audit, and sync flow.',
     '- WebSocket or polling fallback worker.',
+    '- A smoke test that clearly says what works now and what still uses sample data.',
     '',
     '## Platform Tasks',
     '',
@@ -273,6 +406,7 @@ function aiImplementationBrief(platform: ConnectorPlatform, baseUrl: string): st
     '- Staff Help Desk appears only for authenticated staff.',
     '- Customer/public pages never show this Help Desk.',
     '- Navigation buttons open the correct local screens.',
+    '- Route verification passes for every routeId in the manifest.',
     '- Read/report actions return small safe JSON.',
     '- Write/update actions require explicit confirmation.',
     '- Health logs appear in Switch&Save.',
@@ -300,6 +434,24 @@ export async function GET(req: Request, { params }: { params: { platform: string
   zip.file(`${folderName}/SETUP.md`, setupGuide(params.platform, baseUrl.replace(/\/+$/, '')));
   zip.file(`${folderName}/AI_IMPLEMENTATION_BRIEF.md`, aiImplementationBrief(params.platform, baseUrl.replace(/\/+$/, '')));
   zip.file(`${folderName}/ACTION_FORMAT.json`, JSON.stringify(actionFormatExample(), null, 2));
+  if (params.platform === 'web' || params.platform === 'node' || params.platform === 'fullstack') {
+    zip.file(
+      `${folderName}/package.json`,
+      JSON.stringify(
+        {
+          private: true,
+          type: 'module',
+          scripts: {
+            preview: 'node helpdesk-node-starter.mjs --preview-only',
+            'sync:once': 'node helpdesk-node-starter.mjs --once',
+            start: 'node helpdesk-node-starter.mjs',
+          },
+        },
+        null,
+        2,
+      ),
+    );
+  }
 
   for (const file of sharedFiles) {
     const absolutePath = path.join(root, file);

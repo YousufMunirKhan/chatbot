@@ -35,21 +35,38 @@ export async function POST(req: Request) {
     );
   }
 
-  const result = await syncConnectorPayload(connector, parsed.data);
-  await logConnectorHealth(connector, {
-    eventType: 'sync_completed',
-    deliveryMode: connector.activeDeliveryMode,
-    status: 'success',
-    metadata: result,
-  });
-  return NextResponse.json({
-    ok: true,
-    connector: {
-      id: connector.id,
-      platform: connector.platform,
-      name: connector.name,
-    },
-    ...connectorStatusPayload({ ...connector, lastSyncAt: new Date().toISOString(), resyncRequestedAt: null }),
-    ...result,
-  });
+  try {
+    const result = await syncConnectorPayload(connector, parsed.data);
+    await logConnectorHealth(connector, {
+      eventType: 'sync_completed',
+      deliveryMode: connector.activeDeliveryMode,
+      status: 'success',
+      metadata: result,
+    });
+    return NextResponse.json({
+      ok: true,
+      connector: {
+        id: connector.id,
+        platform: connector.platform,
+        name: connector.name,
+      },
+      ...connectorStatusPayload({ ...connector, lastSyncAt: new Date().toISOString(), resyncRequestedAt: null }),
+      ...result,
+    });
+  } catch (error) {
+    const message = error instanceof Error && error.message ? error.message : 'Connector sync failed on the server.';
+    await logConnectorHealth(connector, {
+      eventType: 'sync_failed',
+      deliveryMode: connector.activeDeliveryMode,
+      status: 'error',
+      message,
+      metadata: {
+        name: error instanceof Error ? error.name : typeof error,
+      },
+    });
+    return NextResponse.json(
+      { error: 'sync_failed', message },
+      { status: 500 },
+    );
+  }
 }

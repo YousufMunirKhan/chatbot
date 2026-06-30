@@ -32,6 +32,39 @@ config/helpdesk.php
 resources/views/helpdesk/chat.blade.php
 ```
 
+## Plug-And-Play Starter
+
+The downloaded web connector zip includes `HelpdeskLaravelStarter.php`.
+
+Copy it to:
+
+```text
+app/Services/Helpdesk/HelpdeskLaravelStarter.php
+```
+
+Then set:
+
+```env
+HELPDESK_BASE_URL=https://chatbot.ssepos.co.uk
+HELPDESK_CONNECTOR_TOKEN=hdk_your_token_from_help_desk
+```
+
+What works immediately:
+
+- manifest preview
+- audit
+- sync
+- polling one cycle
+- route test
+- sample product/report handlers
+
+What the developer replaces:
+
+- `ProductService`
+- `ReportService`
+- route URLs in `manifest()` and `testRoute()`
+- queue/Artisan command that calls `sync()` and `runCycle()`
+
 ## Required Configuration
 
 Create a connector in Switch&Save **Company -> Internal Help Desk -> Create connector**, then add:

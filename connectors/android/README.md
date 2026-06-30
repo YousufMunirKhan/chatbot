@@ -66,6 +66,15 @@ For every action, add:
 
 The preview screen stores the key with `HelpdeskEncryptedTokenStore`. For production, replace the starter preview connector with your real app wiring:
 
+What works immediately after Save key:
+
+- Preview: local, no network
+- Audit: local, no network
+- Test route: local navigation callback check
+- Sync: background network call to Switch&Save
+
+If Sync fails, the screen now shows the real API/network error. Common causes are wrong Base URL, expired/wrong `hdk_` token, no internet from the Android device/emulator, or server-side validation errors.
+
 ```kotlin
 HelpdeskConnectorPreviewRegistry.configure {
     HelpdeskQuickStart.setup(
@@ -99,6 +108,7 @@ Do not put the Help Desk token in public/customer screens.
 - `HelpdeskAndroidManifestStore.kt` - local saved manifest storage for diff detection.
 - `HelpdeskConnectorLifecycleObserver.kt` - opens WebSocket while the helpdesk/admin screen is active and closes it on background.
 - `HelpdeskConnectorPreviewActivity.kt` - simple local preview/audit/sync screen.
+- The preview activity now uses the default staff Help Desk card design: Chat/History tabs, greeting, quick questions, category chips, large input, settings, and route testing.
 - `HelpdeskChatController.kt` - route/role visibility checks and staff-only chat API client.
 
 ## Dependencies
@@ -225,6 +235,8 @@ startActivity(Intent(context, HelpdeskConnectorPreviewActivity::class.java))
 ```
 
 The screen shows the human-readable manifest, audit blockers/warnings, and a sync button. Sync is blocked if audit finds missing handlers, unsafe write actions, duplicate keys, obvious secrets, or dangerous actions enabled by default.
+
+Use **Test route** before Sync. Enter a `routeId` such as `inventory.products`; if it fails, add that route in `HelpdeskAndroidAppDetails.kt -> buildNavigation(...)` and map it to the real Android navigation callback.
 
 ## Production Rules
 

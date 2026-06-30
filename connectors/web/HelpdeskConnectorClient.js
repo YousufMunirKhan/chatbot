@@ -165,12 +165,32 @@ export class HelpdeskConnectorClient {
     });
 
     const text = await response.text();
-    const data = text ? JSON.parse(text) : {};
+    const data = safeJson(text);
     if (!response.ok) {
-      throw new Error(data.error || `Connector API error ${response.status}`);
+      throw new Error(formatApiError(response.status, data, text));
     }
     return data;
   }
+}
+
+function safeJson(text) {
+  if (!text) return {};
+  try {
+    return JSON.parse(text);
+  } catch {
+    return {};
+  }
+}
+
+function formatApiError(status, data, text) {
+  const base = data.message || data.error || `Connector API error ${status}`;
+  if (Array.isArray(data.issues) && data.issues.length) {
+    return `${base}\n${data.issues.map((issue) => {
+      const path = Array.isArray(issue.path) ? issue.path.join('.') : issue.path || 'payload';
+      return `- ${path}: ${issue.message || 'Invalid value'}`;
+    }).join('\n')}`;
+  }
+  return text && !data.message && !data.error ? `${base}: ${text.slice(0, 1000)}` : base;
 }
 
 export function previewManifest(manifest, handlers = {}) {

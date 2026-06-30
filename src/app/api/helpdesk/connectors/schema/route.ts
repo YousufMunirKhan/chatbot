@@ -9,7 +9,9 @@ export async function GET() {
     auth: {
       header: 'Authorization: Bearer hdk_your_connector_token',
     },
-    supportedPlatforms: ['dotnet', 'android', 'web'],
+    supportedPlatforms: ['android', 'dotnet', 'web', 'node', 'laravel', 'react', 'vue', 'fullstack'],
+    platformStorageNote:
+      'Node, Laravel, React, and Vue use web connector authentication under the hood, but downloads and setup guides are separate.',
     dataFlow: [
       'Connector syncs reviewed software help docs and an approved action manifest.',
       'The platform stores docs, actions, and event logs only.',

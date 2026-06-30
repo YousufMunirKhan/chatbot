@@ -2,6 +2,8 @@ package com.switchsave.helpdesk
 
 import android.app.Activity
 import android.content.Context
+import android.graphics.Color
+import android.graphics.Typeface
 import android.os.Bundle
 import android.view.ViewGroup
 import android.widget.Button
@@ -9,6 +11,7 @@ import android.widget.EditText
 import android.widget.LinearLayout
 import android.widget.ScrollView
 import android.widget.TextView
+import android.graphics.drawable.GradientDrawable
 import org.json.JSONObject
 
 object HelpdeskConnectorPreviewRegistry {
@@ -28,12 +31,15 @@ class HelpdeskConnectorPreviewActivity : Activity() {
     private lateinit var output: TextView
     private lateinit var baseUrlInput: EditText
     private lateinit var tokenInput: EditText
+    private lateinit var questionInput: EditText
+    private lateinit var routeInput: EditText
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
         output = TextView(this).apply {
             textSize = 14f
+            setTextColor(Color.rgb(51, 65, 85))
             setPadding(24, 24, 24, 24)
         }
 
@@ -48,51 +54,73 @@ class HelpdeskConnectorPreviewActivity : Activity() {
             setSingleLine(true)
         }
 
-        val setupButton = Button(this).apply {
-            text = "Save key"
-            setOnClickListener { saveTokenAndRegisterPreviewConnector() }
-        }
-        val guideButton = Button(this).apply {
-            text = "Setup guide"
-            setOnClickListener { renderSetupGuide() }
-        }
-        val previewButton = Button(this).apply {
-            text = "Preview"
-            setOnClickListener { renderPreview() }
-        }
-        val auditButton = Button(this).apply {
-            text = "Audit"
-            setOnClickListener { renderAudit() }
-        }
-        val syncButton = Button(this).apply {
-            text = "Sync"
-            setOnClickListener { syncManifest() }
+        questionInput = EditText(this).apply {
+            hint = "Ask the assistant anything..."
+            minLines = 3
+            setSingleLine(false)
         }
 
-        val buttons = LinearLayout(this).apply {
+        routeInput = EditText(this).apply {
+            hint = "Route ID, e.g. inventory.products"
+            setSingleLine(true)
+        }
+
+        val setupActions = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
-            addView(setupButton)
-            addView(guideButton)
-            addView(previewButton)
-            addView(auditButton)
-            addView(syncButton)
+            addView(actionButton("Save key") { saveTokenAndRegisterPreviewConnector() })
+            addView(actionButton("Preview") { renderPreview() })
+            addView(actionButton("Audit") { renderAudit() })
+            addView(actionButton("Sync") { syncManifest() })
+        }
+
+        val routeActions = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            addView(actionButton("Test route") { testRoute() })
+            addView(actionButton("Setup guide") { renderSetupGuide() })
+        }
+
+        val questionActions = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            addView(actionButton("Ask") { askAssistant() })
         }
 
         val content = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
-            addView(TextView(this@HelpdeskConnectorPreviewActivity).apply {
-                text = "Smoke test:\n" +
-                    "1) Paste Base URL and hdk_ token.\n" +
-                    "2) Press Save key.\n" +
-                    "3) Press Preview, Audit, then Sync.\n\n" +
-                    "Production:\n" +
-                    "Edit HelpdeskAndroidAppDetails.kt with your real screens, actions, routes, and repositories."
-                setPadding(24, 24, 24, 12)
+            setPadding(28, 28, 28, 28)
+            setBackgroundColor(Color.rgb(248, 250, 252))
+
+            addView(panel {
+                addView(topBar())
+                addView(hero())
+                quickQuestion("How do I add product?")
+                quickQuestion("Check stock")
+                quickQuestion("Update product price")
+                quickQuestion("Create purchase order")
+                quickQuestion("Daily sales report")
+                addView(chips())
+                addView(questionInput)
+                addView(questionActions)
             })
-            addView(baseUrlInput)
-            addView(tokenInput)
-            addView(buttons)
-            addView(output, ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT)
+
+            addView(sectionTitle("Connector setup"))
+            addView(panel {
+                addView(helpText("Paste the Base URL and hdk_ token once, then Preview, Audit, and Sync. This screen uses the same default chat design the staff will see."))
+                addView(baseUrlInput)
+                addView(tokenInput)
+                addView(setupActions)
+            })
+
+            addView(sectionTitle("Routes"))
+            addView(panel {
+                addView(helpText("Add routes in HelpdeskAndroidAppDetails.kt -> buildNavigation(...). Test a routeId here before syncing. A pass means your local navigation callback is wired."))
+                addView(routeInput)
+                addView(routeActions)
+            })
+
+            addView(sectionTitle("Result"))
+            addView(panel {
+                addView(output, ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT)
+            })
         }
 
         setContentView(ScrollView(this).apply { addView(content) })
@@ -138,10 +166,26 @@ class HelpdeskConnectorPreviewActivity : Activity() {
         val navigation = HelpdeskNavigationRegistry()
             .register(
                 HelpdeskNavigationTarget(
+                    routeId = "dashboard.main",
+                    label = "Open Dashboard",
+                    route = "dashboard",
+                    open = { output.text = "Route OK: dashboard.main -> dashboard" }
+                )
+            )
+            .register(
+                HelpdeskNavigationTarget(
+                    routeId = "inventory.products",
+                    label = "Open Products",
+                    route = "inventory/products",
+                    open = { output.text = "Route OK: inventory.products -> inventory/products" }
+                )
+            )
+            .register(
+                HelpdeskNavigationTarget(
                     routeId = "inventory.stock_adjustment",
                     label = "Open Stock Adjustment",
                     route = "inventory/stock-adjustment",
-                    open = { output.text = "Open route requested: inventory/stock-adjustment" }
+                    open = { output.text = "Route OK: inventory.stock_adjustment -> inventory/stock-adjustment" }
                 )
             )
             .register(
@@ -149,7 +193,7 @@ class HelpdeskConnectorPreviewActivity : Activity() {
                     routeId = "reports.daily_sales",
                     label = "Open Daily Sales",
                     route = "reports/daily-sales",
-                    open = { output.text = "Open route requested: reports/daily-sales" }
+                    open = { output.text = "Route OK: reports.daily_sales -> reports/daily-sales" }
                 )
             )
 
@@ -193,14 +237,38 @@ class HelpdeskConnectorPreviewActivity : Activity() {
             .getOrElse { "Preview failed: ${it.message}" }
     }
 
+    private fun askAssistant() {
+        output.text = runCatching {
+            val text = questionInput.text.toString().trim()
+            require(text.isNotBlank()) { "Type a staff question first." }
+            connector()
+            "Question ready: \"$text\"\n\nFor production chat, create HelpdeskChatController and call helpdeskChat.ask(text) from your staff-only Activity/Fragment."
+        }.getOrElse { "Ask failed: ${it.message}" }
+    }
+
+    private fun testRoute() {
+        output.text = runCatching {
+            val routeId = routeInput.text.toString().trim()
+            require(routeId.isNotBlank()) { "Enter a routeId such as inventory.products." }
+            val ok = connector().openNavigationTarget(routeId)
+            if (ok) {
+                "Route verified: $routeId\n\nThis routeId has a local navigation callback. Now add the same routeId to the matching document.navigation.routeId in HelpdeskAndroidAppDetails.kt."
+            } else {
+                "Route not wired: $routeId\n\nAdd it in HelpdeskAndroidAppDetails.kt -> buildNavigation(...), then map it to navController.navigate(...), an Activity, Fragment, or deep link."
+            }
+        }.getOrElse { "Route test failed: ${it.message}" }
+    }
+
     private fun renderAudit() {
         output.text = runCatching { connector().auditManifest().toString(2) }
             .getOrElse { "Audit failed: ${it.message}" }
     }
 
     private fun syncManifest() {
-        output.text = runCatching { connector().syncPosManifest().toString(2) }
-            .getOrElse { "Sync failed: ${it.message}" }
+        runOutputInBackground("Sync") {
+            val response = connector().syncPosManifest()
+            "Sync complete.\n\nDocuments/actions were sent to Switch&Save as drafts.\n\n${response.toString(2)}"
+        }
     }
 
     private fun renderSetupGuide() {
@@ -221,6 +289,7 @@ class HelpdeskConnectorPreviewActivity : Activity() {
             3) Navigation callbacks
             - Add one routeId for each screen the bot can open.
             - Map routeId to the real app route, for example navController.navigate("inventory/products").
+            - Verify it here with Test route before Sync.
 
             4) Action handlers
             - Register only approved action names.
@@ -239,6 +308,148 @@ class HelpdeskConnectorPreviewActivity : Activity() {
             - Press Sync to send the manifest.
             - Ask a staff question and confirm the returned route/action works.
         """.trimIndent()
+    }
+
+    private fun topBar(): LinearLayout {
+        return LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            setPadding(0, 0, 0, 18)
+            addView(chip("Chat", true))
+            addView(chip("History", false))
+            addView(TextView(this@HelpdeskConnectorPreviewActivity).apply {
+                text = "      *   >"
+                textSize = 22f
+                setTextColor(Color.rgb(99, 62, 243))
+            })
+        }
+    }
+
+    private fun hero(): LinearLayout {
+        return LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(0, 26, 0, 20)
+            addView(TextView(this@HelpdeskConnectorPreviewActivity).apply {
+                text = "[bot]"
+                textSize = 34f
+                gravity = android.view.Gravity.CENTER
+                setTextColor(Color.WHITE)
+                background = rounded(Color.rgb(99, 62, 243), 22f)
+                setPadding(20, 14, 20, 14)
+            }, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply {
+                gravity = android.view.Gravity.CENTER_HORIZONTAL
+            })
+            addView(TextView(this@HelpdeskConnectorPreviewActivity).apply {
+                text = "Hello Aamir"
+                textSize = 24f
+                typeface = Typeface.DEFAULT_BOLD
+                gravity = android.view.Gravity.CENTER
+                setTextColor(Color.rgb(15, 23, 42))
+                setPadding(0, 18, 0, 8)
+            })
+            addView(TextView(this@HelpdeskConnectorPreviewActivity).apply {
+                text = "How can the assistant help you today?"
+                textSize = 16f
+                gravity = android.view.Gravity.CENTER
+                setTextColor(Color.rgb(71, 85, 105))
+            })
+        }
+    }
+
+    private fun LinearLayout.quickQuestion(text: String) {
+        addView(TextView(this@HelpdeskConnectorPreviewActivity).apply {
+            this.text = "*  $text"
+            textSize = 16f
+            setTextColor(Color.rgb(30, 41, 59))
+            setPadding(8, 18, 8, 18)
+            setOnClickListener {
+                questionInput.setText(text)
+                askAssistant()
+            }
+        })
+    }
+
+    private fun chips(): LinearLayout {
+        return LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            setPadding(0, 10, 0, 18)
+            addView(chip("* For You", true))
+            addView(chip("Products", false))
+            addView(chip("Reports", false))
+            addView(chip("Stock", false))
+            addView(chip("Customers", false))
+        }
+    }
+
+    private fun chip(text: String, selected: Boolean): TextView {
+        return TextView(this).apply {
+            this.text = text
+            textSize = 14f
+            setTextColor(if (selected) Color.rgb(99, 62, 243) else Color.rgb(71, 85, 105))
+            typeface = if (selected) Typeface.DEFAULT_BOLD else Typeface.DEFAULT
+            setPadding(20, 12, 20, 12)
+            background = rounded(Color.WHITE, 32f, if (selected) Color.rgb(124, 92, 255) else Color.rgb(226, 232, 240))
+        }
+    }
+
+    private fun panel(build: LinearLayout.() -> Unit): LinearLayout {
+        return LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(26, 26, 26, 26)
+            background = rounded(Color.WHITE, 16f, Color.rgb(226, 232, 240))
+            build()
+        }
+    }
+
+    private fun sectionTitle(text: String): TextView {
+        return TextView(this).apply {
+            this.text = text
+            textSize = 17f
+            typeface = Typeface.DEFAULT_BOLD
+            setTextColor(Color.rgb(15, 23, 42))
+            setPadding(4, 28, 4, 10)
+        }
+    }
+
+    private fun helpText(text: String): TextView {
+        return TextView(this).apply {
+            this.text = text
+            textSize = 14f
+            setTextColor(Color.rgb(71, 85, 105))
+            setPadding(0, 0, 0, 16)
+        }
+    }
+
+    private fun actionButton(text: String, onClick: () -> Unit): Button {
+        return Button(this).apply {
+            this.text = text
+            setOnClickListener { onClick() }
+        }
+    }
+
+    private fun runOutputInBackground(label: String, work: () -> String) {
+        output.text = "$label running..."
+        Thread {
+            val result = runCatching { work() }
+                .getOrElse { "$label failed: ${formatError(it)}" }
+            runOnUiThread { output.text = result }
+        }.start()
+    }
+
+    private fun formatError(error: Throwable): String {
+        val message = error.message?.trim()
+        if (!message.isNullOrBlank()) return message
+        return when (error::class.java.simpleName) {
+            "NetworkOnMainThreadException" -> "Android blocked a network call on the main thread. This connector now runs Sync in the background; try again."
+            else -> "${error::class.java.simpleName}. Check Base URL, hdk_ token, network access, and server logs."
+        }
+    }
+
+    private fun rounded(fill: Int, radius: Float, stroke: Int? = null): GradientDrawable {
+        return GradientDrawable().apply {
+            setColor(fill)
+            cornerRadius = radius
+            if (stroke != null) setStroke(2, stroke)
+        }
     }
 
     companion object {

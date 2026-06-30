@@ -19,6 +19,8 @@ Integrate the Switch&Save Help Desk Connector into this software so an internal 
 3. Run approved local actions such as product search, stock checks, reports, and safe updates.
 4. Preview, audit, save, and sync the connector manifest.
 
+Default UI requirement: the staff Help Desk must open with the Switch&Save card design, not a raw debug/log screen. Include Chat/History tabs, greeting, quick questions, category chips, large rounded input, Settings/setup panel, and route verification.
+
 The connector must not upload full database tables, customer records, invoices, passwords, tokens, payment data, or secrets.
 
 ## Build These Pieces
@@ -29,9 +31,11 @@ The connector must not upload full database tables, customer records, invoices, 
 4. Local action handlers for supported actions.
 5. Navigation handlers for clickable paths where the app supports them.
 6. A staff-only Help Desk UI entry point.
-7. A preview/editor surface or readable local preview output.
-8. An audit step that blocks unsafe or incomplete syncs.
-9. A sync step that sends only reviewed docs/actions to Switch&Save.
+7. The default chat/settings UI design.
+8. Route verification for every clickable routeId.
+9. A preview/editor surface or readable local preview output.
+10. An audit step that blocks unsafe or incomplete syncs.
+11. A sync step that sends only reviewed docs/actions to Switch&Save.
 
 ## Manifest Shape
 

@@ -43,8 +43,15 @@ export function HelpdeskConnectorForm() {
           >
             <option value="dotnet">.NET / Windows POS</option>
             <option value="android">Android app</option>
-            <option value="web">Website / web app</option>
+            <option value="web">Web backend</option>
+            <option value="node">Node backend</option>
+            <option value="laravel">Laravel backend</option>
+            <option value="react">React admin UI</option>
+            <option value="vue">Vue admin UI</option>
           </select>
+          <p className="text-xs text-muted-foreground">
+            Node, Laravel, React, and Vue use the web connector token, but their downloads are separate.
+          </p>
         </div>
       </div>
       {state.error ? <p className="text-sm text-destructive">{state.error}</p> : null}

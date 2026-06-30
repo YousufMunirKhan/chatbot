@@ -2,6 +2,20 @@
 
 Use `HelpdeskChatController.cs` for the logic. The UI can be WinForms, WPF, MAUI, or Avalonia.
 
+## Default Design
+
+Use `HelpdeskDefaultChatViewModel.cs` as the default staff Help Desk model. Bind it to a card/panel with:
+
+- Chat/History tabs
+- centered bot icon and greeting
+- quick questions for products, stock, price, purchase orders, and reports
+- category chips
+- large rounded input
+- settings/setup panel
+- route tester
+
+The design should match the web/Android card layout, not a raw log/debug window.
+
 ## WinForms
 
 ```csharp
@@ -42,6 +56,15 @@ Create a `UserControl` with:
 - input box
 
 Bind it to a view model that calls `HelpdeskChatController.AskAsync(...)`.
+
+Route verification:
+
+```csharp
+var result = viewModel.TestRoute("inventory.products");
+statusLabel.Text = result.Message;
+```
+
+If `result.Ok` is false, add the route in `HelpdeskDotnetAppDetails.cs` and map it to a form/window command.
 
 ## Safety
 

@@ -108,6 +108,11 @@ export function buildHandlers({ productService, reportService, staffRoleProvider
       return productService.checkStock(input.product_id, input.branch_id);
     },
 
+    low_stock_products: async (input) => {
+      requireService(productService, 'productService.lowStock');
+      return { results: await productService.lowStock(input.threshold, input.branch_id) };
+    },
+
     daily_sales_report: async (input) => {
       requireService(reportService, 'reportService.dailySales');
       return reportService.dailySales(input.date, input.branch_id);

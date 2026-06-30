@@ -9,7 +9,8 @@ After unzipping, start with:
 1. `AI_IMPLEMENTATION_BRIEF.md` - the short instruction file to paste into Cursor, Claude Code, Codex, or give to a developer.
 2. `HelpdeskWebAppDetails.js` - the file to edit with the customer's real admin pages, route URLs, actions, and backend services.
 3. `HelpdeskConnectorClient.js` - connector client, preview, audit, sync, polling, and event execution.
-4. `HelpdeskEmbeddedChat.js`, React/Vue/Laravel/Node guides - staff-only embedded chat and backend proxy examples.
+4. `HelpdeskDefaultChatUI.js` - default chat/settings card matching the Switch&Save connector design.
+5. `HelpdeskEmbeddedChat.js`, React/Vue/Laravel/Node guides - staff-only embedded chat and backend proxy examples.
 
 The starter manifest is only sample data. Production is ready only after `HelpdeskWebAppDetails.js` matches the real admin app.
 
@@ -74,6 +75,41 @@ app.post('/admin/helpdesk/chat', requireStaff, async (req, res) => {
 });
 ```
 
+Default chat/settings UI:
+
+```js
+import { mountHelpdeskDefaultChat } from './HelpdeskDefaultChatUI.js';
+import { openHelpdeskRoute } from './HelpdeskWebAppDetails.js';
+
+const client = {
+  ask: async (text) => {
+    const res = await fetch('/admin/helpdesk/chat', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        text,
+        currentRoute: router.pathname,
+        staffRole: currentUser.role,
+      }),
+    });
+    return res.json();
+  },
+  openNavigationTarget: (routeId) => openHelpdeskRoute(routeId, router),
+};
+
+mountHelpdeskDefaultChat({
+  root: document.querySelector('#helpdesk'),
+  client,
+  currentRoute: router.pathname,
+  staffRole: currentUser.role,
+  staffName: currentUser.name,
+  routeIds: ['dashboard.main', 'inventory.products', 'reports.daily_sales'],
+  onOpenRoute: (routeId) => openHelpdeskRoute(routeId, router),
+});
+```
+
+Use the Settings panel to enter a `routeId` and test it before Sync.
+
 ## Example Usage
 
 ```js
@@ -89,6 +125,28 @@ console.log(connector.previewManifest());
 console.log(connector.auditManifest());
 await connector.runCycle();
 ```
+
+## Node Plug-And-Play Smoke Test
+
+The zip includes `helpdesk-node-starter.mjs`.
+
+```bash
+HELPDESK_BASE_URL=https://chatbot.ssepos.co.uk \
+HELPDESK_CONNECTOR_TOKEN=hdk_your_token_from_help_desk \
+node helpdesk-node-starter.mjs --once
+```
+
+This previews, audits, syncs, and polls one time using sample product/report services. Replace the sample services with the customer's real backend services.
+
+## Laravel Plug-And-Play Starter
+
+The zip includes `HelpdeskLaravelStarter.php`. Copy it to:
+
+```text
+app/Services/Helpdesk/HelpdeskLaravelStarter.php
+```
+
+It provides `preview()`, `audit()`, `sync()`, `runCycle()`, and `testRoute(...)`. Replace the sample `ProductService` and `ReportService` with real Laravel services or Eloquent queries.
 
 ## Connect It To Your Web App
 

@@ -61,11 +61,6 @@ function DeveloperPackages() {
   const baseUrl = env.NEXT_PUBLIC_APP_URL.replace(/\/+$/, '');
   const packages = [
     {
-      label: 'Web SDK',
-      href: '/api/helpdesk/connectors/download/web',
-      body: 'JavaScript client for web apps, SaaS admin panels, docs sync, event polling, and action handlers.',
-    },
-    {
       label: 'Android SDK',
       href: '/api/helpdesk/connectors/download/android',
       body: 'Kotlin client, POS action examples, docs sync, event polling, and resync handling.',
@@ -74,6 +69,36 @@ function DeveloperPackages() {
       label: '.NET SDK',
       href: '/api/helpdesk/connectors/download/dotnet',
       body: 'Console worker, POS action manifest, local handler examples, and environment setup.',
+    },
+    {
+      label: 'Web SDK',
+      href: '/api/helpdesk/connectors/download/web',
+      body: 'Browser/admin UI helpers plus a backend JavaScript connector client.',
+    },
+    {
+      label: 'Node starter',
+      href: '/api/helpdesk/connectors/download/node',
+      body: 'Plug-and-play Node worker with preview, audit, sync, polling, and sample services.',
+    },
+    {
+      label: 'Laravel starter',
+      href: '/api/helpdesk/connectors/download/laravel',
+      body: 'PHP/Laravel service with manifest, audit, sync, polling, route test, and sample services.',
+    },
+    {
+      label: 'React UI',
+      href: '/api/helpdesk/connectors/download/react',
+      body: 'Staff Help Desk chat component guide and default UI helper for React/Next admin apps.',
+    },
+    {
+      label: 'Vue UI',
+      href: '/api/helpdesk/connectors/download/vue',
+      body: 'Staff Help Desk chat component guide and default UI helper for Vue/Nuxt admin apps.',
+    },
+    {
+      label: 'Full web stack',
+      href: '/api/helpdesk/connectors/download/fullstack',
+      body: 'Everything for web, Node, Laravel, React, and Vue in one advanced package.',
     },
   ];
 
@@ -90,7 +115,7 @@ function DeveloperPackages() {
           <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Base URL</p>
           <pre className="mt-1 overflow-auto text-xs">{baseUrl}</pre>
         </div>
-        <div className="grid gap-3 sm:grid-cols-3">
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
           {packages.map((pkg) => (
             <div key={pkg.href} className="rounded-md border p-3">
               <p className="font-medium">{pkg.label}</p>

@@ -28,6 +28,41 @@ src/helpdesk/worker.ts
 src/helpdesk/chat-route.ts
 ```
 
+## Plug-And-Play Starter
+
+The downloaded web connector zip includes `helpdesk-node-starter.mjs`.
+
+Run a smoke test:
+
+```bash
+HELPDESK_BASE_URL=https://chatbot.ssepos.co.uk \
+HELPDESK_CONNECTOR_TOKEN=hdk_your_token_from_help_desk \
+node helpdesk-node-starter.mjs --preview-only
+```
+
+Run preview, audit, sync, and one event poll:
+
+```bash
+HELPDESK_BASE_URL=https://chatbot.ssepos.co.uk \
+HELPDESK_CONNECTOR_TOKEN=hdk_your_token_from_help_desk \
+node helpdesk-node-starter.mjs --once
+```
+
+What works immediately:
+
+- preview
+- audit
+- sync
+- polling
+- sample product/report handlers
+
+What the developer replaces:
+
+- `sampleProductService`
+- `sampleReportService`
+- route map in `HelpdeskWebAppDetails.js`
+- staff chat backend proxy
+
 ## Required Configuration
 
 Create a connector in Switch&Save **Company -> Internal Help Desk -> Create connector**, then set:

@@ -9,7 +9,8 @@ After unzipping, start with:
 1. `AI_IMPLEMENTATION_BRIEF.md` - the short instruction file to paste into Cursor, Claude Code, Codex, or give to a developer.
 2. `HelpdeskDotnetAppDetails.cs` - the file to edit with the customer's real forms/screens, route commands, actions, and service methods.
 3. `Program.cs` - starter runner that previews, audits, syncs, then opens WebSocket or polling fallback.
-4. `HelpdeskChatController.cs` and `WINFORMS_WPF_UI.md` - staff-only embedded chat UI.
+4. `HelpdeskDefaultChatViewModel.cs` - default chat/settings model with quick questions, categories, ask, and route testing.
+5. `HelpdeskChatController.cs` and `WINFORMS_WPF_UI.md` - staff-only embedded chat UI.
 
 The starter data is only sample data. Production is ready only after `HelpdeskDotnetAppDetails.cs` matches the real app.
 
@@ -115,3 +116,11 @@ Add a staff-only **Help Desk** button/menu item in WinForms/WPF. That screen sho
 4. Show the chat panel only when `ShouldShow(HelpdeskChatSettings.Default)` returns true.
 5. Call `AskAsync(text)` for staff questions.
 6. Call `OpenRoute(routeId)` when the bot returns a navigation target.
+7. Bind `HelpdeskDefaultChatViewModel` to the default card design: Chat/History tabs, greeting, quick questions, category chips, large input, and Settings route tester.
+
+Verify routes before Sync:
+
+```csharp
+var result = viewModel.TestRoute("inventory.products");
+Console.WriteLine(result.Message);
+```

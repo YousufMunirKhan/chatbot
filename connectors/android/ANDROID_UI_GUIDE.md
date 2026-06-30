@@ -2,6 +2,20 @@
 
 Use `HelpdeskChatController.kt` for route/role checks and API calls.
 
+## Default Design
+
+Use the default card layout from `HelpdeskConnectorPreviewActivity.kt` as the baseline for the staff Help Desk screen:
+
+- Chat/History tabs
+- centered bot icon and greeting
+- quick questions for products, stock, price, purchase orders, and reports
+- category chips
+- large rounded input
+- settings/setup panel
+- route tester
+
+The preview screen is no longer only a debug screen. It is the reference design for the production Activity/Fragment.
+
 ## Jetpack Compose Shape
 
 ```kotlin
@@ -44,6 +58,14 @@ When API returns a navigation target:
 ```kotlin
 controller.openRoute(routeId)
 ```
+
+Verify routes before Sync:
+
+```kotlin
+val ok = connector.openNavigationTarget("inventory.products")
+```
+
+If it returns `false`, add that route in `HelpdeskAndroidAppDetails.kt -> buildNavigation(...)` and map it to `navController.navigate(...)`, an Activity, Fragment, or deep link.
 
 ## XML/Activity
 

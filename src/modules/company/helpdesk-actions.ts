@@ -15,7 +15,7 @@ export type ConnectorActionState = ActionState & { token?: string; connectorName
 
 const connectorSchema = z.object({
   name: z.string().min(2, 'Connector name is required').max(80),
-  platform: z.enum(['dotnet', 'android', 'web']),
+  platform: z.enum(['dotnet', 'android', 'web', 'node', 'laravel', 'react', 'vue']),
 });
 
 export async function createHelpdeskConnectorAction(
@@ -28,11 +28,14 @@ export async function createHelpdeskConnectorAction(
   if (!parsed.success) return { error: parsed.error.issues[0]?.message ?? 'Invalid connector' };
 
   const token = createConnectorToken();
+  const storedPlatform = ['node', 'laravel', 'react', 'vue'].includes(parsed.data.platform)
+    ? 'web'
+    : parsed.data.platform;
   const sb = createSupabaseServiceClient();
   const { error } = await sb.from('helpdesk_connectors').insert({
     company_id: companyId,
     name: parsed.data.name,
-    platform: parsed.data.platform,
+    platform: storedPlatform,
     token_hash: hashConnectorToken(token),
     status: 'active',
   });

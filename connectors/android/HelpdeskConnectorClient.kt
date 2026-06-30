@@ -629,9 +629,30 @@ class HelpdeskConnectorClient(
         httpClient.newCall(request).execute().use { response ->
             val text = response.body?.string().orEmpty()
             if (!response.isSuccessful) {
-                throw IOException("Connector API error ${response.code}: $text")
+                throw IOException("Connector API error ${response.code}: ${apiErrorMessage(text)}")
             }
             return if (text.isBlank()) JSONObject() else JSONObject(text)
+        }
+    }
+
+    private fun apiErrorMessage(text: String): String {
+        if (text.isBlank()) return "Empty error response from server."
+        return try {
+            val json = JSONObject(text)
+            val message = json.optString("message").ifBlank { json.optString("error") }
+            val issues = json.optJSONArray("issues")
+            if (issues != null && issues.length() > 0) {
+                val lines = mutableListOf<String>()
+                for (index in 0 until issues.length()) {
+                    val issue = issues.optJSONObject(index)
+                    if (issue != null) lines += "- ${issue.optString("path")}: ${issue.optString("message")}"
+                }
+                listOf(message, lines.joinToString("\n")).filter { it.isNotBlank() }.joinToString("\n")
+            } else {
+                message.ifBlank { text }
+            }
+        } catch (_: Throwable) {
+            text.take(1000)
         }
     }
 
