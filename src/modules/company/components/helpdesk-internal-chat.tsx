@@ -4,6 +4,7 @@ import { useMemo, useState } from 'react';
 import { ArrowRight, ExternalLink, Loader2, Play, Route, Sparkles } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import type { HelpdeskChatSettings } from '@/lib/helpdesk/chat-settings';
 
 type Pill = { id: string; label: string; message: string; source: string; contextMode: string };
 type NavigationTarget = { label: string; routeId: string; path: string | null; module: string; screen: string };
@@ -35,7 +36,13 @@ function title(value: string): string {
   return value.replace(/_/g, ' ').replace(/\b\w/g, (char) => char.toUpperCase());
 }
 
-export function HelpdeskInternalChat({ initialPills }: { initialPills: string[] }) {
+export function HelpdeskInternalChat({
+  initialPills,
+  settings,
+}: {
+  initialPills: string[];
+  settings: HelpdeskChatSettings;
+}) {
   const [messages, setMessages] = useState<Message[]>([
     {
       role: 'assistant',
@@ -74,7 +81,14 @@ export function HelpdeskInternalChat({ initialPills }: { initialPills: string[] 
         body: JSON.stringify({ text: clean, currentRoute: route }),
       });
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error ?? 'Help Desk chat failed.');
+      if (!res.ok) {
+        if (data.error === 'helpdesk_chat_not_available_here') {
+          throw new Error(
+            `Help Desk is blocked for this route or role. Current route: "${route}". Allowed routes: ${settings.allowedRoutes.join(', ') || 'all'}. Blocked routes: ${settings.blockedRoutes.join(', ') || 'none'}. Allowed roles: ${settings.allowedRoles.join(', ') || 'all'}.`,
+          );
+        }
+        throw new Error(data.message ?? data.error ?? 'Help Desk chat failed.');
+      }
       setLast(data);
       setMessages((current) => [...current, { role: 'assistant', text: data.answer || 'No answer.' }]);
     } catch (error) {
@@ -107,7 +121,9 @@ export function HelpdeskInternalChat({ initialPills }: { initialPills: string[] 
       <div className="flex flex-col gap-3 border-b p-4 md:flex-row md:items-center md:justify-between">
         <div>
           <h2 className="font-semibold">Staff Help Desk Chat</h2>
-          <p className="text-sm text-muted-foreground">Internal-only chat with route-aware pills and connector actions.</p>
+          <p className="text-sm text-muted-foreground">
+            Internal-only chat. It is checked against role and route rules before answering.
+          </p>
         </div>
         <div className="flex items-center gap-2">
           <Route className="h-4 w-4 text-muted-foreground" />
@@ -117,6 +133,9 @@ export function HelpdeskInternalChat({ initialPills }: { initialPills: string[] 
 
       <div className="grid gap-4 p-4 lg:grid-cols-[minmax(0,1fr)_320px]">
         <div className="space-y-4">
+          <div className="rounded-md border bg-muted/30 p-3 text-xs leading-5 text-muted-foreground">
+            Test route: <span className="font-mono text-foreground">{route}</span>. If chat is blocked, open the Settings tab and add this route or staff role.
+          </div>
           <div className="h-[420px] overflow-y-auto rounded-md border bg-slate-50 p-3">
             <div className="space-y-3">
               {messages.map((message, index) => (
