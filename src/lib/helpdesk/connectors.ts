@@ -314,8 +314,26 @@ function keywordsFor(...values: Array<string | null | undefined>): string[] {
   return [...words].slice(0, 16);
 }
 
+/**
+ * Order-independent JSON serialization. `source_json` is stored as `jsonb`,
+ * which Postgres normalizes by reordering object keys. A plain `JSON.stringify`
+ * is key-order sensitive, so the round-tripped value would hash differently from
+ * the freshly-received payload and every resync would falsely flag the document
+ * as "changed" — silently resetting approved docs back to draft. Sorting keys
+ * recursively makes the hash depend only on the data, not its key order.
+ */
+function canonicalStringify(value: unknown): string {
+  if (value === null || typeof value !== 'object') return JSON.stringify(value) ?? 'null';
+  if (Array.isArray(value)) return '[' + value.map((v) => canonicalStringify(v)).join(',') + ']';
+  const obj = value as Record<string, unknown>;
+  const keys = Object.keys(obj)
+    .filter((k) => obj[k] !== undefined)
+    .sort();
+  return '{' + keys.map((k) => JSON.stringify(k) + ':' + canonicalStringify(obj[k])).join(',') + '}';
+}
+
 function stableHash(value: unknown): string {
-  return crypto.createHash('sha256').update(JSON.stringify(value)).digest('hex');
+  return crypto.createHash('sha256').update(canonicalStringify(value)).digest('hex');
 }
 
 export function buildConnectorDocumentContent(doc: z.infer<typeof connectorDocumentSchema>): string {
