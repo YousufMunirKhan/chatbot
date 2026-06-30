@@ -10,6 +10,15 @@ var token = Environment.GetEnvironmentVariable("HELPDESK_CONNECTOR_TOKEN");
 if (string.IsNullOrWhiteSpace(baseUrl) || string.IsNullOrWhiteSpace(token))
 {
     Console.WriteLine("Set HELPDESK_BASE_URL and HELPDESK_CONNECTOR_TOKEN before running.");
+    Console.WriteLine("Create a connector in Switch&Save Help Desk, copy the hdk_ token, then set:");
+    Console.WriteLine(@"  $env:HELPDESK_BASE_URL=""https://chatbot.ssepos.co.uk""");
+    Console.WriteLine(@"  $env:HELPDESK_CONNECTOR_TOKEN=""hdk_your_token_from_help_desk""");
+    return;
+}
+
+if (!token.StartsWith("hdk_", StringComparison.Ordinal))
+{
+    Console.WriteLine("HELPDESK_CONNECTOR_TOKEN must start with hdk_. Copy it from Company -> Internal Help Desk -> Create connector.");
     return;
 }
 
@@ -271,7 +280,7 @@ sealed class HelpdeskConnector
         }
     }
 
-    private Manifest BuildManifest() => ManifestFactory.Build(_knownRevision);
+    private Manifest BuildManifest() => HelpdeskDotnetAppDetails.BuildManifest(_knownRevision);
 
     private static Uri ToWebSocketUri(string baseUrl, string path)
     {

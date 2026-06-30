@@ -11,7 +11,12 @@ Read `PROTOCOL.md` for the full cross-platform data flow.
 
 For developer onboarding:
 
+- If this came from a downloaded zip, start with `AI_IMPLEMENTATION_BRIEF.md`.
 - Start with `HELPDESK_DEVELOPER_HANDOFF.md`.
+- Edit the platform details file first:
+  - Android: `android/HelpdeskAndroidAppDetails.kt`
+  - .NET: `dotnet/HelpdeskDotnetAppDetails.cs`
+  - Web/Node/Laravel backend: `web/HelpdeskWebAppDetails.js`
 - Use `DEVELOPMENT_TASK_LIST.md` as the implementation roadmap for WebSocket-first delivery, polling fallback, Connector Studio, audits, monitoring, and Android/.NET/Web connector tracks.
 - Open `docs/helpdesk-connector-guide.html` for the human-readable connector guide.
 - Read `docs/UI_COMPONENT_GUIDE.md` for embedding the staff chat UI.
@@ -38,9 +43,11 @@ The platform stores docs/actions/events only. Live POS data stays in the client 
 
 ## What The Developer Builds
 
-The developer does not build the whole connector protocol. They only map their local app functions to action handlers:
+The developer does not build the whole connector protocol. They fill the platform details file with real screens/pages/forms, route IDs, and action handlers:
 
 ```text
+screen/page/form -> connector document
+routeId -> local navigation command/router URL
 search_product -> product service search
 check_stock -> inventory service lookup
 daily_sales_report -> reporting service
@@ -52,7 +59,7 @@ The provided SDK handles token auth, status checks, manifest sync, event polling
 ## Dashboard Setup
 
 1. Open `/company/help-desk`.
-2. Create a `.NET` or `Android` connector.
+2. Create an `Android`, `.NET`, or `Web` connector.
 3. Copy the token once.
 4. Configure the starter with:
 

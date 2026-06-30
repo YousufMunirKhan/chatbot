@@ -2,6 +2,10 @@
 
 Use this with `connectors/AI_AGENT_INTEGRATION_PROMPT.md` when integrating a SaaS dashboard, website admin panel, or browser-based business app.
 
+## First File To Edit
+
+Start with `HelpdeskWebAppDetails.js`. Replace the sample admin pages, route URLs, actions, and backend service handlers with the real web app details. Keep the `hdk_...` connector token on the backend.
+
 ## What To Inspect
 
 Ask the developer to provide:

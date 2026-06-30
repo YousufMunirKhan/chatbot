@@ -2,6 +2,17 @@
 
 Use this for SaaS dashboards, website admin panels, or browser-based business software.
 
+## Give This Zip To A Developer Or AI
+
+After unzipping, start with:
+
+1. `AI_IMPLEMENTATION_BRIEF.md` - the short instruction file to paste into Cursor, Claude Code, Codex, or give to a developer.
+2. `HelpdeskWebAppDetails.js` - the file to edit with the customer's real admin pages, route URLs, actions, and backend services.
+3. `HelpdeskConnectorClient.js` - connector client, preview, audit, sync, polling, and event execution.
+4. `HelpdeskEmbeddedChat.js`, React/Vue/Laravel/Node guides - staff-only embedded chat and backend proxy examples.
+
+The starter manifest is only sample data. Production is ready only after `HelpdeskWebAppDetails.js` matches the real admin app.
+
 ## Where To Run It
 
 Recommended production setup:
@@ -22,31 +33,99 @@ For embedded staff chat, also read:
 - `../vue/HELPDESK_VUE_COMPONENT.md`
 - `HelpdeskEmbeddedChat.js`
 
+## Where the connector key goes
+
+1. In Switch&Save, open **Company -> Internal Help Desk -> Create connector**.
+2. Choose Web and create the connector.
+3. Copy the one-time token. It starts with `hdk_`.
+4. Put it in your backend environment as `HELPDESK_CONNECTOR_TOKEN`.
+5. Put your Switch&Save app URL in `HELPDESK_BASE_URL`, for example `https://chatbot.ssepos.co.uk`.
+6. Start your backend worker or call `connector.runCycle()` from a controlled staff/admin process.
+
+Do not place the `hdk_...` token in public website JavaScript. If you use `HelpdeskEmbeddedChat.js`, use it only behind staff auth or call it through your backend.
+
+## How staff open Help Desk
+
+Add a staff-only **Help Desk** item in your admin sidebar. That screen should:
+
+1. Load only for authenticated staff roles.
+2. Call your backend chat proxy, not the public website widget API.
+3. Pass the current route and staff role.
+4. Render navigation buttons from returned route IDs.
+5. Run the connector worker on the backend so approved actions can execute locally.
+
+Backend chat proxy:
+
+```js
+app.post('/admin/helpdesk/chat', requireStaff, async (req, res) => {
+  const response = await fetch(`${process.env.HELPDESK_BASE_URL}/api/helpdesk/chat`, {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${process.env.HELPDESK_CONNECTOR_TOKEN}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      text: req.body.text,
+      currentRoute: req.body.currentRoute,
+      staffRole: req.user.role,
+    }),
+  });
+  res.status(response.status).json(await response.json());
+});
+```
+
 ## Example Usage
 
 ```js
-import { HelpdeskConnectorClient } from './HelpdeskConnectorClient.js';
+import { createHelpdeskConnector } from './HelpdeskWebAppDetails.js';
 
-const connector = new HelpdeskConnectorClient({
-  baseUrl: 'https://your-platform-domain.com',
-  token: 'hdk_your_token',
-  handlers: {
-    search_product: async (input) => {
-      const results = await yourProductApi.search(input.query);
-      return { results };
-    },
-    daily_sales_report: async (input) => {
-      return yourReportsApi.dailySales(input.date);
-    },
-    update_product_quantity: async (input) => {
-      await requireManagerApproval();
-      return yourInventoryApi.setQuantity(input.product_id, input.quantity);
-    },
-  },
+const connector = createHelpdeskConnector({
+  productService: yourProductService,
+  reportService: yourReportService,
+  staffRoleProvider: () => currentStaff.role,
 });
 
+console.log(connector.previewManifest());
+console.log(connector.auditManifest());
 await connector.runCycle();
 ```
+
+## Connect It To Your Web App
+
+First edit `HelpdeskWebAppDetails.js`:
+
+- add real admin pages/modules
+- add real menu paths, steps, fields, and common errors
+- map route IDs to `router.push(...)`, redirects, or admin URLs
+- keep only actions the backend can safely support
+- wire handlers to real backend services
+
+For every page, add:
+
+| Detail | What to enter |
+| --- | --- |
+| `externalKey` | Stable unique ID, for example `inventory.products`. |
+| `module` | Admin area, for example `Inventory`. |
+| `screen` | Page name staff recognize. |
+| `path` | Menu path, for example `Dashboard > Inventory > Products`. |
+| `purpose` | What staff do on this page. |
+| `steps` | Click path to complete the task. |
+| `fields` | Important fields, required status, and meaning. |
+| `commonErrors` | Validation messages or common failure reasons. |
+| `actions` | Connector action names related to this page. |
+| `navigation.routeId` | Must match a frontend/backend route mapping. |
+
+For every action, add:
+
+| Detail | What to enter |
+| --- | --- |
+| `name` | Approved snake_case action name, for example `search_product`. |
+| `type` | `read`, `create`, `update`, `delete`, `report`, or `danger`. |
+| `risk` | `low`, `medium`, or `high`. |
+| `requiredFields` | Inputs the bot must provide before the handler runs. |
+| `handler` | Real backend service method. |
+| `roles` | Staff roles allowed to run it. |
+| `confirmation` | Required for write/high-risk actions. |
 
 ## What It Does
 

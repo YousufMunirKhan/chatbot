@@ -2,6 +2,14 @@
 
 Use this for React, Next.js admin dashboards, or Inertia React apps.
 
+This is the staff chat UI layer. Use `web/HelpdeskWebAppDetails.js` for the backend connector manifest, action handlers, and route IDs, then map those route IDs in this React component.
+
+## Required Backend Setup
+
+Create a connector in Switch&Save **Company -> Internal Help Desk -> Create connector** and store the `hdk_...` token on your backend as `HELPDESK_CONNECTOR_TOKEN`. This React component must call your backend proxy, not Switch&Save directly.
+
+Add a staff-only **Help Desk** item in your admin navigation and render this component only for authenticated staff/admin roles.
+
 ## Basic Shape
 
 ```tsx

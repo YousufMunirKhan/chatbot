@@ -8,7 +8,9 @@ export class HelpdeskConnectorClient {
     pollIntervalSeconds = 60,
   }) {
     if (!baseUrl) throw new Error('baseUrl is required');
-    if (!token) throw new Error('token is required');
+    if (!token || !String(token).startsWith('hdk_')) {
+      throw new Error('Connector token is required. Create a connector in Switch&Save Help Desk and paste the hdk_ token here.');
+    }
     this.baseUrl = baseUrl.replace(/\/+$/, '');
     this.token = token;
     this.handlers = handlers;

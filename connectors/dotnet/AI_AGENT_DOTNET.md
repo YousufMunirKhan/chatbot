@@ -4,6 +4,10 @@ Use this with `connectors/AI_AGENT_INTEGRATION_PROMPT.md` when integrating Windo
 
 Set `HELPDESK_BASE_URL` for HTTP APIs. If the WebSocket gateway is hosted separately, also set `HELPDESK_WS_BASE_URL`; otherwise the connector uses `HELPDESK_BASE_URL` for both.
 
+## First File To Edit
+
+Start with `HelpdeskDotnetAppDetails.cs`. Replace the sample forms/screens, route commands, actions, and service interfaces with the real Windows POS/ERP/admin app details. `Program.cs` uses this file for preview/audit/sync.
+
 ## What To Inspect
 
 Ask the developer to provide:

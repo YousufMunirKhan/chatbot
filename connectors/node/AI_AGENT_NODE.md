@@ -2,6 +2,10 @@
 
 Use this with `connectors/AI_AGENT_INTEGRATION_PROMPT.md` when integrating Node.js, Express, NestJS, Fastify, or a backend for a React/Vue admin app.
 
+## First File To Edit
+
+Use `web/HelpdeskWebAppDetails.js` as the source-of-truth template. Move its manifest, handlers, and route mapping into the app's preferred Node structure.
+
 ## What To Inspect
 
 Ask the developer to provide:
@@ -23,6 +27,21 @@ src/helpdesk/navigation.ts
 src/helpdesk/worker.ts
 src/helpdesk/chat-route.ts
 ```
+
+## Required Configuration
+
+Create a connector in Switch&Save **Company -> Internal Help Desk -> Create connector**, then set:
+
+```bash
+HELPDESK_BASE_URL=https://chatbot.ssepos.co.uk
+HELPDESK_CONNECTOR_TOKEN=hdk_your_token_from_help_desk
+```
+
+Keep `HELPDESK_CONNECTOR_TOKEN` on the backend only. Never expose it in public React/Vue/browser bundles.
+
+## How Staff Open Help Desk
+
+Add a staff-only `/admin/helpdesk` page or admin sidebar button. The page calls your backend proxy (`/admin/helpdesk/chat`) with `text`, `currentRoute`, and the authenticated staff role. Your backend attaches the `hdk_...` token when it calls Switch&Save.
 
 ## Action Registry
 

@@ -23,16 +23,21 @@ The app does not send:
 
 Always read:
 
-1. `PROTOCOL.md`
-2. `AI_AGENT_INTEGRATION_PROMPT.md`
-3. Your platform guide:
+1. `AI_IMPLEMENTATION_BRIEF.md` if it exists in the downloaded zip.
+2. The platform details file:
+   - Android: `HelpdeskAndroidAppDetails.kt`
+   - .NET/C#: `HelpdeskDotnetAppDetails.cs`
+   - Web/Node: `HelpdeskWebAppDetails.js`
+3. `PROTOCOL.md`
+4. `AI_AGENT_INTEGRATION_PROMPT.md`
+5. Your platform guide:
    - Android: `android/AI_AGENT_ANDROID.md`
    - .NET/C#: `dotnet/AI_AGENT_DOTNET.md`
    - Web/Node: `web/AI_AGENT_WEB.md`
    - Laravel/PHP: `laravel/AI_AGENT_LARAVEL.md`
-4. UI guide:
+6. UI guide:
    - `docs/UI_COMPONENT_GUIDE.md`
-5. Test guide:
+7. Test guide:
    - `docs/CONNECTOR_TEST_PLAN.md`
 
 ## What The Developer Must Inspect
@@ -49,22 +54,26 @@ Ask the developer or AI agent to inspect:
 
 ## Build These Pieces
 
-1. Software map builder
+1. Platform details file
+   - Edit `HelpdeskAndroidAppDetails.kt`, `HelpdeskDotnetAppDetails.cs`, or `HelpdeskWebAppDetails.js` first.
+   - This is where real screens/pages/forms, fields, routes, actions, and service mappings live.
+
+2. Software map builder
    - Converts app screens into connector documents.
 
-2. Action registry
+3. Action registry
    - Maps approved action names to real app services.
 
-3. Navigation registry
+4. Navigation registry
    - Maps route IDs to app navigation.
 
-4. Embedded staff chat
+5. Embedded staff chat
    - Shows only for allowed roles/routes.
 
-5. Preview/audit/sync
+6. Preview/audit/sync
    - Lets developer/admin check what will be sent before sync.
 
-6. Worker/WebSocket
+7. Worker/WebSocket
    - WebSocket first when available.
    - Polling fallback when WebSocket is unavailable.
 

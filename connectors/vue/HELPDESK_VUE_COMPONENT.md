@@ -2,6 +2,14 @@
 
 Use this for Vue, Nuxt, or Laravel Inertia Vue admin dashboards.
 
+This is the staff chat UI layer. Use `web/HelpdeskWebAppDetails.js` for the backend connector manifest, action handlers, and route IDs, then map those route IDs in this Vue component.
+
+## Required Backend Setup
+
+Create a connector in Switch&Save **Company -> Internal Help Desk -> Create connector** and store the `hdk_...` token on your backend as `HELPDESK_CONNECTOR_TOKEN`. This Vue component must call your backend proxy, not Switch&Save directly.
+
+Add a staff-only **Help Desk** item in your admin navigation and render this component only for authenticated staff/admin roles.
+
 ## Basic Shape
 
 ```vue

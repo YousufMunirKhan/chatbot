@@ -180,6 +180,7 @@ class HelpdeskConnectorClient(
     private val actionRegistry: HelpdeskActionRegistry,
     private val navigationRegistry: HelpdeskNavigationRegistry = HelpdeskNavigationRegistry(),
     private val manifestStore: HelpdeskManifestStore? = null,
+    private val manifestProvider: ((appVersion: String) -> JSONObject)? = null,
     private val httpClient: OkHttpClient = OkHttpClient.Builder()
         .connectTimeout(15, TimeUnit.SECONDS)
         .readTimeout(30, TimeUnit.SECONDS)
@@ -646,6 +647,8 @@ class HelpdeskConnectorClient(
     }
 
     private fun buildDefaultManifest(appVersion: String = "android-pos-starter-1.0"): JSONObject {
+        manifestProvider?.let { return it(appVersion) }
+
         val stockRoute = "inventory.stock_adjustment"
         val salesRoute = "reports.daily_sales"
         val actions = JSONArray()

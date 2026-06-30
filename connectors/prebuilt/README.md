@@ -21,6 +21,29 @@ only providing credentials. They build on the same Web SDK
    platform API. Real-time delivery upgrades automatically when the WebSocket
    gateway is reachable (`npm run dev:helpdesk-ws`).
 
+## Give This Folder To A Developer Or AI
+
+Use this when the customer uses Shopify, Square, or Foodics and wants a faster setup than a custom app connector.
+
+Tell Cursor, Claude Code, Codex, or the developer:
+
+1. Open `connectors/prebuilt/<platform>/connector.mjs`.
+2. Read the `Required env` block at the top.
+3. Add the customer's platform API credentials to environment variables.
+4. Keep `HELPDESK_CONNECTOR_TOKEN` and platform API tokens server-side only.
+5. Run the connector as a backend worker, container, Windows service, or cron-managed process.
+6. Test `syncManifest()`, then let `runCycle()` poll events.
+7. Extend the `handlers` map only for actions the platform account/API scope can safely support.
+
+For each prebuilt connector, an AI agent should verify:
+
+- required API scopes are documented and present
+- action names match `standardActionLibrary()`
+- result JSON is small and does not expose full customer/order databases
+- write actions keep `needsConfirmation: true`
+- missing credentials fail with a clear message
+- platform API errors are surfaced in connector health/log output
+
 ## Status & scope
 
 These are **production-shaped scaffolds**: the API calls hit each platform's real

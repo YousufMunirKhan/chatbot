@@ -38,7 +38,9 @@ export function shouldShowHelpdeskChat(settings, { route, role }) {
 export class HelpdeskEmbeddedChatClient {
   constructor({ baseUrl, token, staffRole, getRoute, onOpenRoute }) {
     if (!baseUrl) throw new Error('baseUrl is required');
-    if (!token) throw new Error('connector token is required');
+    if (!token || !String(token).startsWith('hdk_')) {
+      throw new Error('Connector token is required. Use a backend proxy or a trusted staff-only page with the hdk_ token from Switch&Save Help Desk.');
+    }
     this.baseUrl = baseUrl.replace(/\/+$/, '');
     this.token = token;
     this.staffRole = staffRole || 'staff';

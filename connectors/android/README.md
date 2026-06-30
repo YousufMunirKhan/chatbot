@@ -14,9 +14,87 @@ New here? Open **[`HelpdeskQuickStartExample.kt`](HelpdeskQuickStartExample.kt)*
 
 You only write step 3's handler bodies. Everything below is reference detail.
 
+## What the Android developer must create
+
+The preview manifest is sample data. For a real customer app, edit `HelpdeskAndroidAppDetails.kt` first and replace the placeholder screens/actions with the app's real details.
+
+Create or wire these pieces:
+
+- `HelpdeskAndroidAppDetails.kt` - the real list of staff screens, actions, route IDs, and repository handlers.
+- Token entry - a staff/admin-only place to paste the `hdk_...` connector key, or secure config that saves it with `HelpdeskEncryptedTokenStore`.
+- Staff Help Desk Activity/Fragment - the screen where staff open the bot.
+- Navigation map - route IDs such as `inventory.products` mapped to real `navController.navigate(...)`, Activity, Fragment, or deep-link calls.
+- Action handlers - approved action names mapped to real repositories/services.
+- Lifecycle observer - `HelpdeskConnectorLifecycleObserver` attached only while the staff Help Desk screen is open.
+
+For every staff screen, add:
+
+| Detail | What to enter |
+| --- | --- |
+| `externalKey` | Stable unique ID, for example `inventory.products`. |
+| `module` | App area, for example `Inventory`. |
+| `screen` | Screen name staff recognize. |
+| `path` | Menu path, for example `Inventory > Products`. |
+| `purpose` | What staff do on this screen. |
+| `steps` | Click/tap path to complete the task. |
+| `fields` | Important fields, whether required, and what they mean. |
+| `commonErrors` | Validation messages or common reasons the screen fails. |
+| `actions` | Connector action names related to this screen. |
+| `navigation.routeId` | Must match a registered navigation target. |
+
+For every action, add:
+
+| Detail | What to enter |
+| --- | --- |
+| `name` | Approved snake_case action name, for example `search_product`. |
+| `type` | `read`, `create`, `update`, `delete`, `report`, or `danger`. |
+| `risk` | `low`, `medium`, or `high`. |
+| `requiredFields` | Inputs the bot must provide before the handler runs. |
+| `handler` | Repository/service method that actually performs the work. |
+| `roles` | Staff roles allowed to run it. |
+| `confirmation` | Required for write/high-risk actions. |
+
+## Where the connector key goes
+
+1. In Switch&Save, open **Company -> Internal Help Desk -> Create connector**.
+2. Choose Android and create the connector.
+3. Copy the one-time connector token. It starts with `hdk_`.
+4. In the Android app, open `HelpdeskConnectorPreviewActivity`, paste:
+   - Base URL: your Switch&Save app URL, for example `https://chatbot.ssepos.co.uk`
+   - Connector token: the `hdk_...` token
+5. Press **Save key**, then **Preview**, **Audit**, and **Sync**.
+
+The preview screen stores the key with `HelpdeskEncryptedTokenStore`. For production, replace the starter preview connector with your real app wiring:
+
+```kotlin
+HelpdeskConnectorPreviewRegistry.configure {
+    HelpdeskQuickStart.setup(
+        context = this,
+        products = productRepository,
+        currentStaffRole = { session.currentStaff.role },
+        openScreen = { route -> navController.navigate(route) },
+    )
+}
+```
+
+If you see `Connector is not configured yet`, it means neither the key has been saved in the preview screen nor `HelpdeskConnectorPreviewRegistry.configure { ... }` has been called.
+
+## How staff open Help Desk in the Android app
+
+Add a staff-only menu item such as **Help Desk** or **Support Assistant** in your admin area. That screen should:
+
+1. Build/register the connector.
+2. Add `HelpdeskConnectorLifecycleObserver` so sync/events run while the staff screen is open.
+3. Render your chat bubble/panel only when `HelpdeskChatController.shouldShow(settings)` returns `true`.
+4. Call `helpdeskChat.ask("...")` when staff ask a question.
+5. Call `helpdeskChat.openRoute(routeId)` when the bot returns a navigation target.
+
+Do not put the Help Desk token in public/customer screens.
+
 ## Files
 
 - `HelpdeskConnectorClient.kt` - HTTP/WebSocket client, polling fallback, action registry, navigation registry, audit, diff, sync, safe result redaction.
+- `HelpdeskAndroidAppDetails.kt` - production template where developers add real screens, actions, route IDs, and repositories.
 - `HelpdeskEncryptedTokenStore.kt` - encrypted `hdk_...` token storage.
 - `HelpdeskAndroidManifestStore.kt` - local saved manifest storage for diff detection.
 - `HelpdeskConnectorLifecycleObserver.kt` - opens WebSocket while the helpdesk/admin screen is active and closes it on background.
@@ -137,10 +215,12 @@ Also read:
 
 ## Preview And Audit Screen
 
-Register the connector provider before opening the preview activity:
+For a first smoke test, open the preview activity directly, paste the Base URL and `hdk_...` token, then press **Save key**. That creates a starter preview connector so Preview/Audit/Sync are not blocked by `connectorProvider is not configured`.
+
+For production, register the real connector provider before opening the preview activity:
 
 ```kotlin
-HelpdeskConnectorPreviewRegistry.connectorProvider = { connector }
+HelpdeskConnectorPreviewRegistry.configure { connector }
 startActivity(Intent(context, HelpdeskConnectorPreviewActivity::class.java))
 ```
 

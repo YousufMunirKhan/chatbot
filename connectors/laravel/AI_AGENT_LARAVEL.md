@@ -2,6 +2,10 @@
 
 Use this with `connectors/AI_AGENT_INTEGRATION_PROMPT.md` when integrating a Laravel app, Laravel POS backend, admin panel, or Inertia/Livewire dashboard.
 
+## First File To Edit
+
+Use `web/HelpdeskWebAppDetails.js` as the JavaScript reference for manifest shape, route mapping, and action handler behavior. Recreate the same structure in Laravel services such as `HelpdeskManifest`, `HelpdeskNavigation`, and `HelpdeskActions`.
+
 ## What To Inspect
 
 Ask the developer to provide:
@@ -27,6 +31,18 @@ app/Jobs/HelpdeskPollEvents.php
 config/helpdesk.php
 resources/views/helpdesk/chat.blade.php
 ```
+
+## Required Configuration
+
+Create a connector in Switch&Save **Company -> Internal Help Desk -> Create connector**, then add:
+
+```env
+HELPDESK_BASE_URL=https://chatbot.ssepos.co.uk
+HELPDESK_CONNECTOR_TOKEN=hdk_your_token_from_help_desk
+HELPDESK_POLL_INTERVAL=60
+```
+
+Keep `HELPDESK_CONNECTOR_TOKEN` server-side in `.env`. Do not expose it to public Blade/Inertia/Vue/React pages.
 
 ## Config
 

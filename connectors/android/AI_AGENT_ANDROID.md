@@ -2,6 +2,10 @@
 
 Use this with `connectors/AI_AGENT_INTEGRATION_PROMPT.md` when integrating an Android POS or mobile business app.
 
+## First File To Edit
+
+Start with `HelpdeskAndroidAppDetails.kt`. Replace the sample screens, actions, route IDs, repositories, and staff role checks with the real Android app details. The preview activity is only a smoke-test surface until this file matches the customer app.
+
 ## What To Inspect
 
 Ask the developer to provide:

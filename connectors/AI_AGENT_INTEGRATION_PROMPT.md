@@ -2,6 +2,14 @@
 
 Copy this file into Codex, Cursor, Claude Code, or another coding agent together with the target app's route/menu/screen/action files. The AI agent should generate or update the Help Desk connector integration without uploading real customer records.
 
+If this file came from a downloaded connector zip, read `AI_IMPLEMENTATION_BRIEF.md` first. Then edit the platform details file first:
+
+- Android: `HelpdeskAndroidAppDetails.kt`
+- .NET/C#: `HelpdeskDotnetAppDetails.cs`
+- Web/Node: `HelpdeskWebAppDetails.js`
+
+Those files are the intended integration surface for real screens, actions, routes, and service handlers.
+
 ## Goal
 
 Integrate the Switch&Save Help Desk Connector into this software so an internal staff assistant can:
@@ -15,13 +23,15 @@ The connector must not upload full database tables, customer records, invoices, 
 
 ## Build These Pieces
 
-1. A local software map builder.
-2. A connector manifest with `documents` and `actions`.
-3. Local action handlers for supported actions.
-4. Navigation handlers for clickable paths where the app supports them.
-5. A preview/editor surface or readable local preview output.
-6. An audit step that blocks unsafe or incomplete syncs.
-7. A sync step that sends only reviewed docs/actions to Switch&Save.
+1. A platform details file filled with the real app screens/pages/forms.
+2. A local software map builder.
+3. A connector manifest with `documents` and `actions`.
+4. Local action handlers for supported actions.
+5. Navigation handlers for clickable paths where the app supports them.
+6. A staff-only Help Desk UI entry point.
+7. A preview/editor surface or readable local preview output.
+8. An audit step that blocks unsafe or incomplete syncs.
+9. A sync step that sends only reviewed docs/actions to Switch&Save.
 
 ## Manifest Shape
 
