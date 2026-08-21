@@ -1,5 +1,6 @@
 import { getSessionUser } from '@/lib/auth';
 import { createSupabaseServiceClient } from '@/lib/db/server';
+import { ticketNumberFromState } from '@/lib/tickets/ticket-number';
 import { getCompanyId } from './data';
 
 /**
@@ -16,11 +17,16 @@ export interface ConversationRow {
   language: string | null;
   visitorId: string | null;
   unreadCount: number;
+  startedAt: string | null;
   lastMessageAt: string | null;
+  closedAt: string | null;
   aiEnabled: boolean;
   assignedAgentId: string | null;
   firstAgentReplyAt: string | null;
   csatRating: number | null;
+  priority: string;
+  tags: string[];
+  state: Record<string, unknown>;
 }
 
 export interface InboxMessage {
@@ -49,10 +55,14 @@ export interface ConversationDetail {
   channel: string;
   language: string | null;
   visitorId: string | null;
+  startedAt: string | null;
+  lastMessageAt: string | null;
+  closedAt: string | null;
   aiEnabled: boolean;
   assignedAgentId: string | null;
   priority: string;
   tags: string[];
+  state: Record<string, unknown>;
   csatRating: number | null;
   csatComment: string | null;
   messages: InboxMessage[];
@@ -80,7 +90,7 @@ export async function listConversations(): Promise<ConversationRow[]> {
   const sb = createSupabaseServiceClient();
   const { data, error } = await sb
     .from('conversations')
-    .select('id,status,channel,language,visitor_id,unread_count,last_message_at,ai_enabled,assigned_agent_id,first_agent_reply_at,csat_rating')
+    .select('id,status,channel,language,visitor_id,unread_count,started_at,last_message_at,closed_at,ai_enabled,assigned_agent_id,first_agent_reply_at,csat_rating,priority,tags,state_json')
     .eq('company_id', companyId)
     .order('last_message_at', { ascending: false })
     .limit(100);
@@ -94,11 +104,16 @@ export async function listConversations(): Promise<ConversationRow[]> {
       language: (c.language as string) ?? null,
       visitorId: (c.visitor_id as string) ?? null,
       unreadCount: (c.unread_count as number) ?? 0,
+      startedAt: (c.started_at as string) ?? null,
       lastMessageAt: (c.last_message_at as string) ?? null,
+      closedAt: (c.closed_at as string) ?? null,
       aiEnabled: Boolean(c.ai_enabled),
       assignedAgentId: (c.assigned_agent_id as string) ?? null,
       firstAgentReplyAt: (c.first_agent_reply_at as string) ?? null,
       csatRating: (c.csat_rating as number) ?? null,
+      priority: (c.priority as string) ?? 'normal',
+      tags: (c.tags as string[]) ?? [],
+      state: c.state_json && typeof c.state_json === 'object' ? (c.state_json as Record<string, unknown>) : {},
     };
   });
 }
@@ -122,6 +137,30 @@ export function isConversationOverdue(c: ConversationRow, slaMinutes: number): b
   return Date.now() - new Date(c.lastMessageAt).getTime() > slaMinutes * 60 * 1000;
 }
 
+export function conversationSource(c: Pick<ConversationRow, 'channel' | 'visitorId' | 'tags' | 'state'>): 'customer' | 'helpdesk' | 'connector' | 'manual' {
+  const source = typeof c.state.source === 'string' ? c.state.source : '';
+  if (source.includes('connector')) return 'connector';
+  if (source.includes('manual')) return 'manual';
+  if (source.includes('helpdesk') || c.tags.includes('helpdesk') || c.visitorId?.startsWith('staff:')) return 'helpdesk';
+  return 'customer';
+}
+
+export function slaLabel(c: ConversationRow, slaMinutes: number): string {
+  if (c.status === 'closed' && c.startedAt && c.closedAt) {
+    const minutes = Math.max(1, Math.round((new Date(c.closedAt).getTime() - new Date(c.startedAt).getTime()) / 60000));
+    return `Resolved in ${minutes}m`;
+  }
+  if (c.status !== 'needs_human' || !c.lastMessageAt) return '-';
+  const dueAt = new Date(c.lastMessageAt).getTime() + slaMinutes * 60000;
+  const diff = dueAt - Date.now();
+  if (diff <= 0) return `Overdue ${Math.max(1, Math.ceil(Math.abs(diff) / 60000))}m`;
+  return `Due in ${Math.max(1, Math.ceil(diff / 60000))}m`;
+}
+
+export function conversationTicketNumber(c: Pick<ConversationRow | ConversationDetail, 'id' | 'state'>): string {
+  return ticketNumberFromState(c.state, c.id);
+}
+
 export function summarizeInboxSla(conversations: ConversationRow[], slaMinutes = 5) {
   const needsHuman = conversations.filter((c) => c.status === 'needs_human');
   return {
@@ -140,7 +179,7 @@ export async function getConversationDetail(id: string): Promise<ConversationDet
 
   const { data: convo, error } = await sb
     .from('conversations')
-    .select('id,company_id,status,channel,language,visitor_id,ai_enabled,assigned_agent_id,priority,tags,csat_rating,csat_comment')
+    .select('id,company_id,status,channel,language,visitor_id,started_at,last_message_at,closed_at,ai_enabled,assigned_agent_id,priority,tags,state_json,csat_rating,csat_comment')
     .eq('company_id', companyId) // scope prevents cross-company access
     .eq('id', id)
     .maybeSingle();
@@ -184,10 +223,14 @@ export async function getConversationDetail(id: string): Promise<ConversationDet
     channel: c.channel as string,
     language: (c.language as string) ?? null,
     visitorId: (c.visitor_id as string) ?? null,
+    startedAt: (c.started_at as string) ?? null,
+    lastMessageAt: (c.last_message_at as string) ?? null,
+    closedAt: (c.closed_at as string) ?? null,
     aiEnabled: Boolean(c.ai_enabled),
     assignedAgentId: (c.assigned_agent_id as string) ?? null,
     priority: (c.priority as string) ?? 'normal',
     tags: (c.tags as string[]) ?? [],
+    state: c.state_json && typeof c.state_json === 'object' ? (c.state_json as Record<string, unknown>) : {},
     csatRating: (c.csat_rating as number) ?? null,
     csatComment: (c.csat_comment as string) ?? null,
     messages: (messages ?? []).map((m) => {

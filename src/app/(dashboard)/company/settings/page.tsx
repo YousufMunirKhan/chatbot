@@ -12,6 +12,7 @@ import { Badge } from '@/components/ui/badge';
 import { formatDate } from '@/lib/format';
 import { listDataRequests } from '@/modules/company/gdpr-data';
 import { processDataRequestAction } from '@/modules/company/gdpr-actions';
+import { ConfirmSubmit } from '@/components/confirm-submit';
 
 async function getRetentionDays(): Promise<number> {
   const companyId = await getCompanyId();
@@ -63,8 +64,8 @@ export default async function CompanySettingsPage() {
           <p className="mt-1 text-xs text-muted-foreground">Chat buttons and handoff shortcuts.</p>
         </Link>
         <Link href="/company/ai-controls" className="rounded-lg border bg-card p-4 hover:bg-muted/50">
-          <p className="text-sm font-medium">AI controls</p>
-          <p className="mt-1 text-xs text-muted-foreground">Routing, provider, and model controls.</p>
+          <p className="text-sm font-medium">AI budget</p>
+          <p className="mt-1 text-xs text-muted-foreground">Monthly spend cap, hard stop, and caching.</p>
         </Link>
         <Link href="/company/quality" className="rounded-lg border bg-card p-4 hover:bg-muted/50">
           <p className="text-sm font-medium">Quality</p>
@@ -77,6 +78,26 @@ export default async function CompanySettingsPage() {
         <Link href="/company/security" className="rounded-lg border bg-card p-4 hover:bg-muted/50">
           <p className="text-sm font-medium">Security</p>
           <p className="mt-1 text-xs text-muted-foreground">Access, privacy, and protections.</p>
+        </Link>
+        <Link href="/company/channels" className="rounded-lg border bg-card p-4 hover:bg-muted/50">
+          <p className="text-sm font-medium">Channels</p>
+          <p className="mt-1 text-xs text-muted-foreground">WhatsApp, Instagram, email, and SMS.</p>
+        </Link>
+        <Link href="/company/broadcasts" className="rounded-lg border bg-card p-4 hover:bg-muted/50">
+          <p className="text-sm font-medium">Broadcasts</p>
+          <p className="mt-1 text-xs text-muted-foreground">Send a message to a group of customers.</p>
+        </Link>
+        <Link href="/company/campaigns" className="rounded-lg border bg-card p-4 hover:bg-muted/50">
+          <p className="text-sm font-medium">Campaigns</p>
+          <p className="mt-1 text-xs text-muted-foreground">Proactive messages triggered by visitor behaviour.</p>
+        </Link>
+        <Link href="/company/managed-connectors" className="rounded-lg border bg-card p-4 hover:bg-muted/50">
+          <p className="text-sm font-medium">Managed connectors</p>
+          <p className="mt-1 text-xs text-muted-foreground">Shopify, Square, and Foodics, connected for you.</p>
+        </Link>
+        <Link href="/company/catalog" className="rounded-lg border bg-card p-4 hover:bg-muted/50">
+          <p className="text-sm font-medium">Catalog</p>
+          <p className="mt-1 text-xs text-muted-foreground">Products and menu items the assistant can quote.</p>
         </Link>
       </div>
 
@@ -126,9 +147,18 @@ export default async function CompanySettingsPage() {
                     <form action={processRequest}>
                       <input type="hidden" name="requestId" value={r.id} />
                       <input type="hidden" name="decision" value="execute" />
-                      <Button type="submit" size="sm" variant={r.requestType === 'delete' ? 'destructive' : 'default'}>
-                        {r.requestType === 'delete' ? 'Erase data' : 'Mark done'}
-                      </Button>
+                      {r.requestType === 'delete' ? (
+                        <ConfirmSubmit
+                          label="Erase data"
+                          confirmLabel="Erase permanently"
+                          pendingLabel="Erasing…"
+                          question="Permanently deletes this person's conversations, leads and appointments."
+                          typeToConfirm="ERASE"
+                          idleVariant="destructive"
+                        />
+                      ) : (
+                        <Button type="submit" size="sm">Mark done</Button>
+                      )}
                     </form>
                     <form action={processRequest}>
                       <input type="hidden" name="requestId" value={r.id} />
@@ -164,7 +194,7 @@ export default async function CompanySettingsPage() {
         </CardHeader>
         <CardContent>
           <InfoBanner>
-            <ul className="list-disc space-y-1 pl-5">
+            <ul className="list-disc space-y-1 ps-5">
               <li>Integration tokens are encrypted at rest.</li>
               <li>Company data isolation enforced via row-level security (RLS).</li>
               <li>Rate limiting protects against abuse.</li>

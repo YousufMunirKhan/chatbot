@@ -13,6 +13,8 @@ export interface SetupStep {
 }
 
 export interface CompanySetupProgress {
+  /** Scopes any client-side wizard state so it cannot leak across companies. */
+  companyId: string;
   companyName: string;
   percent: number;
   complete: number;
@@ -264,11 +266,13 @@ export async function getCompanySetupProgress(): Promise<CompanySetupProgress> {
     },
     {
       key: 'test',
+      // Anchored at the live "Test your assistant" tool. The design preview on
+      // this page is a mock, so linking at the page alone left the step untestable.
       title: 'Test assistant',
-      description: 'Preview answers before launch and confirm it says “I do not know” when data is missing.',
-      href: '/company/widget',
+      description: 'Ask real questions before launch and confirm it says “I do not know” when data is missing.',
+      href: '/company/widget#test-assistant',
       complete: canTest,
-      detail: canTest ? 'Ready to test in the widget preview' : 'Complete purpose, capabilities, and required data first',
+      detail: canTest ? 'Ready — ask a test question' : 'Complete purpose, capabilities, and required data first',
     },
     {
       key: 'install',
@@ -284,6 +288,7 @@ export async function getCompanySetupProgress(): Promise<CompanySetupProgress> {
   const total = steps.length;
 
   return {
+    companyId: company.id,
     companyName: company.name,
     percent: Math.round((complete / total) * 100),
     complete,

@@ -318,7 +318,18 @@ export async function runHelpdeskConnectorAction(
     });
   }
 
+  const status = 'status' in result ? String(result.status) : 'unknown';
+
   return {
+    __action: {
+      action: 'helpdesk_event',
+      payload: {
+        eventId: event.id,
+        actionName: action.name,
+        connector: action.connectorName,
+        status,
+      },
+    },
     ok: true,
     action_name: action.name,
     connector: action.connectorName,

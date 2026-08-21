@@ -8,6 +8,7 @@ import {
 } from '@/lib/helpdesk/connectors';
 import { createSupabaseServiceClient } from '@/lib/db/server';
 import { updateHelpdeskAuditLogForEvent } from '@/lib/helpdesk/audit';
+import { createConnectorIssueTicket } from '@/lib/helpdesk/tickets';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -108,6 +109,28 @@ export async function POST(req: Request) {
       source: 'connector_event_result',
     },
   });
+
+  if (parsed.data.status === 'failed') {
+    const { data: eventRow } = await sb
+      .from('helpdesk_connector_events')
+      .select('id,event_name,response_json,error_message')
+      .eq('company_id', connector.companyId)
+      .eq('connector_id', connector.id)
+      .eq('id', parsed.data.eventId)
+      .maybeSingle();
+    if (eventRow) {
+      await createConnectorIssueTicket({
+        companyId: connector.companyId,
+        connectorId: connector.id,
+        connectorName: connector.name,
+        eventId: parsed.data.eventId,
+        eventName: (eventRow.event_name as string) || 'connector_action',
+        reason: 'failed',
+        error: parsed.data.error ?? ((eventRow.error_message as string | null) || null),
+        response: (parsed.data.response as Record<string, unknown> | undefined) ?? ((eventRow.response_json as Record<string, unknown> | null) || null),
+      });
+    }
+  }
 
   return NextResponse.json({ ok: true });
 }

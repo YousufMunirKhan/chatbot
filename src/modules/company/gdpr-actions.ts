@@ -124,5 +124,11 @@ export async function processDataRequestAction(formData: FormData): Promise<Acti
     .eq('id', req.id);
 
   revalidatePath('/company/settings');
+  // The erasure removed rows that several other workspaces render, so every
+  // surface showing this person has to be rebuilt or they keep appearing.
+  revalidatePath('/company/leads');
+  revalidatePath('/company/appointments');
+  revalidatePath('/company/customers');
+  revalidatePath('/company/inbox');
   return { ok: true };
 }

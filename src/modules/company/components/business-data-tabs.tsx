@@ -39,7 +39,9 @@ export function BusinessDataTabs({ tabs }: { tabs: BusinessDataTab[] }) {
                 aria-selected={selected}
                 onClick={() => setActive(tab.key)}
                 className={cn(
-                  'border-b-2 px-3 py-3 text-left text-sm transition-colors',
+                  // Module 21 (RTL): `text-start` + `ms-2` so the tab label and its
+                  // count badge follow the reading direction.
+                  'border-b-2 px-3 py-3 text-start text-sm transition-colors',
                   selected
                     ? 'border-primary text-foreground'
                     : 'border-transparent text-muted-foreground hover:text-foreground',
@@ -47,7 +49,7 @@ export function BusinessDataTabs({ tabs }: { tabs: BusinessDataTab[] }) {
               >
                 <span className="font-medium">{tab.label}</span>
                 {tab.badge ? (
-                  <span className="ml-2 rounded-full bg-muted px-2 py-0.5 text-xs text-muted-foreground">
+                  <span className="ms-2 rounded-full bg-muted px-2 py-0.5 text-xs text-muted-foreground">
                     {tab.badge}
                   </span>
                 ) : null}

@@ -1,0 +1,31 @@
+{
+  "daily_sales_report": {
+    "input": {
+      "date": "2026-07-01",
+      "branch_id": "main"
+    },
+    "customerHandler": "reportService.dailySales(date, branchId)",
+    "exampleResult": {
+      "date": "2026-07-01",
+      "gross_sales": 142500,
+      "orders": 87,
+      "returns": 2,
+      "currency": "PKR"
+    }
+  },
+  "end_of_day_report": {
+    "input": {
+      "date": "2026-07-01",
+      "branch_id": "main"
+    },
+    "customerHandler": "reportService.endOfDay(date, branchId)",
+    "exampleResult": {
+      "date": "2026-07-01",
+      "cash": 78500,
+      "card": 64000,
+      "discounts": 3500,
+      "open_orders": 3,
+      "currency": "PKR"
+    }
+  }
+}

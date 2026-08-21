@@ -14,6 +14,7 @@ import {
 import { disconnectAction, resyncAction } from '@/modules/company/integrations-actions';
 import { CsvImportForm } from '@/modules/company/components/csv-import-form';
 import { ConnectIntegrationForm } from '@/modules/company/components/connect-integration-form';
+import { ConfirmSubmit } from '@/components/confirm-submit';
 
 function statusVariant(status: string): 'success' | 'destructive' | 'secondary' {
   if (status === 'connected') return 'success';
@@ -101,7 +102,7 @@ export default async function CompanyIntegrationsPage() {
         </CardContent>
       </Card>
 
-      <Card>
+      <Card id="connect-integration">
         <CardHeader>
           <CardTitle>Connect an integration</CardTitle>
         </CardHeader>
@@ -122,9 +123,16 @@ export default async function CompanyIntegrationsPage() {
         </CardHeader>
         <CardContent className="p-0">
           {integrations.length === 0 ? (
-            <p className="px-6 pb-6 text-sm text-muted-foreground">
-              No integrations connected yet.
-            </p>
+            // Module 1 — the connect form is on this page, so link straight to it.
+            <div className="space-y-3 px-6 pb-6">
+              <p className="max-w-2xl text-sm text-muted-foreground">
+                Nothing connected yet. Link your store, calendar, or custom API and the assistant answers from
+                live prices, stock, and orders instead of a copy you have to keep updating.
+              </p>
+              <Button asChild size="sm">
+                <a href="#connect-integration">Connect an integration</a>
+              </Button>
+            </div>
           ) : (
             <Table>
               <TableHeader>
@@ -147,7 +155,7 @@ export default async function CompanyIntegrationsPage() {
                       <Badge variant={statusVariant(i.status)}>{i.status}</Badge>
                     </TableCell>
                     <TableCell>{formatDate(i.lastSyncAt)}</TableCell>
-                    <TableCell className="text-right">
+                    <TableCell className="text-end">
                       <div className="flex justify-end gap-2">
                         <form action={resyncAction}>
                           <input type="hidden" name="accountId" value={i.id} />
@@ -157,9 +165,7 @@ export default async function CompanyIntegrationsPage() {
                         </form>
                         <form action={disconnectAction}>
                           <input type="hidden" name="accountId" value={i.id} />
-                          <Button type="submit" variant="ghost" size="sm">
-                            Disconnect
-                          </Button>
+                          <ConfirmSubmit label="Disconnect" confirmLabel="Yes, disconnect" question="Synced data stops updating." />
                         </form>
                       </div>
                     </TableCell>
@@ -177,7 +183,11 @@ export default async function CompanyIntegrationsPage() {
         </CardHeader>
         <CardContent className="p-0">
           {jobs.length === 0 ? (
-            <p className="px-6 pb-6 text-sm text-muted-foreground">No sync jobs yet.</p>
+            // Module 2 — a log, not a task: explain what fills it, no button.
+            <p className="max-w-2xl px-6 pb-6 text-sm text-muted-foreground">
+              No sync jobs yet. Each hourly sync, on-demand resync, and CSV import is logged here so you can see
+              what was pulled in and what failed.
+            </p>
           ) : (
             <Table>
               <TableHeader>

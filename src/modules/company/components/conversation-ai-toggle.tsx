@@ -18,7 +18,7 @@ function labelFor(actionName: 'pause' | 'resume' | 'close', pending: boolean): s
   return pending ? 'Closing...' : 'Close chat';
 }
 
-export function AiControls({
+export function ConversationAiToggle({
   conversationId,
   aiEnabled,
   isClosed,

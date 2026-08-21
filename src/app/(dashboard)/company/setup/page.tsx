@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { getCompanySetupProgress } from '@/modules/company/setup-data';
 import { OnboardingWizard } from '@/modules/company/components/onboarding-wizard';
+import { TestAssistant } from '@/modules/company/components/test-assistant';
 import { WebsiteOnboardingForm } from '@/modules/company/components/website-onboarding-form';
 
 export default async function CompanySetupPage() {
@@ -57,8 +58,10 @@ export default async function CompanySetupPage() {
                   : 'Everything important is ready. Keep improving answers from the Business Data workspace.'}
               </p>
             </div>
-            <div className="grid grid-cols-2 border-t bg-muted/30 lg:border-l lg:border-t-0">
-              <div className="border-b border-r p-4">
+            {/* Module 21 (RTL): logical seams, so the divider stays inside the block
+                when the grid reverses. */}
+            <div className="grid grid-cols-2 border-t bg-muted/30 lg:border-s lg:border-t-0">
+              <div className="border-b border-e p-4">
                 <p className="text-xs uppercase tracking-wider text-muted-foreground">Assistants</p>
                 <p className="mt-1 text-2xl font-semibold">{setup.stats.bots}</p>
               </div>
@@ -66,7 +69,7 @@ export default async function CompanySetupPage() {
                 <p className="text-xs uppercase tracking-wider text-muted-foreground">Knowledge docs</p>
                 <p className="mt-1 text-2xl font-semibold">{setup.stats.knowledgeDocs}</p>
               </div>
-              <div className="border-r p-4">
+              <div className="border-e p-4">
                 <p className="text-xs uppercase tracking-wider text-muted-foreground">Team members</p>
                 <p className="mt-1 text-2xl font-semibold">{setup.stats.teamMembers}</p>
               </div>
@@ -183,7 +186,7 @@ export default async function CompanySetupPage() {
 
           {setup.customerReadiness.testScenarios.length ? (
             <div className="rounded-md border bg-muted/30 p-4">
-              <p className="text-sm font-medium">Preview tests before launch</p>
+              <p className="text-sm font-medium">Run these tests before launch</p>
               <div className="mt-3 grid gap-2 md:grid-cols-2">
                 {setup.customerReadiness.testScenarios.map((scenario) => (
                   <div key={scenario} className="rounded-md border bg-background p-3 text-sm">
@@ -191,8 +194,8 @@ export default async function CompanySetupPage() {
                   </div>
                 ))}
               </div>
-              <Button asChild className="mt-4">
-                <Link href="/company/widget">Open widget preview</Link>
+              <Button asChild className="mt-4" variant="outline">
+                <Link href="/company/widget">Design and install the widget</Link>
               </Button>
             </div>
           ) : (
@@ -200,6 +203,11 @@ export default async function CompanySetupPage() {
               Create a customer-facing assistant and choose capabilities to generate launch tests.
             </div>
           )}
+
+          {/* The launch tests above are useless without somewhere to run them. */}
+          <div id="test-assistant" className="scroll-mt-6">
+            <TestAssistant />
+          </div>
         </CardContent>
       </Card>
 

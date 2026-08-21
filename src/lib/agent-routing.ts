@@ -1,4 +1,5 @@
 import { createSupabaseServiceClient } from '@/lib/db/server';
+import { ROLES } from '@/lib/constants';
 import { getSupportSettingsFor } from '@/modules/company/support-settings-data';
 
 export async function assignBestAvailableAgent(companyId: string, conversationId: string): Promise<string | null> {
@@ -12,7 +13,24 @@ export async function assignBestAvailableAgent(companyId: string, conversationId
     .limit(25);
   const online = (agents ?? []).map((a) => (a as { user_id: string }).user_id).filter(Boolean);
   const first = online[0];
-  if (!first) return null;
+  if (!first) {
+    const { data: fallbackRows } = await sb
+      .from('company_users')
+      .select('user_id,role')
+      .eq('company_id', companyId)
+      .in('role', [ROLES.COMPANY_ADMIN, ROLES.AGENT])
+      .limit(25);
+    const fallback = (fallbackRows ?? [])
+      .map((row) => row as { user_id: string; role: string })
+      .sort((a, b) => (a.role === ROLES.COMPANY_ADMIN ? -1 : 0) - (b.role === ROLES.COMPANY_ADMIN ? -1 : 0))[0];
+    if (!fallback?.user_id) return null;
+    await sb
+      .from('conversations')
+      .update({ assigned_agent_id: fallback.user_id, status: 'needs_human', ai_enabled: false })
+      .eq('company_id', companyId)
+      .eq('id', conversationId);
+    return fallback.user_id;
+  }
 
   const { routingStrategy } = await getSupportSettingsFor(companyId);
   let agent: string = first;

@@ -813,34 +813,7 @@ class HelpdeskConnectorClient(
         }
 
         fun standardActionLibrary(): List<HelpdeskActionDefinition> {
-            return listOf(
-                HelpdeskActionDefinition("search_product", "Search products by name, SKU, or barcode.", "read", "low", listOf("query"), allowedRoles = listOf("admin", "manager", "cashier")),
-                HelpdeskActionDefinition("get_product", "Return one product by id.", "read", "low", listOf("product_id"), allowedRoles = listOf("admin", "manager", "cashier")),
-                HelpdeskActionDefinition("create_product", "Create a new product.", "create", "medium", listOf("name", "sku", "price"), listOf("opening_stock"), needsConfirmation = true),
-                HelpdeskActionDefinition("update_product", "Update product fields.", "update", "medium", listOf("product_id"), listOf("name", "sku", "price"), needsConfirmation = true),
-                HelpdeskActionDefinition("update_product_price", "Update product sale price.", "update", "medium", listOf("product_id", "price"), listOf("reason"), needsConfirmation = true),
-                HelpdeskActionDefinition("update_product_quantity", "Update stock quantity for one product.", "update", "medium", listOf("product_id", "quantity"), listOf("reason"), needsConfirmation = true),
-                HelpdeskActionDefinition("disable_product", "Disable a product.", "update", "high", listOf("product_id", "reason"), needsConfirmation = true),
-                HelpdeskActionDefinition("check_stock", "Return stock quantity for a product.", "read", "low", listOf("product_id"), allowedRoles = listOf("admin", "manager", "cashier")),
-                HelpdeskActionDefinition("low_stock_products", "List low-stock products.", "report", "low", optionalFields = listOf("threshold"), allowedRoles = listOf("admin", "manager", "cashier")),
-                HelpdeskActionDefinition("stock_adjustment_history", "Return stock adjustment history.", "report", "low", listOf("product_id"), allowedRoles = listOf("admin", "manager")),
-                HelpdeskActionDefinition("search_customer", "Search customers by name or phone.", "read", "low", listOf("query"), allowedRoles = listOf("admin", "manager")),
-                HelpdeskActionDefinition("create_customer", "Create a customer.", "create", "medium", listOf("name"), listOf("phone", "email"), needsConfirmation = true),
-                HelpdeskActionDefinition("update_customer", "Update customer fields.", "update", "medium", listOf("customer_id"), listOf("name", "phone", "email"), needsConfirmation = true),
-                HelpdeskActionDefinition("update_customer_phone", "Update customer phone.", "update", "medium", listOf("customer_id", "phone"), needsConfirmation = true),
-                HelpdeskActionDefinition("search_order", "Search orders.", "read", "low", listOf("query"), allowedRoles = listOf("admin", "manager", "cashier")),
-                HelpdeskActionDefinition("get_order_status", "Return order status.", "read", "low", listOf("order_id"), allowedRoles = listOf("admin", "manager", "cashier")),
-                HelpdeskActionDefinition("create_order", "Create an order.", "create", "medium", listOf("items"), listOf("customer_id"), needsConfirmation = true),
-                HelpdeskActionDefinition("cancel_order", "Cancel an order.", "danger", "high", listOf("order_id", "reason"), needsConfirmation = true, enabled = false),
-                HelpdeskActionDefinition("create_purchase_order", "Create a supplier purchase order.", "create", "medium", listOf("supplier_id", "items"), listOf("expected_date", "notes"), needsConfirmation = true),
-                HelpdeskActionDefinition("search_invoice", "Search invoices.", "read", "low", listOf("query"), allowedRoles = listOf("admin", "manager")),
-                HelpdeskActionDefinition("get_invoice", "Return invoice summary.", "read", "low", listOf("invoice_id"), allowedRoles = listOf("admin", "manager")),
-                HelpdeskActionDefinition("daily_sales_report", "Return sales summary for a date.", "report", "low", listOf("date"), listOf("branch_id"), allowedRoles = listOf("admin", "manager")),
-                HelpdeskActionDefinition("end_of_day_report", "Return end-of-day close summary.", "report", "low", listOf("date"), listOf("branch_id"), allowedRoles = listOf("admin", "manager")),
-                HelpdeskActionDefinition("stock_value_report", "Return stock valuation.", "report", "low", optionalFields = listOf("branch_id"), allowedRoles = listOf("admin", "manager")),
-                HelpdeskActionDefinition("create_support_ticket", "Create an internal support ticket.", "create", "low", listOf("title", "description"), needsConfirmation = true, allowedRoles = listOf("admin", "manager", "cashier")),
-                HelpdeskActionDefinition("add_customer_note", "Add a note to a customer.", "create", "medium", listOf("customer_id", "note"), needsConfirmation = true)
-            )
+            return StandardHelpdeskEvents.all()
         }
     }
 }

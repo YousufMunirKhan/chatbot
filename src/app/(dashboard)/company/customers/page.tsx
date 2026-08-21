@@ -9,6 +9,7 @@ import { formatCurrency, formatDate } from '@/lib/format';
 import { listAppointments } from '@/modules/company/appointments-data';
 import { listLeads } from '@/modules/company/leads-data';
 import { listChatOrders, listSyncedOrders } from '@/modules/company/orders-data';
+import { RefreshOnFocus } from '@/components/refresh-on-focus';
 
 function CountCard({ label, value, href }: { label: string; value: number; href: string }) {
   return (
@@ -35,6 +36,7 @@ export default async function CustomersWorkspacePage() {
 
   return (
     <div className="mx-auto max-w-6xl space-y-6">
+      <RefreshOnFocus />
       <div className="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
         <div>
           <h1 className="text-2xl font-semibold">Customers</h1>
@@ -68,7 +70,16 @@ export default async function CustomersWorkspacePage() {
         </CardHeader>
         <CardContent>
           {leads.length === 0 ? (
-            <p className="text-sm text-muted-foreground">No leads yet.</p>
+            // Module 1 — nothing captured yet; the widget is what starts the flow.
+            <div className="space-y-3">
+              <p className="max-w-xl text-sm text-muted-foreground">
+                No leads yet. Once the widget is live, anyone who leaves a name and contact detail in chat appears
+                here.
+              </p>
+              <Button asChild size="sm">
+                <Link href="/company/widget">Install the widget</Link>
+              </Button>
+            </div>
           ) : (
             <Table>
               <TableHeader>
@@ -103,7 +114,16 @@ export default async function CustomersWorkspacePage() {
         </CardHeader>
         <CardContent>
           {appointments.length === 0 ? (
-            <p className="text-sm text-muted-foreground">No appointment requests yet.</p>
+            // Module 2 — bookings need a bookable service before they can arrive.
+            <div className="space-y-3">
+              <p className="max-w-xl text-sm text-muted-foreground">
+                No appointment requests yet. Mark a service as bookable and the assistant can take requests in
+                chat.
+              </p>
+              <Button asChild size="sm" variant="outline">
+                <Link href="/company/business-data?tab=services">Set up a bookable service</Link>
+              </Button>
+            </div>
           ) : (
             <Table>
               <TableHeader>
@@ -138,7 +158,16 @@ export default async function CustomersWorkspacePage() {
         </CardHeader>
         <CardContent>
           {orders.length === 0 ? (
-            <p className="text-sm text-muted-foreground">No orders yet.</p>
+            // Module 3 — covers both chat orders and store-synced orders.
+            <div className="space-y-3">
+              <p className="max-w-xl text-sm text-muted-foreground">
+                No orders yet. Orders placed in chat show up here, and so do orders from a connected store once
+                you link one.
+              </p>
+              <Button asChild size="sm" variant="outline">
+                <Link href="/company/integrations">Connect a store</Link>
+              </Button>
+            </div>
           ) : (
             <Table>
               <TableHeader>

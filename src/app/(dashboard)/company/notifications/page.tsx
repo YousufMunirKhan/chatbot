@@ -12,6 +12,7 @@ import {
   listNotificationDeliveryLogs,
 } from '@/modules/company/notification-settings';
 import { NotificationSettingsForm } from '@/modules/company/components/notification-settings-form';
+import { RefreshOnFocus } from '@/components/refresh-on-focus';
 
 const tabs = [
   { key: 'inbox', label: 'Inbox' },
@@ -38,6 +39,7 @@ export default async function NotificationsPage({
 
   return (
     <div className="space-y-6">
+      <RefreshOnFocus />
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h1 className="text-2xl font-semibold">Notifications</h1>
@@ -97,12 +99,12 @@ export default async function NotificationsPage({
                 <table className="w-full min-w-[720px] text-sm">
                   <thead className="border-b bg-muted/30">
                     <tr>
-                      <th className="px-3 py-2 text-left font-medium">Time</th>
-                      <th className="px-3 py-2 text-left font-medium">Event</th>
-                      <th className="px-3 py-2 text-left font-medium">Channel</th>
-                      <th className="px-3 py-2 text-left font-medium">Recipient</th>
-                      <th className="px-3 py-2 text-left font-medium">Status</th>
-                      <th className="px-3 py-2 text-left font-medium">Error</th>
+                      <th className="px-3 py-2 text-start font-medium">Time</th>
+                      <th className="px-3 py-2 text-start font-medium">Event</th>
+                      <th className="px-3 py-2 text-start font-medium">Channel</th>
+                      <th className="px-3 py-2 text-start font-medium">Recipient</th>
+                      <th className="px-3 py-2 text-start font-medium">Status</th>
+                      <th className="px-3 py-2 text-start font-medium">Error</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -128,16 +130,35 @@ export default async function NotificationsPage({
                 </table>
               </div>
             ) : (
-              <p className="text-sm text-muted-foreground">No delivery attempts yet.</p>
+              // Module 1 — nothing has been sent yet; point at the rules that decide sending.
+              <div className="space-y-3">
+                <p className="max-w-xl text-sm text-muted-foreground">
+                  No delivery attempts yet. Every email, WhatsApp, Slack, and webhook alert this workspace sends
+                  is recorded here, with the reason when one is skipped or fails.
+                </p>
+                <Button asChild size="sm" variant="outline">
+                  <Link href="/company/notifications?tab=settings">Check delivery settings</Link>
+                </Button>
+              </div>
             )}
           </CardContent>
         </Card>
       ) : null}
 
       {activeTab === 'inbox' && notifications.length === 0 ? (
+        // Module 2 — admins can act on this; agents only get the explanation.
         <Card>
-          <CardContent className="p-6">
-            <p className="text-sm text-muted-foreground">No notifications yet.</p>
+          <CardContent className="space-y-3 p-6">
+            <p className="text-sm font-medium">No notifications yet</p>
+            <p className="max-w-xl text-sm text-muted-foreground">
+              You will get one here whenever a lead, booking, order, or handoff request comes in. Nothing has
+              happened yet.
+            </p>
+            {canManageDelivery ? (
+              <Button asChild size="sm" variant="outline">
+                <Link href="/company/notifications?tab=settings">Choose who gets alerted</Link>
+              </Button>
+            ) : null}
           </CardContent>
         </Card>
       ) : null}

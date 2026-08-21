@@ -33,6 +33,10 @@ export async function importCsvAction(_prev: ActionState, formData: FormData): P
   }
   revalidatePath('/company/integrations');
   revalidatePath('/company/catalog');
+  // An import can land orders and customers, and it counts towards setup progress.
+  revalidatePath('/company/orders');
+  revalidatePath('/company/customers');
+  revalidatePath('/company/setup');
   return { ok: true };
 }
 
@@ -106,6 +110,10 @@ export async function resyncAction(formData: FormData): Promise<void> {
   await runSync(parsed.data.accountId);
   revalidatePath('/company/integrations');
   revalidatePath('/company/catalog');
+  // A sync pulls orders and customers, and it counts towards setup progress.
+  revalidatePath('/company/orders');
+  revalidatePath('/company/customers');
+  revalidatePath('/company/setup');
 }
 
 export async function disconnectAction(formData: FormData): Promise<void> {

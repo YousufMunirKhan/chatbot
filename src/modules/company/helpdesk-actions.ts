@@ -6,8 +6,11 @@ import { requireRole } from '@/lib/auth';
 import { ROLES } from '@/lib/constants';
 import { createSupabaseServiceClient } from '@/lib/db/server';
 import { ingestText } from '@/lib/ai/ingest';
+import { logAppError, type AppErrorSeverity } from '@/lib/application-errors';
 import { createConnectorToken, hashConnectorToken, requestConnectorResync } from '@/lib/helpdesk/connectors';
 import { insertHelpdeskAuditLog } from '@/lib/helpdesk/audit';
+import { notify } from '@/lib/notify';
+import { dispatchWebhookEvent } from '@/lib/webhooks';
 import { getCompanyId } from './data';
 import type { ActionState } from './actions';
 
@@ -17,6 +20,109 @@ const connectorSchema = z.object({
   name: z.string().min(2, 'Connector name is required').max(80),
   platform: z.enum(['dotnet', 'android', 'web', 'node', 'laravel', 'react', 'vue']),
 });
+
+const helpdeskIssueSchema = z.object({
+  subject: z.string().min(3, 'Subject is required').max(140),
+  details: z.string().min(10, 'Please describe the issue.').max(4000),
+  severity: z.enum(['low', 'normal', 'high', 'urgent']).default('normal'),
+  currentRoute: z.string().max(240).optional(),
+});
+
+export async function reportHelpdeskIssueAction(
+  _prev: ActionState,
+  formData: FormData,
+): Promise<ActionState> {
+  const user = await requireRole([ROLES.COMPANY_ADMIN, ROLES.AGENT]);
+  const companyId = await getCompanyId();
+  const parsed = helpdeskIssueSchema.safeParse(Object.fromEntries(formData));
+  if (!parsed.success) return { error: parsed.error.issues[0]?.message ?? 'Invalid issue report.' };
+
+  const body = [
+    `Severity: ${parsed.data.severity}`,
+    parsed.data.currentRoute ? `Route: ${parsed.data.currentRoute}` : null,
+    '',
+    parsed.data.details,
+  ].filter((line) => line != null).join('\n');
+
+  await notify({
+    companyId,
+    type: 'helpdesk_issue_reported',
+    title: `Help Desk issue: ${parsed.data.subject}`,
+    body,
+    data: {
+      subject: parsed.data.subject,
+      severity: parsed.data.severity,
+      currentRoute: parsed.data.currentRoute || null,
+      reportedBy: user.email,
+      reportedByUserId: user.userId,
+      source: 'company_helpdesk_support_tab',
+    },
+    email: true,
+  });
+
+  await insertHelpdeskAuditLog({
+    companyId,
+    actorUserId: user.userId,
+    source: 'dashboard',
+    actionName: 'helpdesk_issue_reported',
+    question: parsed.data.subject,
+    answer: parsed.data.details,
+    status: 'info',
+    metadata: {
+      severity: parsed.data.severity,
+      currentRoute: parsed.data.currentRoute || null,
+      reportedBy: user.email,
+    },
+  });
+
+  const platformSeverity: AppErrorSeverity =
+    parsed.data.severity === 'urgent' ? 'critical' : parsed.data.severity === 'high' ? 'error' : 'warning';
+  await logAppError({
+    companyId,
+    userId: user.userId,
+    source: 'helpdesk_issue_report',
+    severity: platformSeverity,
+    message: parsed.data.subject,
+    route: parsed.data.currentRoute || '/company/help-desk?tab=support',
+    metadata: {
+      details: parsed.data.details,
+      severity: parsed.data.severity,
+      reportedBy: user.email,
+      delivery: 'company_notification_and_platform_error_log',
+    },
+  });
+
+  revalidatePath('/company/help-desk');
+  revalidatePath('/company/notifications');
+  revalidatePath('/super-admin/error-logs');
+  return { ok: true };
+}
+
+export async function sendTicketCreatedTestAutomationAction(
+  _prev: ActionState,
+  _formData: FormData,
+): Promise<ActionState> {
+  const user = await requireRole([ROLES.COMPANY_ADMIN]);
+  const companyId = await getCompanyId();
+  await dispatchWebhookEvent({
+    companyId,
+    event: 'ticket.created',
+    title: 'Test ticket.created automation',
+    body: 'This is a test ticket event from the Help Desk Support tab.',
+    data: {
+      test: true,
+      ticketNumber: 'HD-TEST',
+      conversationId: 'test-conversation',
+      source: 'helpdesk_support_tab_test',
+      severity: 'normal',
+      reportedBy: user.email,
+    },
+  });
+
+  revalidatePath('/company/help-desk');
+  revalidatePath('/company/webhooks');
+  return { ok: true };
+}
 
 export async function createHelpdeskConnectorAction(
   _prev: ConnectorActionState,

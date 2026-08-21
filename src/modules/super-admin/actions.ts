@@ -233,7 +233,13 @@ export async function createCompanyAction(
   const { error: mErr } = await sb
     .from('company_users')
     .insert({ company_id: company.id, user_id: created.user.id, role: ROLES.COMPANY_ADMIN });
-  if (mErr) return { error: 'Company created but linking admin failed: ' + mErr.message };
+  if (mErr) {
+    // The company, subscription, budgets, credit wallet and auth user are all
+    // persisted by now — without this the orphaned company stays invisible on
+    // the list page until an unrelated write revalidates it.
+    revalidatePath('/super-admin/companies');
+    return { error: 'Company created but linking admin failed: ' + mErr.message };
+  }
 
   // 5. Audit
   await writeAudit(sb, {
@@ -291,6 +297,7 @@ export async function setCompanyStatusAction(formData: FormData): Promise<void> 
     targetId: v.companyId,
   });
   revalidatePath(`/super-admin/companies/${v.companyId}`);
+  revalidatePath(`/super-admin/companies/${v.companyId}/manage`);
   revalidatePath('/super-admin/companies');
 }
 
@@ -343,6 +350,8 @@ export async function updateSubscriptionAction(formData: FormData): Promise<void
     },
   });
   revalidatePath(`/super-admin/companies/${v.companyId}`);
+  // `/manage` renders the same `getCompanyDetail(id)` payload as the detail page.
+  revalidatePath(`/super-admin/companies/${v.companyId}/manage`);
   revalidatePath('/super-admin/subscriptions');
 }
 
@@ -391,6 +400,7 @@ export async function topUpCompanyCreditAction(formData: FormData): Promise<void
     metadata: { amountGbp: v.amount, description: v.description ?? null },
   });
   revalidatePath(`/super-admin/companies/${v.companyId}`);
+  revalidatePath(`/super-admin/companies/${v.companyId}/manage`);
   revalidatePath('/super-admin/usage');
 }
 
@@ -443,6 +453,7 @@ export async function grantCompanyRepliesAction(formData: FormData): Promise<voi
     },
   });
   revalidatePath(`/super-admin/companies/${v.companyId}`);
+  revalidatePath(`/super-admin/companies/${v.companyId}/manage`);
   revalidatePath('/super-admin/companies');
   revalidatePath('/super-admin/usage');
 }
@@ -493,5 +504,6 @@ export async function runCompanyGradedEvalAction(formData: FormData): Promise<vo
     });
   }
   revalidatePath(`/super-admin/companies/${companyId}`);
+  revalidatePath(`/super-admin/companies/${companyId}/manage`);
   revalidatePath('/super-admin/quality');
 }

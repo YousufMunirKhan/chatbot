@@ -7,6 +7,7 @@ import { ROLES } from '@/lib/constants';
 import { QuickActionForm } from '@/modules/company/components/quick-action-form';
 import { deleteQuickActionAction } from '@/modules/company/quick-actions-actions';
 import { listQuickActions } from '@/modules/company/quick-actions-data';
+import { ConfirmSubmit } from '@/components/confirm-submit';
 
 const TYPE_LABELS: Record<string, string> = {
   send_message: 'Message',
@@ -70,7 +71,7 @@ export default async function QuickActionsPage() {
         </div>
         <Button asChild variant="outline">
           <a href="/company/quick-actions/analytics">
-            <BarChart3 className="mr-2 h-4 w-4" />
+            <BarChart3 className="me-2 h-4 w-4" />
             Analytics
           </a>
         </Button>
@@ -91,7 +92,7 @@ export default async function QuickActionsPage() {
         </div>
       </div>
 
-      <Card>
+      <Card id="create-quick-action">
         <CardHeader>
           <CardTitle className="text-base">Create quick action</CardTitle>
         </CardHeader>
@@ -126,7 +127,7 @@ export default async function QuickActionsPage() {
                   </div>
                   <form action={deleteQuickActionAction}>
                     <input type="hidden" name="id" value={action.id} />
-                    <Button type="submit" variant="outline" size="sm">Delete</Button>
+                    <ConfirmSubmit label="Delete" question="This button disappears from the chat." />
                   </form>
                 </CardHeader>
                 <CardContent>
@@ -143,12 +144,16 @@ export default async function QuickActionsPage() {
         ) : (
           <Card>
             <CardContent className="grid gap-6 p-6 lg:grid-cols-[1fr_340px] lg:items-center">
+              {/* Module 1 — the builder is on this page, so link straight to it. */}
               <div>
                 <h3 className="text-lg font-semibold">No quick actions yet</h3>
                 <p className="mt-2 max-w-2xl text-sm text-muted-foreground">
-                  Start with one high-intent action like booking a demo, asking for pricing, or requesting a human agent.
-                  The disabled example shows how it will look to visitors.
+                  Visitors see a plain chat box with nothing to tap. Start with one high-intent button like booking
+                  a demo, asking for pricing, or reaching a person. The example on the right is how it will look.
                 </p>
+                <Button asChild size="sm" className="mt-4">
+                  <a href="#create-quick-action">Create your first quick action</a>
+                </Button>
               </div>
               <div className="rounded-xl border bg-slate-950 p-4 text-white">
                 <div className="mb-3 flex items-center gap-2 text-sm font-semibold">

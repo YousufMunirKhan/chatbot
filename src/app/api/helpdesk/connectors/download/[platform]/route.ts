@@ -7,11 +7,15 @@ import { env } from '@/lib/env';
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
+const CONNECTOR_PACKAGE_VERSION = '0.4.0';
+const CONNECTOR_PROTOCOL_VERSION = '1.0';
+
 const packageFiles = {
   android: [
     'connectors/android/README.md',
     'connectors/android/AI_AGENT_ANDROID.md',
     'connectors/android/ANDROID_UI_GUIDE.md',
+    'connectors/android/StandardHelpdeskEvents.kt',
     'connectors/android/HelpdeskConnectorClient.kt',
     'connectors/android/HelpdeskChatController.kt',
     'connectors/android/HelpdeskEncryptedTokenStore.kt',
@@ -25,6 +29,7 @@ const packageFiles = {
     'connectors/dotnet/README.md',
     'connectors/dotnet/AI_AGENT_DOTNET.md',
     'connectors/dotnet/WINFORMS_WPF_UI.md',
+    'connectors/dotnet/StandardHelpdeskEvents.cs',
     'connectors/dotnet/Program.cs',
     'connectors/dotnet/HelpdeskDotnetAppDetails.cs',
     'connectors/dotnet/HelpdeskChatController.cs',
@@ -34,6 +39,7 @@ const packageFiles = {
   web: [
     'connectors/web/README.md',
     'connectors/web/AI_AGENT_WEB.md',
+    'connectors/web/HelpdeskStandardEvents.js',
     'connectors/web/HelpdeskConnectorClient.js',
     'connectors/web/HelpdeskWebAppDetails.js',
     'connectors/web/HelpdeskEmbeddedChat.js',
@@ -42,6 +48,7 @@ const packageFiles = {
   node: [
     'connectors/node/AI_AGENT_NODE.md',
     'connectors/node/helpdesk-node-starter.mjs',
+    'connectors/web/HelpdeskStandardEvents.js',
     'connectors/web/HelpdeskConnectorClient.js',
     'connectors/web/HelpdeskWebAppDetails.js',
     'connectors/web/HelpdeskEmbeddedChat.js',
@@ -49,6 +56,7 @@ const packageFiles = {
   ],
   laravel: [
     'connectors/laravel/AI_AGENT_LARAVEL.md',
+    'connectors/laravel/StandardHelpdeskEvents.php',
     'connectors/laravel/HelpdeskLaravelStarter.php',
   ],
   react: [
@@ -64,6 +72,7 @@ const packageFiles = {
   fullstack: [
     'connectors/web/README.md',
     'connectors/web/AI_AGENT_WEB.md',
+    'connectors/web/HelpdeskStandardEvents.js',
     'connectors/web/HelpdeskConnectorClient.js',
     'connectors/web/HelpdeskWebAppDetails.js',
     'connectors/web/HelpdeskEmbeddedChat.js',
@@ -71,6 +80,7 @@ const packageFiles = {
     'connectors/node/AI_AGENT_NODE.md',
     'connectors/node/helpdesk-node-starter.mjs',
     'connectors/laravel/AI_AGENT_LARAVEL.md',
+    'connectors/laravel/StandardHelpdeskEvents.php',
     'connectors/laravel/HelpdeskLaravelStarter.php',
     'connectors/react/HELPDESK_REACT_COMPONENT.md',
     'connectors/vue/HELPDESK_VUE_COMPONENT.md',
@@ -81,7 +91,15 @@ const sharedFiles = [
   'connectors/HELPDESK_DEVELOPER_HANDOFF.md',
   'connectors/AI_AGENT_INTEGRATION_PROMPT.md',
   'connectors/PROTOCOL.md',
+  'connectors/CHANGELOG.md',
+  'connectors/events/STANDARD_EVENTS.md',
+  'connectors/events/standard-events.json',
+  'connectors/events/examples/reports.json',
+  'connectors/events/examples/inventory.json',
+  'connectors/events/examples/orders.json',
   'connectors/docs/AUTO_DISCOVERY_PLAYBOOK.md',
+  'connectors/docs/COMPATIBILITY_POLICY.md',
+  'connectors/docs/UPGRADE_GUIDE.md',
   'connectors/docs/UI_COMPONENT_GUIDE.md',
   'connectors/docs/CONNECTOR_TEST_PLAN.md',
 ];
@@ -292,6 +310,13 @@ function setupGuide(platform: ConnectorPlatform, baseUrl: string): string {
     runHint,
     ...platformSteps,
     '',
+    '## New Install vs Upgrade',
+    '',
+    '- New install: follow AI_IMPLEMENTATION_BRIEF.md and replace starter samples with the real app map.',
+    '- Existing integration: read CONNECTOR_VERSION.json, CHANGELOG.md, events/STANDARD_EVENTS.md, docs/COMPATIBILITY_POLICY.md, and docs/UPGRADE_GUIDE.md first.',
+    '- Do not overwrite customer-owned mapping files such as HelpdeskAndroidAppDetails.kt, HelpdeskWebAppDetails.js, or HelpdeskDotnetAppDetails.cs without merging.',
+    '- Keep existing externalKey and routeId values stable so resync updates the same records.',
+    '',
     '## Required Flow',
     '',
     '1. Check status.',
@@ -363,6 +388,10 @@ function aiImplementationBrief(platform: ConnectorPlatform, baseUrl: string): st
     '',
     `Base URL: ${baseUrl}`,
     'Connector token: create it in Switch&Save Help Desk. It starts with hdk_.',
+    '',
+    '## Existing Integration Warning',
+    '',
+    'If this app already has a Help Desk connector, read `CONNECTOR_VERSION.json`, `CHANGELOG.md`, `events/STANDARD_EVENTS.md`, `docs/COMPATIBILITY_POLICY.md`, and `docs/UPGRADE_GUIDE.md` before editing. Replace SDK/runtime files and standard event definition files, but manually merge customer-owned mapping files so real screens, route IDs, and action handlers are not lost.',
     '',
     '## Edit This First',
     '',
@@ -439,6 +468,7 @@ export async function GET(req: Request, { params }: { params: { platform: string
 
   zip.file(`${folderName}/SETUP.md`, setupGuide(params.platform, baseUrl.replace(/\/+$/, '')));
   zip.file(`${folderName}/AI_IMPLEMENTATION_BRIEF.md`, aiImplementationBrief(params.platform, baseUrl.replace(/\/+$/, '')));
+  zip.file(`${folderName}/CONNECTOR_VERSION.json`, JSON.stringify(connectorVersionManifest(params.platform), null, 2));
   zip.file(`${folderName}/ACTION_FORMAT.json`, JSON.stringify(actionFormatExample(), null, 2));
   if (params.platform === 'web' || params.platform === 'node' || params.platform === 'fullstack') {
     zip.file(
@@ -462,7 +492,12 @@ export async function GET(req: Request, { params }: { params: { platform: string
   for (const file of sharedFiles) {
     const absolutePath = path.join(root, file);
     const content = await fs.readFile(absolutePath);
-    zip.file(`${folderName}/${path.basename(file)}`, content);
+    const zipPath = file.startsWith('connectors/docs/')
+      ? `docs/${path.basename(file)}`
+      : file.startsWith('connectors/events/')
+        ? file.replace(/^connectors\/events\//, 'events/')
+        : path.basename(file);
+    zip.file(`${folderName}/${zipPath}`, content);
   }
 
   for (const file of packageFiles[params.platform]) {
@@ -479,6 +514,55 @@ export async function GET(req: Request, { params }: { params: { platform: string
       'Cache-Control': 'no-store',
     },
   });
+}
+
+function connectorVersionManifest(platform: ConnectorPlatform) {
+  return {
+    packageVersion: CONNECTOR_PACKAGE_VERSION,
+    protocolVersion: CONNECTOR_PROTOCOL_VERSION,
+    platform,
+    compatibility: 'backward-compatible',
+    updatePolicy: {
+      defaultRule: 'Connector updates are additive by default. Existing customer integrations must keep working unless a major version explicitly marks a breaking change.',
+      safeToReplace: [
+        'SDK/client/runtime files',
+        'standard event definition files',
+        'chat controller/view model files',
+        'encrypted token store and lifecycle helper files',
+        'preview/audit/sync helper screens',
+      ],
+      mergeManually: [
+        'customer-owned app detail/mapping files',
+        'routeId to local navigation mappings',
+        'action handler implementations',
+        'service/repository integrations',
+        'customer-owned event handler classes',
+      ],
+      stableKeys: [
+        'externalKey',
+        'routeId',
+        'action.name',
+      ],
+    },
+    customerOwnedFiles: [
+      'HelpdeskAndroidAppDetails.kt',
+      'HelpdeskWebAppDetails.js',
+      'HelpdeskDotnetAppDetails.cs',
+      'HelpdeskLaravelStarter.php after customization',
+      'ReportEventHandlers.*',
+      'ProductEventHandlers.*',
+      'OrderEventHandlers.*',
+    ],
+    safeUpgradeChecklist: [
+      'Read CHANGELOG.md and docs/COMPATIBILITY_POLICY.md.',
+      'Replace safe SDK/runtime files only.',
+      'Merge customer-owned mapping files manually.',
+      'Preserve existing externalKey, routeId, and action.name values.',
+      'Run Preview, Audit, route tests, and Sync.',
+    ],
+    breakingChanges: [],
+    deprecations: [],
+  };
 }
 
 function actionFormatExample() {

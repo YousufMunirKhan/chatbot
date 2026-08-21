@@ -5,6 +5,8 @@ import { z } from 'zod';
 import { requireRole, getSessionUser } from '@/lib/auth';
 import { ROLES } from '@/lib/constants';
 import { createSupabaseServiceClient } from '@/lib/db/server';
+import { sendEmail } from '@/lib/email';
+import { notify } from '@/lib/notify';
 import { getCompanyId } from './data';
 
 export type ActionState = { error?: string; ok?: boolean };
@@ -148,6 +150,102 @@ export async function closeChatAction(formData: FormData): Promise<ActionState> 
     conversationId,
     values: { ai_enabled: false, status: 'closed', closed_at: new Date().toISOString() },
   });
+}
+
+const resolveTicketSchema = z.object({
+  conversationId: z.string().uuid(),
+  resolution: z.string().min(3, 'Resolution message is required').max(2000),
+});
+
+function emailFromConversation(row: Record<string, unknown> | null): string | null {
+  const state = row?.state_json && typeof row.state_json === 'object'
+    ? (row.state_json as Record<string, unknown>)
+    : {};
+  const reportedBy = typeof state.reportedBy === 'string' ? state.reportedBy : null;
+  const visitorId = typeof row?.visitor_id === 'string' ? row.visitor_id : null;
+  const candidate = reportedBy || visitorId;
+  return candidate && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(candidate) ? candidate : null;
+}
+
+function escapeHtml(value: string): string {
+  return value
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
+}
+
+export async function resolveTicketAction(
+  _prev: ActionState,
+  formData: FormData,
+): Promise<ActionState> {
+  const user = await requireRole([ROLES.COMPANY_ADMIN, ROLES.AGENT]);
+  const companyId = await getCompanyId();
+  const parsed = resolveTicketSchema.safeParse(Object.fromEntries(formData));
+  if (!parsed.success) return { error: parsed.error.issues[0]?.message ?? 'Invalid resolution' };
+
+  const sb = createSupabaseServiceClient();
+  const { data: convo } = await sb
+    .from('conversations')
+    .select('id,visitor_id,state_json,priority,tags')
+    .eq('company_id', companyId)
+    .eq('id', parsed.data.conversationId)
+    .maybeSingle();
+  if (!convo) return { error: 'Conversation not found' };
+
+  const now = new Date().toISOString();
+  const { error } = await sb
+    .from('conversations')
+    .update({
+      ai_enabled: false,
+      status: 'closed',
+      closed_at: now,
+      last_message_at: now,
+      unread_count: 0,
+    })
+    .eq('company_id', companyId)
+    .eq('id', parsed.data.conversationId);
+  if (error) return { error: error.message };
+
+  await sb.from('messages').insert({
+    company_id: companyId,
+    conversation_id: parsed.data.conversationId,
+    sender_type: 'system',
+    sender_id: user.userId,
+    content_text: `Ticket resolved: ${parsed.data.resolution}`,
+    content_type: 'system',
+    metadata_json: { source: 'ticket_resolved' },
+  });
+
+  const email = emailFromConversation(convo as Record<string, unknown>);
+  if (email) {
+    await sendEmail({
+      to: email,
+      subject: 'Your support ticket is resolved',
+      html: `<h2>Your support ticket is resolved</h2><p>${escapeHtml(parsed.data.resolution)}</p>`,
+    }).catch(() => undefined);
+  }
+
+  await notify({
+    companyId,
+    type: 'helpdesk_issue_resolved',
+    title: 'Ticket resolved',
+    body: parsed.data.resolution,
+    data: {
+      conversationId: parsed.data.conversationId,
+      resolvedBy: user.email,
+      resolvedByUserId: user.userId,
+      priority: (convo as Record<string, unknown>).priority ?? null,
+      tags: (convo as Record<string, unknown>).tags ?? [],
+      reporterEmail: email,
+    },
+    email: false,
+  });
+
+  revalidateInbox(parsed.data.conversationId);
+  revalidatePath('/company/notifications');
+  revalidatePath('/company/webhooks');
+  return { ok: true };
 }
 
 // ---- Ticketing: priority, tags, internal notes, canned responses ----------

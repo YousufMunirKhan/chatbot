@@ -6,6 +6,7 @@ import { getCompanyDashboardSummary } from '@/modules/company/dashboard-data';
 import { getCompanySetupProgress } from '@/modules/company/setup-data';
 import { planLabel } from '@/modules/super-admin/plans';
 import { formatDate, formatNumber } from '@/lib/format';
+import { RefreshOnFocus } from '@/components/refresh-on-focus';
 
 function Stat({ label, value, href }: { label: string; value: string; href?: string }) {
   const body = (
@@ -28,6 +29,7 @@ export default async function CompanyOverview() {
 
   return (
     <div className="mx-auto max-w-6xl space-y-6">
+      <RefreshOnFocus />
       <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
         <div>
           <h1 className="text-2xl font-semibold">{summary.company.name}</h1>
@@ -74,8 +76,11 @@ export default async function CompanyOverview() {
               </Button>
             </div>
           </div>
-          <div className="grid grid-cols-2 border-t bg-muted/30 lg:border-l lg:border-t-0">
-            <div className="border-b border-r p-4">
+          {/* Module 21 (RTL): logical seams. `border-l`/`border-r` would draw the
+              divider outside the block once the grid reverses; `border-s`/`border-e`
+              follow the reading direction. */}
+          <div className="grid grid-cols-2 border-t bg-muted/30 lg:border-s lg:border-t-0">
+            <div className="border-b border-e p-4">
               <p className="text-xs uppercase tracking-wider text-muted-foreground">Assistants</p>
               <p className="mt-1 text-2xl font-semibold">{formatNumber(summary.botCount)}</p>
             </div>
@@ -83,7 +88,7 @@ export default async function CompanyOverview() {
               <p className="text-xs uppercase tracking-wider text-muted-foreground">Team</p>
               <p className="mt-1 text-2xl font-semibold">{formatNumber(summary.memberCount)}</p>
             </div>
-            <div className="border-r p-4">
+            <div className="border-e p-4">
               <p className="text-xs uppercase tracking-wider text-muted-foreground">Open chats</p>
               <p className="mt-1 text-2xl font-semibold">{formatNumber(summary.activeConversations)}</p>
             </div>

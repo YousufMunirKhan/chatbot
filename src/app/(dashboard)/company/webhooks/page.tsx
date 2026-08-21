@@ -16,21 +16,22 @@ import {
   testWebhookAction,
 } from '@/modules/company/webhooks-actions';
 import { WebhookForm } from '@/modules/company/components/webhook-form';
+import { ConfirmSubmit } from '@/components/confirm-submit';
 
 const codeBlock = 'overflow-x-auto rounded-md bg-muted p-3 text-xs leading-relaxed';
 
 const PAYLOAD_EXAMPLE = `POST  (your endpoint)
 Content-Type: application/json
-X-Webhook-Event: lead.created
+X-Webhook-Event: ticket.created
 X-Webhook-Signature: sha256=<hmac>
 
 {
-  "event": "lead.created",
+  "event": "ticket.created",
   "created_at": "2026-06-26T10:00:00.000Z",
   "company_id": "…",
-  "title": "New lead",
-  "body": "Jane Doe — jane@example.com",
-  "data": { "name": "Jane Doe", "email": "jane@example.com" }
+  "title": "Help Desk ticket: Daily sales report stuck",
+  "body": "The report stayed queued after the connector action ran.",
+  "data": { "conversationId": "...", "priority": "high", "source": "helpdesk" }
 }`;
 
 const VERIFY_EXAMPLE = `// Verify the signature (Node.js)
@@ -60,10 +61,10 @@ export default async function WebhooksPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-semibold">Webhooks &amp; integrations</h1>
+          <h1 className="text-2xl font-semibold">Webhooks &amp; automations</h1>
         <p className="text-sm text-muted-foreground">
-          Push new leads, appointments, and orders into your own systems — a generic
-          signed webhook, Slack, or any of 5,000+ apps via Zapier / Make.
+          Push leads, appointments, orders, and ticket events into Slack, Jira, your CRM,
+          or any app that accepts a signed webhook.
         </p>
       </div>
 
@@ -183,9 +184,7 @@ export default async function WebhooksPage() {
                         </form>
                         <form action={deleteWebhookAction}>
                           <input type="hidden" name="id" value={ep.id} />
-                          <Button type="submit" variant="ghost" size="sm">
-                            Delete
-                          </Button>
+                          <ConfirmSubmit label="Delete" question="This endpoint stops receiving events." />
                         </form>
                       </div>
                     </TableCell>
@@ -252,7 +251,9 @@ export default async function WebhooksPage() {
         <CardContent className="space-y-5 text-sm">
           <div>
             <h3 className="font-medium">1. Events we send</h3>
-            <ul className="ml-5 list-disc text-muted-foreground">
+            {/* Module 21 (RTL): `ms-5` keeps the bullet indent on the reading-start
+                edge; `ms-5` would indent from the wrong side and clip the markers. */}
+            <ul className="ms-5 list-disc text-muted-foreground">
               <li>
                 <code>lead.created</code> — a new lead is captured
               </li>
@@ -261,6 +262,12 @@ export default async function WebhooksPage() {
               </li>
               <li>
                 <code>order.created</code> — a new order is placed via chat
+              </li>
+              <li>
+                <code>ticket.created</code> - a customer or Help Desk ticket needs attention
+              </li>
+              <li>
+                <code>ticket.resolved</code> - a ticket was marked resolved
               </li>
             </ul>
           </div>
@@ -281,8 +288,14 @@ export default async function WebhooksPage() {
 
           <div>
             <h3 className="font-medium">4. Connect Slack</h3>
+            {/* Module 21 (RTL): these are verbatim menu paths in Slack's / Zapier's own
+                English UI, so they are isolated with dir="ltr" rather than mirrored like
+                the back-link arrows. The "→" here means "then click", reading with the
+                Latin labels either side of it — flipping it would contradict the LTR run
+                the bidi algorithm keeps them in, and dir="ltr" also stops the trailing
+                comma and quote marks from being dragged to the wrong end of the phrase. */}
             <p className="text-muted-foreground">
-              In Slack: <em>Apps → Incoming Webhooks → Add to a channel</em>, copy the URL,
+              In Slack: <em dir="ltr">Apps → Incoming Webhooks → Add to a channel</em>, copy the URL,
               then add it here as a <strong>Slack</strong> webhook. You&apos;ll get a message
               in that channel for each event you choose.
             </p>
@@ -291,7 +304,7 @@ export default async function WebhooksPage() {
           <div>
             <h3 className="font-medium">5. Connect 5,000+ apps (Zapier / Make)</h3>
             <p className="text-muted-foreground">
-              In Zapier or Make create a trigger of type <em>&quot;Webhooks → Catch Hook&quot;</em>,
+              In Zapier or Make create a trigger of type <em dir="ltr">&quot;Webhooks → Catch Hook&quot;</em>,
               copy the URL it gives you, and add it here as a <strong>Generic</strong> webhook.
               From there you can send leads/orders to Google Sheets, HubSpot, Salesforce,
               Mailchimp, and more — no coding.

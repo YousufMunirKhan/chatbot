@@ -55,8 +55,8 @@ export default async function CompanyQualityPage() {
           </p>
         </div>
         <Button asChild variant="outline">
-          <Link href="/company/knowledge">
-            <Database className="mr-2 h-4 w-4" />
+          <Link href="/company/business-data?tab=knowledge">
+            <Database className="me-2 h-4 w-4" />
             Open knowledge base
           </Link>
         </Button>
@@ -185,8 +185,10 @@ export default async function CompanyQualityPage() {
               </div>
             ))
           ) : (
-            <p className="text-sm text-muted-foreground">
-              No fixes saved yet. When you correct a weak answer, it will appear here with an edit shortcut.
+            // Module 1 — no action to offer yet: fixes are created from the section below.
+            <p className="max-w-2xl text-sm text-muted-foreground">
+              No fixes saved yet. When you correct a weak answer below, the correction is saved into the right
+              business section and shows up here with a shortcut back to it.
             </p>
           )}
         </CardContent>
@@ -232,12 +234,19 @@ export default async function CompanyQualityPage() {
               </div>
             ))
           ) : (
+            // Module 2 — nothing to fix, so offer the way to prevent the next gap.
             <div className="rounded-xl border bg-emerald-50 p-5 text-sm text-emerald-800">
               <div className="flex items-center gap-2 font-semibold">
                 <CheckCircle2 className="h-5 w-5" />
                 No weak answers logged recently
               </div>
-              <p className="mt-1">When a customer question has missing knowledge, it will appear here for correction.</p>
+              <p className="mt-1">
+                When a customer asks something your assistant cannot answer well, the question lands here with the
+                answer it gave, so you can correct it.
+              </p>
+              <Button asChild variant="outline" size="sm" className="mt-3">
+                <Link href="/company/business-data?tab=faqs">Add an FAQ instead</Link>
+              </Button>
             </div>
           )}
         </CardContent>
@@ -252,7 +261,16 @@ export default async function CompanyQualityPage() {
           </CardHeader>
           <CardContent className="space-y-3">
             {room.suggestions.length === 0 ? (
-              <p className="text-sm text-muted-foreground">Your assistant setup looks healthy. New suggestions will appear as customers chat.</p>
+              // Module 3 — the CTA used to live only in the populated branch; it belongs here too.
+              <div className="space-y-3">
+                <p className="max-w-2xl text-sm text-muted-foreground">
+                  Nothing to suggest right now. Your saved business facts cover the topics we check. New
+                  suggestions appear as customers ask about things you have not filled in.
+                </p>
+                <Button asChild variant="outline" size="sm">
+                  <Link href="/company/business-data">Review your business data</Link>
+                </Button>
+              </div>
             ) : (
               room.suggestions.map((s) => (
                 <div key={s.id} className="flex flex-col gap-3 rounded-lg border p-4 sm:flex-row sm:items-center sm:justify-between">
@@ -292,7 +310,12 @@ export default async function CompanyQualityPage() {
                   </li>
                 ))}
               </ul>
-            ) : null}
+            ) : (
+              // Module 4 — was rendering null under a heading; the form above is the action.
+              <p className="text-sm text-muted-foreground">
+                No test questions saved yet. Saved questions show up in this list.
+              </p>
+            )}
           </CardContent>
         </Card>
       </div>

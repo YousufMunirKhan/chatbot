@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { getCurrentCompany, listBots } from '@/modules/company/data';
 import { WidgetDesignStudio } from '@/modules/company/components/widget-design-studio';
+import { TestAssistant } from '@/modules/company/components/test-assistant';
 import { env } from '@/lib/env';
 
 export default async function WidgetPage() {
@@ -20,6 +21,12 @@ export default async function WidgetPage() {
           Design the customer-facing chat widget, preview it against different website backgrounds,
           then save it to update the live embed.
         </p>
+      </div>
+
+      {/* The setup wizard's test step lands here, so the real test tool sits above
+          the design studio — the studio preview is a design mock, not a chat. */}
+      <div id="test-assistant" className="scroll-mt-6">
+        <TestAssistant />
       </div>
 
       <Card>

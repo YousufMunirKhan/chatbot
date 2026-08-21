@@ -2,20 +2,22 @@ import Link from 'next/link';
 import { requireRole } from '@/lib/auth';
 import { ROLES } from '@/lib/constants';
 import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { formatCurrency } from '@/lib/format';
 import { listMenuItems, listSyncedProducts } from '@/modules/company/integrations-data';
 
-function EmptyState({ kind }: { kind: string }) {
+function EmptyState({ kind, detail }: { kind: string; detail: string }) {
   return (
-    <p className="px-6 pb-6 text-sm text-muted-foreground">
-      No {kind} yet. Import data from the{' '}
-      <Link href="/company/integrations" className="font-medium text-primary underline-offset-4 hover:underline">
-        Integrations page
-      </Link>{' '}
-      using CSV import or a connected store.
-    </p>
+    <div className="space-y-3 px-6 pb-6">
+      <p className="max-w-2xl text-sm text-muted-foreground">
+        No {kind} yet. This page is read-only — {detail} Connect your store or upload a CSV and they appear here.
+      </p>
+      <Button asChild size="sm">
+        <Link href="/company/integrations">Import your {kind}</Link>
+      </Button>
+    </div>
   );
 }
 
@@ -38,7 +40,7 @@ export default async function CompanyCatalogPage() {
         </CardHeader>
         <CardContent className="p-0">
           {products.length === 0 ? (
-            <EmptyState kind="products" />
+            <EmptyState kind="products" detail="products come from your integrations, not from typing them in." />
           ) : (
             <Table>
               <TableHeader>
@@ -74,7 +76,7 @@ export default async function CompanyCatalogPage() {
         </CardHeader>
         <CardContent className="p-0">
           {menuItems.length === 0 ? (
-            <EmptyState kind="menu items" />
+            <EmptyState kind="menu items" detail="menu items come from your integrations, not from typing them in." />
           ) : (
             <Table>
               <TableHeader>

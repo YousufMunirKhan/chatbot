@@ -119,7 +119,7 @@ export function HelpdeskDocumentReview({ doc, platformLabel }: { doc: HelpdeskCo
             <div>
               <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Steps</p>
               {doc.steps.length ? (
-                <ol className="mt-2 list-decimal space-y-1 pl-4 text-sm">
+                <ol className="mt-2 list-decimal space-y-1 ps-4 text-sm">
                   {doc.steps.map((step) => <li key={step}>{step}</li>)}
                 </ol>
               ) : (
@@ -133,7 +133,7 @@ export function HelpdeskDocumentReview({ doc, platformLabel }: { doc: HelpdeskCo
                   doc.fields.map((field) => (
                     <div key={field.name} className="rounded border bg-background p-2 text-xs">
                       <span className="font-medium">{field.name}</span>
-                      {field.required ? <Badge variant="warning" className="ml-2">required</Badge> : null}
+                      {field.required ? <Badge variant="warning" className="ms-2">required</Badge> : null}
                       {field.description ? <p className="mt-1 text-muted-foreground">{field.description}</p> : null}
                     </div>
                   ))
@@ -142,20 +142,28 @@ export function HelpdeskDocumentReview({ doc, platformLabel }: { doc: HelpdeskCo
                 )}
               </div>
             </div>
-            {doc.actions.length ? (
-              <div>
-                <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Related actions</p>
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Related actions</p>
+              {doc.actions.length ? (
                 <div className="mt-2 flex flex-wrap gap-2">{doc.actions.map(pill)}</div>
-              </div>
-            ) : null}
-            {doc.commonErrors.length ? (
-              <div>
-                <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Common errors</p>
-                <ul className="mt-2 list-disc space-y-1 pl-4 text-sm">
+              ) : (
+                <p className="mt-2 text-sm text-muted-foreground">
+                  No actions supplied. The assistant can explain this screen but not act on it.
+                </p>
+              )}
+            </div>
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Common errors</p>
+              {doc.commonErrors.length ? (
+                <ul className="mt-2 list-disc space-y-1 ps-4 text-sm">
                   {doc.commonErrors.map((error) => <li key={error}>{error}</li>)}
                 </ul>
-              </div>
-            ) : null}
+              ) : (
+                <p className="mt-2 text-sm text-muted-foreground">
+                  No common errors supplied. Add them in the answer text if staff hit the same problem often.
+                </p>
+              )}
+            </div>
           </div>
 
           <form action={saveAction} className="space-y-3">

@@ -5,9 +5,16 @@ import { ROLES } from '@/lib/constants';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent } from '@/components/ui/card';
 import { cn } from '@/lib/utils';
-import { getConversationDetail, type InboxMessage } from '@/modules/company/inbox-data';
+import { formatDate } from '@/lib/format';
+import {
+  conversationSource,
+  conversationTicketNumber,
+  getConversationDetail,
+  type ConversationDetail,
+  type InboxMessage,
+} from '@/modules/company/inbox-data';
 import { AgentReplyForm } from '@/modules/company/components/agent-reply-form';
-import { AiControls } from '@/modules/company/components/ai-controls';
+import { ConversationAiToggle } from '@/modules/company/components/conversation-ai-toggle';
 import { InboxRealtime } from '@/modules/company/components/inbox-realtime';
 import { ChatAutoScroll } from '@/modules/company/components/chat-auto-scroll';
 import { TicketPanel } from '@/modules/company/components/ticket-panel';
@@ -33,6 +40,20 @@ function statusLabel(status: string): string {
   return status
     .replace(/_/g, ' ')
     .replace(/^\w/, (letter) => letter.toUpperCase());
+}
+
+function sourceLabel(source: ReturnType<typeof conversationSource>): string {
+  if (source === 'helpdesk') return 'Help Desk chat';
+  if (source === 'connector') return 'Connector failure';
+  if (source === 'manual') return 'Manual';
+  return 'Customer chat';
+}
+
+function sourceVariant(source: ReturnType<typeof conversationSource>): BadgeVariant {
+  if (source === 'connector') return 'destructive';
+  if (source === 'helpdesk') return 'secondary';
+  if (source === 'manual') return 'outline';
+  return 'success';
 }
 
 function senderLabel(senderType: string): string {
@@ -81,6 +102,83 @@ function MessageBubble({ message }: { message: InboxMessage }) {
   );
 }
 
+function buildTicketTimeline(convo: ConversationDetail) {
+  const items: Array<{ key: string; title: string; body?: string; at: string | null; tone?: BadgeVariant }> = [];
+  items.push({
+    key: 'created',
+    title: 'Created',
+    body: `${conversationTicketNumber(convo)} from ${sourceLabel(conversationSource(convo))}`,
+    at: convo.startedAt,
+  });
+
+  if (convo.assignedAgentId) {
+    items.push({ key: 'assigned', title: 'Assigned', body: 'Ticket is owned by a support agent or admin.', at: convo.startedAt });
+  } else if (convo.status !== 'closed') {
+    items.push({ key: 'unassigned', title: 'Unassigned', body: 'No owner yet. Routing will assign an online agent or company admin.', at: null, tone: 'warning' });
+  }
+
+  convo.messages
+    .filter((m) => m.senderType === 'system')
+    .filter((m) => /ticket|connector|failed|queued|resolved/i.test(m.content))
+    .forEach((m) => {
+      const isFailure = /failed|error|queued/i.test(m.content);
+      const isResolved = /resolved/i.test(m.content);
+      items.push({
+        key: `message-${m.id}`,
+        title: isResolved ? 'Resolved' : isFailure ? 'Connector action failed' : 'System event',
+        body: m.content,
+        at: m.createdAt,
+        tone: isResolved ? 'success' : isFailure ? 'destructive' : 'secondary',
+      });
+    });
+
+  convo.notes.forEach((note) => {
+    items.push({
+      key: `note-${note.id}`,
+      title: 'Note added',
+      body: note.note,
+      at: note.createdAt,
+      tone: 'outline',
+    });
+  });
+
+  if (convo.status === 'closed' && convo.closedAt && !items.some((item) => item.title === 'Resolved')) {
+    items.push({ key: 'closed', title: 'Resolved', body: 'Ticket was closed.', at: convo.closedAt, tone: 'success' });
+  }
+
+  return items.sort((a, b) => {
+    if (!a.at) return 1;
+    if (!b.at) return -1;
+    return new Date(a.at).getTime() - new Date(b.at).getTime();
+  });
+}
+
+function TicketTimeline({ convo }: { convo: ConversationDetail }) {
+  const items = buildTicketTimeline(convo);
+  return (
+    <Card>
+      <CardContent className="p-4">
+        <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">Ticket timeline</p>
+        {/* Module 21 (RTL): logical rail — the border, its padding and the dot all
+            sit on the reading-start edge, so the timeline stays beside its text. */}
+        <div className="mt-3 space-y-3">
+          {items.map((item) => (
+            <div key={item.key} className="relative border-s ps-3">
+              <div className="absolute -start-[5px] top-1 h-2.5 w-2.5 rounded-full bg-primary" />
+              <div className="flex flex-wrap items-center gap-2">
+                <p className="text-sm font-medium">{item.title}</p>
+                {item.tone ? <Badge variant={item.tone}>{item.title}</Badge> : null}
+              </div>
+              {item.at ? <p className="text-xs text-muted-foreground">{formatDate(item.at)}</p> : null}
+              {item.body ? <p className="mt-1 line-clamp-4 whitespace-pre-wrap text-xs leading-5 text-muted-foreground">{item.body}</p> : null}
+            </div>
+          ))}
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
 export default async function ConversationPage({ params }: { params: { id: string } }) {
   await requireRole([ROLES.COMPANY_ADMIN, ROLES.AGENT]);
   const convo = await getConversationDetail(params.id);
@@ -92,6 +190,8 @@ export default async function ConversationPage({ params }: { params: { id: strin
       : convo.visitorId
     : 'Visitor';
   const status = displayStatus(convo.status, convo.aiEnabled);
+  const source = conversationSource(convo);
+  const ticketNumber = conversationTicketNumber(convo);
   const priorityVariant: BadgeVariant =
     convo.priority === 'urgent' ? 'destructive' : convo.priority === 'high' ? 'warning' : 'outline';
 
@@ -103,10 +203,12 @@ export default async function ConversationPage({ params }: { params: { id: strin
 
         <div>
           <Link href="/company/inbox" className="text-sm text-muted-foreground hover:underline">
-            ← Inbox
+            Back to Inbox
           </Link>
           <div className="mt-2 flex flex-wrap items-center gap-3">
             <h1 className="text-2xl font-semibold">{visitorName}</h1>
+            <Badge variant="outline">{ticketNumber}</Badge>
+            <Badge variant={sourceVariant(source)}>{sourceLabel(source)}</Badge>
             <Badge variant={statusVariant(status)}>{statusLabel(status)}</Badge>
             <Badge variant={convo.aiEnabled ? 'success' : 'outline'}>
               {convo.aiEnabled ? 'AI on' : 'AI off'}
@@ -115,7 +217,7 @@ export default async function ConversationPage({ params }: { params: { id: strin
               <Badge variant={priorityVariant} className="capitalize">{convo.priority}</Badge>
             ) : null}
             {convo.csatRating ? (
-              <Badge variant="secondary">{convo.csatRating}★ CSAT</Badge>
+              <Badge variant="secondary">{convo.csatRating} stars CSAT</Badge>
             ) : null}
           </div>
         </div>
@@ -131,11 +233,11 @@ export default async function ConversationPage({ params }: { params: { id: strin
           </CardContent>
         </Card>
 
-        <AiControls conversationId={convo.id} aiEnabled={convo.aiEnabled} isClosed={convo.status === 'closed'} />
+        <ConversationAiToggle key={convo.id} conversationId={convo.id} aiEnabled={convo.aiEnabled} isClosed={convo.status === 'closed'} />
 
         <Card>
           <CardContent className="p-4">
-            <AgentReplyForm conversationId={convo.id} cannedResponses={convo.cannedResponses} />
+            <AgentReplyForm key={convo.id} conversationId={convo.id} cannedResponses={convo.cannedResponses} />
           </CardContent>
         </Card>
       </div>
@@ -145,13 +247,15 @@ export default async function ConversationPage({ params }: { params: { id: strin
           <Card>
             <CardContent className="p-4">
               <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">CSAT feedback</p>
-              <p className="mt-1 text-sm">“{convo.csatComment}”</p>
+              <p className="mt-1 text-sm">{convo.csatComment}</p>
             </CardContent>
           </Card>
         ) : null}
+        <TicketTimeline convo={convo} />
         <Card>
           <CardContent className="p-4">
             <TicketPanel
+              key={convo.id}
               conversationId={convo.id}
               priority={convo.priority}
               tags={convo.tags}

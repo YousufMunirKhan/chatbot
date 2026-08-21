@@ -1,5 +1,6 @@
 'use client';
 
+import { useState } from 'react';
 import { useFormState, useFormStatus } from 'react-dom';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -44,6 +45,63 @@ function StateMessage({ state }: { state: ActionState }) {
       {state.error ? <p className="text-sm text-destructive">{state.error}</p> : null}
       {state.ok ? <p className="text-sm text-emerald-600">Saved.</p> : null}
     </>
+  );
+}
+
+/**
+ * Starter wording for the three rules that gate human handoff, lead capture, and
+ * booking readiness. Kept as hint text plus a one-click insert: silently
+ * prefilling would satisfy the launch check with a policy nobody has read.
+ */
+const RULE_SUGGESTIONS = {
+  escalationRules:
+    'Hand over to a person when the visitor asks for one, raises a complaint, or asks something we have no answer for. Take their name and the best way to reach them, then tell them when the team will reply.',
+  leadQualificationRules:
+    'Treat anyone who asks for prices, a quote, or a callback as a lead. Ask what they need and when they need it, then take a name plus a phone number or email before promising a reply.',
+  appointmentRules:
+    'Ask which service the visitor wants, then offer a day and time inside our opening hours. Take a name and a phone number or email, and say the booking is confirmed once a team member replies. Ask for at least 24 hours of notice to change or cancel.',
+} as const;
+
+/**
+ * Free textarea with editable starter wording. The suggestion shows as hint text
+ * until the user inserts it, so the saved value is always one they chose.
+ */
+function RuleField({
+  name,
+  label,
+  hint,
+  suggestion,
+  defaultValue,
+  className,
+}: {
+  name: string;
+  label: string;
+  hint: string;
+  suggestion: string;
+  defaultValue: string;
+  className?: string;
+}) {
+  const [value, setValue] = useState(defaultValue);
+  return (
+    <div className={`space-y-1.5 ${className ?? ''}`}>
+      <Label htmlFor={name}>{label}</Label>
+      <Textarea
+        id={name}
+        name={name}
+        value={value}
+        onChange={(event) => setValue(event.target.value)}
+        placeholder={suggestion}
+        rows={4}
+      />
+      <div className="flex flex-wrap items-center gap-2">
+        {value.trim() ? null : (
+          <Button type="button" variant="outline" size="sm" onClick={() => setValue(suggestion)}>
+            Use this wording
+          </Button>
+        )}
+        <p className="text-xs text-muted-foreground">{hint}</p>
+      </div>
+    </div>
   );
 }
 
@@ -147,10 +205,13 @@ export function BusinessMemoryForm({ profile }: { profile: BusinessProfileMemory
           <Label htmlFor="serviceAreas">Service areas</Label>
           <Textarea id="serviceAreas" name="serviceAreas" defaultValue={profile.serviceAreas ?? ''} rows={2} />
         </div>
-        <div className="space-y-1.5">
-          <Label htmlFor="escalationRules">Escalation rules</Label>
-          <Textarea id="escalationRules" name="escalationRules" defaultValue={profile.escalationRules ?? ''} rows={3} />
-        </div>
+        <RuleField
+          name="escalationRules"
+          label="Escalation rules"
+          hint="Decides when the assistant stops answering and brings in a person."
+          suggestion={RULE_SUGGESTIONS.escalationRules}
+          defaultValue={profile.escalationRules ?? ''}
+        />
         <div className="space-y-1.5">
           <Label htmlFor="escalationMessage">Escalation message</Label>
           <Textarea id="escalationMessage" name="escalationMessage" defaultValue={profile.escalationMessage ?? ''} rows={3} />
@@ -159,14 +220,21 @@ export function BusinessMemoryForm({ profile }: { profile: BusinessProfileMemory
           <Label htmlFor="toneNotes">Tone notes</Label>
           <Textarea id="toneNotes" name="toneNotes" defaultValue={profile.toneNotes ?? ''} rows={3} />
         </div>
-        <div className="space-y-1.5">
-          <Label htmlFor="leadQualificationRules">Lead qualification rules</Label>
-          <Textarea id="leadQualificationRules" name="leadQualificationRules" defaultValue={profile.leadQualificationRules ?? ''} rows={3} />
-        </div>
-        <div className="space-y-1.5 lg:col-span-2">
-          <Label htmlFor="appointmentRules">Appointment or booking rules</Label>
-          <Textarea id="appointmentRules" name="appointmentRules" defaultValue={profile.appointmentRules ?? ''} rows={3} />
-        </div>
+        <RuleField
+          name="leadQualificationRules"
+          label="Lead qualification rules"
+          hint="Decides what the assistant asks before it saves someone as a lead."
+          suggestion={RULE_SUGGESTIONS.leadQualificationRules}
+          defaultValue={profile.leadQualificationRules ?? ''}
+        />
+        <RuleField
+          name="appointmentRules"
+          label="Appointment or booking rules"
+          hint="Decides what the assistant asks before it passes a booking request to the team."
+          suggestion={RULE_SUGGESTIONS.appointmentRules}
+          defaultValue={profile.appointmentRules ?? ''}
+          className="lg:col-span-2"
+        />
       </div>
       <StateMessage state={state} />
       <Submit label="Save business memory" />

@@ -58,7 +58,23 @@ export class HelpdeskEmbeddedChatClient {
       }),
     });
     const data = await res.json();
-    if (!res.ok) throw new Error(data.message || data.error || 'Help Desk chat failed');
+    if (!res.ok) {
+      const error = new Error(data.message || data.error || 'Help Desk chat failed');
+      error.replyUsage = data.replyUsage;
+      throw error;
+    }
+    return data;
+  }
+
+  async eventStatus(eventId) {
+    const res = await fetch(`${this.baseUrl}/api/helpdesk/events/${eventId}`, {
+      headers: {
+        Authorization: `Bearer ${this.token}`,
+      },
+      cache: 'no-store',
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.message || data.error || 'Could not check Help Desk result');
     return data;
   }
 

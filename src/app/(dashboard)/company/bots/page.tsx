@@ -8,6 +8,16 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { listBots } from '@/modules/company/data';
 import { formatDate } from '@/lib/format';
 
+function assistantTypeLabel(audience: string) {
+  return audience === 'internal' ? 'Internal Help Desk bot' : 'Customer-facing website bot';
+}
+
+function assistantTypeHint(audience: string) {
+  return audience === 'internal'
+    ? 'Staff support, software guides, connectors, actions'
+    : 'Website widget, customer chat, leads, bookings, handoff';
+}
+
 export default async function BotsPage() {
   await requireRole([ROLES.COMPANY_ADMIN]);
   const bots = await listBots();
@@ -30,7 +40,7 @@ export default async function BotsPage() {
             <TableHeader>
               <TableRow>
                 <TableHead>Name</TableHead>
-                <TableHead>Type</TableHead>
+                <TableHead>Assistant</TableHead>
                 <TableHead>Capabilities</TableHead>
                 <TableHead>AI</TableHead>
                 <TableHead>Created</TableHead>
@@ -51,17 +61,35 @@ export default async function BotsPage() {
               ) : (
                 bots.map((b) => (
                   <TableRow key={b.id}>
-                    <TableCell className="font-medium">{b.name}</TableCell>
-                    <TableCell>{b.botType.replace(/_/g, ' ')}</TableCell>
+                    <TableCell>
+                      <div className="font-medium">{b.name}</div>
+                      <div className="text-xs text-muted-foreground">{assistantTypeHint(b.assistantAudience)}</div>
+                    </TableCell>
+                    <TableCell>
+                      <Badge variant={b.assistantAudience === 'internal' ? 'warning' : 'secondary'}>
+                        {assistantTypeLabel(b.assistantAudience)}
+                      </Badge>
+                    </TableCell>
                     <TableCell>
                       <Badge variant="secondary">{b.capabilityFlags.length}</Badge>
                     </TableCell>
                     <TableCell>{b.aiEnabled ? 'On' : 'Off'}</TableCell>
                     <TableCell className="text-muted-foreground">{formatDate(b.createdAt)}</TableCell>
-                    <TableCell className="text-right">
-                      <Link href={`/company/bots/${b.id}/settings`} className="text-sm text-primary hover:underline">
-                        Settings
-                      </Link>
+                    <TableCell className="text-end">
+                      <div className="flex justify-end gap-3">
+                        {b.assistantAudience === 'internal' ? (
+                          <Link href="/company/help-desk" className="text-sm text-primary hover:underline">
+                            Help Desk
+                          </Link>
+                        ) : (
+                          <Link href="/company/widget" className="text-sm text-primary hover:underline">
+                            Widget
+                          </Link>
+                        )}
+                        <Link href={`/company/bots/${b.id}/settings`} className="text-sm text-primary hover:underline">
+                          Settings
+                        </Link>
+                      </div>
                     </TableCell>
                   </TableRow>
                 ))

@@ -62,7 +62,7 @@ export function BillingUpgrade({
             type="button"
             onClick={() => setPlan(item.key)}
             disabled={item.key === currentPlan}
-            className={`rounded-md border p-3 text-left text-sm disabled:cursor-not-allowed disabled:opacity-60 ${
+            className={`rounded-md border p-3 text-start text-sm disabled:cursor-not-allowed disabled:opacity-60 ${
               plan === item.key ? 'border-primary bg-primary/5' : ''
             }`}
           >

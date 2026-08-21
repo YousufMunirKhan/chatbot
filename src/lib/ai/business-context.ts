@@ -38,6 +38,16 @@ const CONTEXT_TTL_MS = 60_000;
 const contextCache = new Map<string, { value: string; expiresAt: number }>();
 
 /**
+ * Bust the context cache so a Business Data save reaches the bot on the very
+ * next turn instead of up to 60s later. Pass a `companyId` to drop just that
+ * tenant, or omit it to clear every entry.
+ */
+export function invalidateBusinessContextCache(companyId?: string): void {
+  if (companyId) contextCache.delete(companyId);
+  else contextCache.clear();
+}
+
+/**
  * Runtime business context with a 60s cache. Used by the chat engine to inject
  * FRESH business facts each turn instead of relying on the snapshot baked into
  * the stored system prompt (Issue #18).

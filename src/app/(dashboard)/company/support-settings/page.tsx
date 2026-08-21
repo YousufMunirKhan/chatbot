@@ -13,7 +13,7 @@ export default async function SupportSettingsPage() {
     <div className="mx-auto max-w-2xl space-y-6">
       <div>
         <Link href="/company/inbox" className="text-sm text-muted-foreground hover:underline">
-          ← Inbox
+          <span className="dir-arrow" aria-hidden="true">←</span> Inbox
         </Link>
         <h1 className="mt-2 text-2xl font-semibold">Support settings</h1>
         <p className="text-sm text-muted-foreground">

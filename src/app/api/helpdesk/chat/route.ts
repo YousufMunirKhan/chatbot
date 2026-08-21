@@ -17,6 +17,7 @@ import { retrieveContext } from '@/lib/ai/rag';
 import { getChatProviderAsync } from '@/lib/ai/providers';
 import { runToolLoop } from '@/lib/ai/agent';
 import { logAiUsage } from '@/lib/ai/usage';
+import { getReplyAllowanceUsage, withinMessageQuota, type ReplyAllowanceUsage } from '@/lib/billing';
 import { getToolSchemas } from '@/lib/tools';
 import { loadContextualQuickActions, loadInternalQuickActions } from '@/lib/quick-actions';
 import {
@@ -41,6 +42,17 @@ const bodySchema = z.object({
 
 function json(obj: unknown, status = 200) {
   return NextResponse.json(obj, { status });
+}
+
+function publicReplyUsage(usage: ReplyAllowanceUsage) {
+  return {
+    used: usage.used,
+    monthlyAllowance: usage.monthlyAllowance,
+    extraReplies: usage.extraReplies,
+    totalAvailable: usage.totalAvailable,
+    remaining: usage.remaining,
+    resetAt: usage.resetAt,
+  };
 }
 
 function appRole(platformRole: string | null, suppliedRole?: string): string {
@@ -146,6 +158,29 @@ function toPlainText(text: string): string {
     .trim();
 }
 
+function shouldSuggestTicket(input: {
+  question: string;
+  answer: string;
+  toolsCalled: string[];
+  uiActions: Array<{ action: string; payload: unknown }>;
+}): boolean {
+  const combined = `${input.question}\n${input.answer}`.toLowerCase();
+  const issueIntent =
+    /\b(ticket|report (an )?issue|create (a )?(ticket|case)|not working|broken|failed|error|stuck|queued forever|does not work|can't|cannot|unable)\b/i.test(
+      combined,
+    );
+  const unresolvedAnswer =
+    /\b(i do not know|i don't know|cannot confirm|could not confirm|not enough information|missing|failed|still running|queued)\b/i.test(
+      input.answer,
+    );
+  const queuedConnectorAction = input.uiActions.some((item) => {
+    if (item.action !== 'helpdesk_event' || !item.payload || typeof item.payload !== 'object') return false;
+    const status = String((item.payload as Record<string, unknown>).status ?? '');
+    return status === 'queued' || status === 'running' || status === 'failed';
+  });
+  return issueIntent || unresolvedAnswer || (input.toolsCalled.includes('run_helpdesk_action') && queuedConnectorAction);
+}
+
 export async function POST(req: Request) {
   const user = await getSessionUser();
   const connector = user?.companyId ? null : await authenticateHelpdeskConnector(req);
@@ -183,6 +218,18 @@ export async function POST(req: Request) {
   const botId = bot.id as string;
   const capabilityFlags = Array.isArray(bot.capability_flags) ? bot.capability_flags.map(String) : [];
   const language = detectLanguage(parsed.data.text);
+
+  if (!(await withinMessageQuota(companyId))) {
+    const replyUsage = await getReplyAllowanceUsage(companyId);
+    return json(
+      {
+        error: 'reply_allowance_exhausted',
+        message: 'Monthly AI replies are used up. Add extra replies or upgrade the plan to continue using Help Desk AI.',
+        replyUsage: publicReplyUsage(replyUsage),
+      },
+      429,
+    );
+  }
 
   // Persist the internal thread so the assistant has memory across turns (same
   // as the customer side). Staff are scoped by their user id; the channel='api'
@@ -316,6 +363,7 @@ export async function POST(req: Request) {
     inputTokens,
     outputTokens,
   });
+  const replyUsage = await getReplyAllowanceUsage(companyId);
 
   // Persist the turn so the next message has history, then roll up older context.
   await saveMessage({
@@ -392,5 +440,12 @@ export async function POST(req: Request) {
     ),
     guidedActions: safeActions(((connectorActions ?? []) as Array<Record<string, unknown>>)),
     settings,
+    replyUsage: publicReplyUsage(replyUsage),
+    shouldSuggestTicket: shouldSuggestTicket({
+      question: parsed.data.text,
+      answer,
+      toolsCalled,
+      uiActions,
+    }),
   });
 }

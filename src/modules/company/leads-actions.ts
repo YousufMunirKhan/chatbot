@@ -30,6 +30,7 @@ export async function updateLeadStatusAction(formData: FormData): Promise<void> 
     .eq('id', parsed.data.leadId)
     .eq('company_id', companyId); // scope guard
   revalidatePath('/company/leads');
+  revalidatePath('/company/customers'); // the Customers workspace lists leads too
 }
 
 const addManualSchema = z.object({
@@ -57,5 +58,6 @@ export async function addManualLeadAction(_prev: ActionState, formData: FormData
   });
   if (error) return { error: error.message };
   revalidatePath('/company/leads');
+  revalidatePath('/company/customers'); // the Customers workspace lists leads too
   return { ok: true };
 }

@@ -6,6 +6,7 @@ import { requireRole } from '@/lib/auth';
 import { ROLES } from '@/lib/constants';
 import { createSupabaseServiceClient } from '@/lib/db/server';
 import { ingestText } from '@/lib/ai/ingest';
+import { invalidateBusinessContextCache } from '@/lib/ai/business-context';
 import { getCompanyId } from './data';
 import { recomputeCompanyBotPrompts } from './prompt';
 import {
@@ -35,6 +36,10 @@ function csvToArray(v: FormDataEntryValue | null): string[] {
 async function refresh(companyId: string) {
   const sb = createSupabaseServiceClient();
   await recomputeCompanyBotPrompts(sb, companyId);
+  // The chat engine injects runtime business context from a 60s in-memory
+  // cache (Issue #18) — drop this tenant's entry so the edit lands on the very
+  // next turn rather than up to a minute later.
+  invalidateBusinessContextCache(companyId);
   revalidatePath('/company/profile');
   revalidatePath('/company/business-data');
   revalidatePath('/company/setup');
@@ -132,10 +137,14 @@ export async function addLocationAction(_prev: ActionState, formData: FormData):
   const v = parsed.data;
   const sb = createSupabaseServiceClient();
 
-  const { count } = await sb
-    .from('company_locations')
-    .select('id', { count: 'exact', head: true })
-    .eq('company_id', companyId);
+  const [{ count }, { data: company }] = await Promise.all([
+    sb.from('company_locations').select('id', { count: 'exact', head: true }).eq('company_id', companyId),
+    // Issue #31: `companies.timezone` is the single source of truth. A location only
+    // stores its own zone when it genuinely differs — otherwise it derives from the
+    // company so hours, SLA, and the bot never read three different answers.
+    sb.from('companies').select('timezone').eq('id', companyId).maybeSingle(),
+  ]);
+  const companyTimezone = (company as { timezone?: string | null } | null)?.timezone ?? null;
 
   const { error } = await sb.from('company_locations').insert({
     company_id: companyId,
@@ -146,7 +155,7 @@ export async function addLocationAction(_prev: ActionState, formData: FormData):
     region: v.region ?? null,
     country: v.country ?? null,
     postal_code: v.postalCode ?? null,
-    timezone: v.timezone ?? null,
+    timezone: v.timezone ?? companyTimezone,
     phone: v.phone ?? null,
     google_maps_url: v.googleMapsUrl ?? null,
     service_area: v.serviceArea ?? null,
@@ -198,6 +207,10 @@ export async function updateHoursAction(_prev: ActionState, formData: FormData):
   const { error } = await sb.from('company_business_hours').insert(rows);
   if (error) return { error: error.message };
   await refresh(companyId);
+  // These rows are also the source of truth for SLA business hours (Issue #16), so
+  // the support pages must not keep showing the previous schedule.
+  revalidatePath('/company/support-settings');
+  revalidatePath('/company/inbox');
   return { ok: true };
 }
 
@@ -312,7 +325,12 @@ export async function addPolicyAction(_prev: ActionState, formData: FormData): P
     content: v.content,
     document_id: documentId,
   });
-  if (error) return { error: error.message };
+  if (error) {
+    // The document is already ingested and listed on Knowledge — revalidate so
+    // the orphaned entry is visible instead of hiding behind a stale page.
+    revalidatePath('/company/knowledge');
+    return { error: error.message };
+  }
   await refresh(companyId);
   revalidatePath('/company/knowledge');
   return { ok: true };
@@ -361,7 +379,12 @@ export async function updatePolicyAction(_prev: ActionState, formData: FormData)
     })
     .eq('company_id', companyId)
     .eq('id', v.id);
-  if (error) return { error: error.message };
+  if (error) {
+    // Re-indexing already replaced the document, so Knowledge is out of date
+    // even though the policy row was not updated.
+    revalidatePath('/company/knowledge');
+    return { error: error.message };
+  }
   const oldDocumentId = (existing as { document_id?: string | null } | null)?.document_id;
   if (oldDocumentId && oldDocumentId !== documentId) {
     await sb.from('documents').delete().eq('company_id', companyId).eq('id', oldDocumentId);
@@ -426,7 +449,12 @@ export async function addFaqAction(_prev: ActionState, formData: FormData): Prom
     category: v.category,
     document_id: documentId,
   });
-  if (error) return { error: error.message };
+  if (error) {
+    // The document is already ingested and listed on Knowledge — revalidate so
+    // the orphaned entry is visible instead of hiding behind a stale page.
+    revalidatePath('/company/knowledge');
+    return { error: error.message };
+  }
   await refresh(companyId);
   revalidatePath('/company/knowledge');
   return { ok: true };
@@ -475,7 +503,12 @@ export async function updateFaqAction(_prev: ActionState, formData: FormData): P
     })
     .eq('company_id', companyId)
     .eq('id', v.id);
-  if (error) return { error: error.message };
+  if (error) {
+    // Re-indexing already replaced the document, so Knowledge is out of date
+    // even though the FAQ row was not updated.
+    revalidatePath('/company/knowledge');
+    return { error: error.message };
+  }
   const oldDocumentId = (existing as { document_id?: string | null } | null)?.document_id;
   if (oldDocumentId && oldDocumentId !== documentId) {
     await sb.from('documents').delete().eq('company_id', companyId).eq('id', oldDocumentId);

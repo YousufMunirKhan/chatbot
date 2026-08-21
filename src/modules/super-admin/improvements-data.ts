@@ -23,13 +23,14 @@ export interface ImprovementReport {
 }
 
 const SECTION_LABEL: Record<string, string> = {
-  '/company/profile': 'Business Profile',
-  '/company/knowledge': 'Knowledge Base',
+  '/company/business-data': 'Business Data',
   '/company/integrations': 'Integrations',
   '/company/quality': 'Quality Room',
 };
 export function whereLabel(href: string): string {
-  return SECTION_LABEL[href] ?? 'Settings';
+  // Hrefs carry a ?tab= query since Business Profile and Knowledge merged into
+  // Business Data, so match on the pathname only.
+  return SECTION_LABEL[href.split('?')[0]!] ?? 'Settings';
 }
 
 export async function buildImprovementReport(companyId: string): Promise<ImprovementReport> {

@@ -8,6 +8,7 @@ import { formatDate } from '@/lib/format';
 import { listBroadcasts } from '@/modules/company/broadcasts-data';
 import { deleteBroadcastAction } from '@/modules/company/broadcasts-actions';
 import { BroadcastForm } from '@/modules/company/components/broadcast-form';
+import { ConfirmSubmit } from '@/components/confirm-submit';
 
 async function cancel(formData: FormData) {
   'use server';
@@ -38,7 +39,7 @@ export default async function BroadcastsPage() {
         </p>
       </div>
 
-      <Card>
+      <Card id="new-broadcast">
         <CardHeader>
           <CardTitle>New broadcast</CardTitle>
           <CardDescription>Dispatched by the scheduled job to all leads with a matching contact.</CardDescription>
@@ -51,7 +52,17 @@ export default async function BroadcastsPage() {
       <Card>
         <CardContent className="p-0">
           {broadcasts.length === 0 ? (
-            <p className="p-6 text-sm text-muted-foreground">No broadcasts yet.</p>
+            // Module 1 — the compose form is on this page, so link straight to it.
+            <div className="space-y-3 p-6">
+              <p className="text-sm font-medium">No broadcasts yet</p>
+              <p className="max-w-xl text-sm text-muted-foreground">
+                Send one WhatsApp or email to every lead with a matching contact detail. Sent and scheduled
+                broadcasts stay on this list with their delivery count.
+              </p>
+              <Button asChild size="sm">
+                <a href="#new-broadcast">Write a broadcast</a>
+              </Button>
+            </div>
           ) : (
             <ul className="divide-y">
               {broadcasts.map((b) => (
@@ -73,9 +84,7 @@ export default async function BroadcastsPage() {
                   {b.status === 'scheduled' ? (
                     <form action={cancel}>
                       <input type="hidden" name="id" value={b.id} />
-                      <Button type="submit" variant="ghost" size="sm">
-                        Cancel
-                      </Button>
+                      <ConfirmSubmit label="Cancel" confirmLabel="Yes, cancel it" question="Queued messages will not be sent." />
                     </form>
                   ) : null}
                 </li>

@@ -51,6 +51,7 @@ export function mountHelpdeskDefaultChat({
           <div class="ss-helpdesk-bot">bot</div>
           <h2>Hello ${escapeHtml(staffName)}</h2>
           <p>How can the assistant help you today?</p>
+          <p class="ss-helpdesk-replies" data-helpdesk-replies hidden></p>
         </div>
 
         <div class="ss-helpdesk-quick-list">
@@ -115,6 +116,7 @@ export function mountHelpdeskDefaultChat({
   const card = root.querySelector('.ss-helpdesk-card');
   const textarea = root.querySelector('textarea');
   const response = root.querySelector('[data-helpdesk-response]');
+  const replies = root.querySelector('[data-helpdesk-replies]');
   const routeResult = root.querySelector('[data-route-result]');
 
   root.querySelectorAll('[data-helpdesk-view]').forEach((button) => {
@@ -137,8 +139,10 @@ export function mountHelpdeskDefaultChat({
     try {
       const data = await client.ask(text);
       response.textContent = data.answer || data.message || JSON.stringify(data, null, 2);
+      updateReplyUsage(replies, data.replyUsage);
     } catch (error) {
       response.textContent = `Ask failed: ${error.message}`;
+      if (error.replyUsage) updateReplyUsage(replies, error.replyUsage);
     }
   });
 
@@ -163,6 +167,15 @@ export function mountHelpdeskDefaultChat({
   });
 
   return { visible: true, showPanel: (name) => showPanel(root, name) };
+}
+
+function updateReplyUsage(element, usage) {
+  if (!element || !usage) return;
+  const remaining = usage.remaining == null ? 'Unlimited' : Number(usage.remaining).toLocaleString();
+  const used = Number(usage.used || 0).toLocaleString();
+  const total = usage.totalAvailable == null ? 'Unlimited' : Number(usage.totalAvailable).toLocaleString();
+  element.hidden = false;
+  element.textContent = `${remaining} replies remaining (${used} / ${total})`;
 }
 
 function showPanel(root, name) {

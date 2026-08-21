@@ -29,16 +29,22 @@ export async function saveHelpdeskChatSettingsAction(
   if (!parsed.success) return { error: parsed.error.issues[0]?.message ?? 'Invalid settings' };
   const value = parsed.data;
 
-  const { error } = await createSupabaseServiceClient().from('helpdesk_chat_settings').upsert({
-    company_id: companyId,
-    enabled: value.enabled,
-    show_mode: value.showMode,
-    allowed_roles: normalizeList(value.allowedRoles),
-    allowed_routes: normalizeList(value.allowedRoutes),
-    blocked_routes: normalizeList(value.blockedRoutes),
-    auto_open: value.autoOpen,
-    position: value.position,
-  });
+  const { error } = await createSupabaseServiceClient().from('helpdesk_chat_settings').upsert(
+    {
+      company_id: companyId,
+      enabled: value.enabled,
+      show_mode: value.showMode,
+      allowed_roles: normalizeList(value.allowedRoles),
+      allowed_routes: normalizeList(value.allowedRoutes),
+      blocked_routes: normalizeList(value.blockedRoutes),
+      auto_open: value.autoOpen,
+      position: value.position,
+    },
+    // `company_id` is the table's primary key (migration 0037), so re-saving
+    // settings must update the existing row instead of raising a duplicate-key
+    // error.
+    { onConflict: 'company_id' },
+  );
   if (error) return { error: error.message };
   revalidatePath('/company/help-desk');
   return { ok: true };

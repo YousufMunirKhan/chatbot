@@ -26,4 +26,5 @@ export async function setAppointmentStatusAction(formData: FormData): Promise<vo
     .eq('id', parsed.data.appointmentId)
     .eq('company_id', companyId); // scope guard
   revalidatePath('/company/appointments');
+  revalidatePath('/company/customers'); // the Customers workspace lists appointments too
 }

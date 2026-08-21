@@ -12,6 +12,7 @@ import {
 } from '@/modules/company/channels-actions';
 import { ChannelForm } from '@/modules/company/components/channel-form';
 import { WhatsAppSetupGuide } from '@/modules/company/components/whatsapp-setup-guide';
+import { ConfirmSubmit } from '@/components/confirm-submit';
 
 async function toggle(formData: FormData) {
   'use server';
@@ -42,7 +43,7 @@ export default async function ChannelsPage() {
         </p>
       </div>
 
-      <Card>
+      <Card id="connect-channel">
         <CardHeader>
           <CardTitle>Connect a channel</CardTitle>
           <CardDescription>Point the provider&apos;s webhook at this app, then add the credentials here.</CardDescription>
@@ -73,7 +74,17 @@ export default async function ChannelsPage() {
       <Card>
         <CardContent className="p-0">
           {identities.length === 0 ? (
-            <p className="p-6 text-sm text-muted-foreground">No channels connected yet.</p>
+            // Module 1 — the connect form is on this page, so link straight to it.
+            <div className="space-y-3 p-6">
+              <p className="text-sm font-medium">No channels connected yet</p>
+              <p className="max-w-xl text-sm text-muted-foreground">
+                Your assistant only answers on your website so far. Connect WhatsApp, Instagram, or email and it
+                replies there too, in the same inbox.
+              </p>
+              <Button asChild size="sm">
+                <a href="#connect-channel">Connect a channel</a>
+              </Button>
+            </div>
           ) : (
             <ul className="divide-y">
               {identities.map((c) => (
@@ -99,9 +110,7 @@ export default async function ChannelsPage() {
                     </form>
                     <form action={remove}>
                       <input type="hidden" name="id" value={c.id} />
-                      <Button type="submit" size="sm" variant="ghost">
-                        Delete
-                      </Button>
+                      <ConfirmSubmit label="Delete" question="Messages from this channel stop arriving." />
                     </form>
                   </div>
                 </li>

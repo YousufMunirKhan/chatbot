@@ -3,6 +3,7 @@ import { createSupabaseServiceClient } from '@/lib/db/server';
 import { decryptSecret } from '@/lib/crypto';
 import { sendEmail, sendSmtpEmail } from '@/lib/email';
 import { errorMessage, errorStack, logAppError } from '@/lib/application-errors';
+import { logger } from '@/lib/logger';
 
 export type DeliveryChannel = 'email' | 'whatsapp' | 'slack' | 'webhook';
 
@@ -12,6 +13,16 @@ export interface NotificationDeliveryEvent {
   title: string;
   body?: string | null;
   data?: Record<string, unknown>;
+  /**
+   * Channels already delivered for this event by the outbound webhook endpoints
+   * (Module 26, `/company/webhooks`). Those endpoints and the Slack / generic
+   * webhook fields on this settings row cover the same events, so a company that
+   * configured both screens used to receive every alert twice. The caller passes
+   * the endpoint coverage in and we skip the matching channel here. Only 'slack'
+   * and 'webhook' can ever be suppressed — email and WhatsApp have no webhook
+   * equivalent and always deliver.
+   */
+  suppressedChannels?: DeliveryChannel[];
 }
 
 interface CompanyNotificationSettings {
@@ -55,6 +66,8 @@ const CORE_EVENTS = new Set([
   'new_order',
   'human_takeover',
   'missed_conversation',
+  'helpdesk_issue_reported',
+  'helpdesk_issue_resolved',
 ]);
 
 const CHANNELS: DeliveryChannel[] = ['email', 'whatsapp', 'slack', 'webhook'];
@@ -439,6 +452,29 @@ async function sendMetaWhatsApp(
   if (!res.ok) throw new Error(`Meta WhatsApp returned ${res.status}`);
 }
 
+/**
+ * Record a channel we deliberately did not fire because an active webhook
+ * endpoint already delivered this event. Uses the same 'skipped' delivery-log
+ * idiom as the other channels, so the de-duplication is visible in the
+ * dashboard's delivery log and not only in the server logs.
+ */
+async function logSuppressed(event: NotificationDeliveryEvent, channel: DeliveryChannel) {
+  logger.info('Notification channel suppressed: already delivered by a webhook endpoint', {
+    companyId: event.companyId,
+    conversationId: relatedIds(event.data).conversation_id ?? undefined,
+    module: 'notification_delivery',
+    eventType: event.eventType,
+    channel,
+  });
+  await logDelivery({
+    event,
+    channel,
+    status: 'skipped',
+    error: 'Already delivered by an active webhook endpoint (/company/webhooks)',
+    metadata: { suppressedBy: 'webhook_endpoints' },
+  });
+}
+
 async function logFailed(event: NotificationDeliveryEvent, channel: DeliveryChannel, recipient: string | null, err: unknown) {
   const message = errorMessage(err);
   await logDelivery({ event, channel, recipient, status: 'failed', error: message });
@@ -462,6 +498,10 @@ export async function sendNotificationEvent(event: NotificationDeliveryEvent): P
     const settings = await loadSettings(event.companyId);
     if (!settings || !settings.notificationsEnabled) return;
 
+    // Only Slack and the generic webhook can be superseded by a webhook
+    // endpoint; email and WhatsApp are untouched by the de-duplication.
+    const suppressed = new Set(event.suppressedChannels ?? []);
+
     const tasks: Array<Promise<void>> = [];
     if (settings.emailEnabled && channelAllowed(settings, event.eventType, 'email')) {
       tasks.push(deliverEmail(event, settings));
@@ -470,10 +510,10 @@ export async function sendNotificationEvent(event: NotificationDeliveryEvent): P
       tasks.push(deliverWhatsApp(event, settings));
     }
     if (settings.slackEnabled && channelAllowed(settings, event.eventType, 'slack')) {
-      tasks.push(deliverSlack(event, settings));
+      tasks.push(suppressed.has('slack') ? logSuppressed(event, 'slack') : deliverSlack(event, settings));
     }
     if (settings.webhookEnabled && channelAllowed(settings, event.eventType, 'webhook')) {
-      tasks.push(deliverWebhook(event, settings));
+      tasks.push(suppressed.has('webhook') ? logSuppressed(event, 'webhook') : deliverWebhook(event, settings));
     }
     await Promise.allSettled(tasks);
   } catch (err) {

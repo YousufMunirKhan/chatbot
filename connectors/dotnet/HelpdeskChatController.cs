@@ -66,6 +66,14 @@ public sealed class HelpdeskChatController
         return JsonDocument.Parse(body);
     }
 
+    public async Task<JsonDocument> GetEventStatusAsync(string eventId, CancellationToken cancellationToken = default)
+    {
+        using var response = await _http.GetAsync($"/api/helpdesk/events/{eventId}", cancellationToken);
+        var body = await response.Content.ReadAsStringAsync(cancellationToken);
+        if (!response.IsSuccessStatusCode) throw new InvalidOperationException(ReadErrorMessage(body) ?? $"Help Desk event status failed {(int)response.StatusCode}");
+        return JsonDocument.Parse(body);
+    }
+
     public bool OpenRoute(string routeId) => _openRoute(routeId);
 
     private static string Normalize(string value) => (value ?? "").Trim().Trim('/').ToLowerInvariant();

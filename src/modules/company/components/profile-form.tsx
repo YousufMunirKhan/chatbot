@@ -4,6 +4,7 @@ import { useFormState, useFormStatus } from 'react-dom';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { RefreshDashboardShell } from '@/components/refresh-dashboard-shell';
 import { updateProfileAction, type ActionState } from '../actions';
 import type { CompanyProfile } from '../data';
 import { COUNTRY_OPTIONS, TIMEZONE_OPTIONS } from '../form-options';
@@ -26,6 +27,7 @@ export function ProfileForm({ company }: { company: CompanyProfile }) {
 
   return (
     <form action={action} className="space-y-4">
+      <RefreshDashboardShell state={state} />
       <div className="grid gap-4 sm:grid-cols-2">
         <div className="space-y-1.5">
           <Label htmlFor="name">Company name *</Label>

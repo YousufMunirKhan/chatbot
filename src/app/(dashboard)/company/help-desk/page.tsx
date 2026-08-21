@@ -1,14 +1,20 @@
 import Link from 'next/link';
 import {
   AlertCircle,
+  Bell,
   BookOpen,
+  Bot,
   Cable,
   CheckCircle2,
   ClipboardCheck,
   Database,
   Download,
   FilePenLine,
+  Inbox,
+  LifeBuoy,
+  MessageSquare,
   Package,
+  PlugZap,
   RefreshCw,
   Settings,
   ShieldCheck,
@@ -21,6 +27,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { env } from '@/lib/env';
 import { formatDate } from '@/lib/format';
+import { getReplyAllowanceUsage, type ReplyAllowanceUsage } from '@/lib/billing';
 import { getHelpdeskConnectorWorkspace } from '@/modules/company/helpdesk-data';
 import {
   requestConnectorResyncAction,
@@ -31,11 +38,13 @@ import {
   HelpdeskConnectorForm,
   QueueConnectorEventForm,
 } from '@/modules/company/components/helpdesk-connector-form';
-import { HelpdeskChatPreview } from '@/modules/company/components/helpdesk-chat-preview';
 import { HelpdeskInternalChat } from '@/modules/company/components/helpdesk-internal-chat';
 import { HelpdeskChatSettingsForm } from '@/modules/company/components/helpdesk-chat-settings-form';
 import { HelpdeskDocumentReview } from '@/modules/company/components/helpdesk-document-review';
-import { listBots } from '@/modules/company/data';
+import { HelpdeskIssueReportForm } from '@/modules/company/components/helpdesk-issue-report-form';
+import { TicketAutomationTestButton } from '@/modules/company/components/ticket-automation-test-button';
+import { getCompanyId, listBots } from '@/modules/company/data';
+import { listWebhookEndpoints, type WebhookEndpointRow } from '@/modules/company/webhooks-data';
 
 function platformLabel(platform: string) {
   if (platform === 'dotnet') return '.NET';
@@ -52,19 +61,24 @@ function statusVariant(status: string): 'success' | 'warning' | 'secondary' | 'd
 }
 
 const helpDeskTabs = [
-  { key: 'overview', label: 'Overview', hint: 'Status and chat', icon: ClipboardCheck },
-  { key: 'install', label: 'Install', hint: 'Create and download', icon: Package },
-  { key: 'checks', label: 'Checks', hint: 'What is verified', icon: CheckCircle2 },
-  { key: 'manual', label: 'Manual setup', hint: 'Add screens/actions', icon: FilePenLine },
-  { key: 'review', label: 'Review', hint: 'Docs and actions', icon: BookOpen },
-  { key: 'logs', label: 'Logs', hint: 'Sync and events', icon: Terminal },
+  { key: 'overview', label: 'Overview', hint: 'Status and next steps', icon: ClipboardCheck },
+  { key: 'ask', label: 'Ask', hint: 'One staff chat', icon: MessageSquare },
+  { key: 'connect', label: 'Connect Software', hint: 'Download SDKs', icon: PlugZap },
+  { key: 'knowledge', label: 'Review Knowledge', hint: 'Approve docs', icon: BookOpen },
+  { key: 'actions', label: 'Actions', hint: 'Enable and test', icon: ShieldCheck },
+  { key: 'support', label: 'Support', hint: 'Tickets and WhatsApp', icon: LifeBuoy },
   { key: 'settings', label: 'Settings', hint: 'Roles and routes', icon: Settings },
+  { key: 'logs', label: 'Logs', hint: 'Sync and events', icon: Terminal },
 ] as const;
 
 type HelpDeskTab = (typeof helpDeskTabs)[number]['key'];
 
 function normalizeTab(value: string | undefined): HelpDeskTab {
   return helpDeskTabs.some((tab) => tab.key === value) ? (value as HelpDeskTab) : 'overview';
+}
+
+function formatNumber(value: number | null): string {
+  return value == null ? 'Unlimited' : value.toLocaleString();
 }
 
 function HelpDeskTabs({ active }: { active: HelpDeskTab }) {
@@ -79,7 +93,7 @@ function HelpDeskTabs({ active }: { active: HelpDeskTab }) {
               key={tab.key}
               href={`/company/help-desk?tab=${tab.key}`}
               className={[
-                'rounded-md border px-3 py-2 text-left transition-colors',
+                'rounded-md border px-3 py-2 text-start transition-colors',
                 selected ? 'border-primary bg-primary text-primary-foreground' : 'bg-background hover:bg-muted',
               ].join(' ')}
             >
@@ -372,6 +386,582 @@ function latencyVariant(ms: number): 'success' | 'warning' | 'destructive' {
   return 'destructive';
 }
 
+type HelpdeskWorkspace = Awaited<ReturnType<typeof getHelpdeskConnectorWorkspace>>;
+type ConnectorHealthAlert = {
+  id: string;
+  name: string;
+  platform: string;
+  state: string;
+  message: string;
+  lastError: string | null;
+};
+
+function minutesSince(value: string | null): number | null {
+  if (!value) return null;
+  const ms = Date.now() - new Date(value).getTime();
+  if (!Number.isFinite(ms) || ms < 0) return null;
+  return Math.max(1, Math.round(ms / 60000));
+}
+
+function connectorHealthAlerts(connectors: HelpdeskWorkspace['connectors']): ConnectorHealthAlert[] {
+  return connectors
+    .map((connector) => {
+      const lastSeenMinutes = minutesSince(connector.lastSeenAt);
+      const stale = lastSeenMinutes == null || lastSeenMinutes >= 10;
+      const state = connector.connectionState ?? 'unknown';
+      const unhealthy = connector.status !== 'active' || connector.lastError || state === 'offline' || state === 'degraded' || stale;
+      if (!unhealthy) return null;
+      const age = lastSeenMinutes == null ? 'never connected' : `offline for ${lastSeenMinutes}m`;
+      return {
+        id: connector.id,
+        name: connector.name,
+        platform: platformLabel(connector.platform),
+        state,
+        lastError: connector.lastError,
+        message: `${platformLabel(connector.platform)} connector ${age}.`,
+      } satisfies ConnectorHealthAlert;
+    })
+    .filter((alert): alert is ConnectorHealthAlert => alert != null);
+}
+
+function HelpDeskOverview({
+  workspace,
+  replyUsage,
+  assistantHref,
+  assistantLabel,
+  draftCount,
+  enabledActionCount,
+  onlineCount,
+}: {
+  workspace: HelpdeskWorkspace;
+  replyUsage: ReplyAllowanceUsage;
+  assistantHref: string;
+  assistantLabel: string;
+  draftCount: number;
+  enabledActionCount: number;
+  onlineCount: number;
+}) {
+  const connected = workspace.connectors.length > 0;
+  const needsReview = draftCount > 0;
+  const ready = connected && !needsReview && enabledActionCount > 0;
+  const steps = [
+    { done: connected, label: 'Connect software', href: '/company/help-desk?tab=connect' },
+    { done: !needsReview && connected, label: 'Approve knowledge', href: '/company/help-desk?tab=knowledge' },
+    { done: enabledActionCount > 0, label: 'Enable safe actions', href: '/company/help-desk?tab=actions' },
+    { done: ready, label: 'Ask Help Desk', href: '/company/help-desk?tab=ask' },
+  ];
+
+  return (
+    <div className="grid gap-6 lg:grid-cols-[1fr_360px]">
+      <Card>
+        <CardHeader>
+          <CardTitle>Help Desk status</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-5">
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+            <div className="rounded-md border p-3">
+              <p className="text-xs uppercase tracking-wider text-muted-foreground">Replies remaining</p>
+              <p className="mt-1 text-2xl font-semibold">{formatNumber(replyUsage.remaining)}</p>
+              <p className="mt-1 text-xs text-muted-foreground">
+                {formatNumber(replyUsage.used)} / {formatNumber(replyUsage.totalAvailable)} used
+              </p>
+            </div>
+            <div className="rounded-md border p-3">
+              <p className="text-xs uppercase tracking-wider text-muted-foreground">Connected systems</p>
+              <p className="mt-1 text-2xl font-semibold">{workspace.connectors.length}</p>
+              <p className="mt-1 text-xs text-muted-foreground">{onlineCount} online now</p>
+            </div>
+            <div className="rounded-md border p-3">
+              <p className="text-xs uppercase tracking-wider text-muted-foreground">Knowledge to review</p>
+              <p className="mt-1 text-2xl font-semibold">{draftCount}</p>
+              <p className="mt-1 text-xs text-muted-foreground">Approve before staff rely on it</p>
+            </div>
+            <div className="rounded-md border p-3">
+              <p className="text-xs uppercase tracking-wider text-muted-foreground">Enabled actions</p>
+              <p className="mt-1 text-2xl font-semibold">{enabledActionCount}</p>
+              <p className="mt-1 text-xs text-muted-foreground">Reports, stock, search, updates</p>
+            </div>
+          </div>
+
+          <div className="rounded-md border bg-muted/30 p-4">
+            <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+              <div>
+                <p className="font-semibold">{ready ? 'Help Desk is ready for staff' : 'Finish the setup path'}</p>
+                <p className="mt-1 text-sm text-muted-foreground">
+                  One internal assistant answers staff questions, opens known screens, and runs approved local actions through connectors.
+                </p>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                <Button asChild>
+                  <Link href="/company/help-desk?tab=ask">Ask Help Desk</Link>
+                </Button>
+                <Button asChild variant="outline">
+                  <Link href="/company/help-desk?tab=connect">Connect software</Link>
+                </Button>
+              </div>
+            </div>
+          </div>
+
+          <div className="grid gap-3 md:grid-cols-4">
+            {steps.map((step, index) => (
+              <Link key={step.label} href={step.href} className="rounded-md border p-3 hover:bg-muted/40">
+                <div className="flex items-center gap-2">
+                  <span className={step.done ? 'grid h-6 w-6 place-items-center rounded-full bg-emerald-600 text-xs font-semibold text-white' : 'grid h-6 w-6 place-items-center rounded-full bg-muted text-xs font-semibold'}>
+                    {step.done ? 'OK' : index + 1}
+                  </span>
+                  <span className="text-sm font-medium">{step.label}</span>
+                </div>
+              </Link>
+            ))}
+          </div>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Assistant setup</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-3 text-sm">
+          <div className="rounded-md border p-3">
+            <div className="flex items-center gap-2 font-semibold">
+              <Bot className="h-4 w-4 text-primary" />
+              Internal Help Desk bot
+            </div>
+            <p className="mt-1 text-muted-foreground">
+              Settings here are staff-only. Website widget, domains, and embed snippets stay with customer bots.
+            </p>
+            <Button asChild size="sm" variant="outline" className="mt-3">
+              <Link href={assistantHref}>{assistantLabel}</Link>
+            </Button>
+          </div>
+          <div className="rounded-md border p-3">
+            <div className="flex items-center gap-2 font-semibold">
+              <LifeBuoy className="h-4 w-4 text-primary" />
+              When staff need help
+            </div>
+            <p className="mt-1 text-muted-foreground">
+              Use Support for tickets, WhatsApp notifications, and escalation rules when the assistant cannot solve an issue.
+            </p>
+            <Button asChild size="sm" variant="outline" className="mt-3">
+              <Link href="/company/help-desk?tab=support">Open support options</Link>
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
+    </div>
+  );
+}
+
+function HowConnectorsWork() {
+  const steps = [
+    'Download the connector package.',
+    'Paste the hdk_ connector key in the customer system.',
+    'Map real screens, routes, and local event handlers.',
+    'Run Preview, Audit, and Sync.',
+    'Approve knowledge and enable safe actions.',
+    'Staff ask Help Desk from the internal app.',
+  ];
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>How software integration works</CardTitle>
+      </CardHeader>
+      <CardContent className="grid gap-3 md:grid-cols-6">
+        {steps.map((step, index) => (
+          <div key={step} className="rounded-md border p-3">
+            <span className="grid h-7 w-7 place-items-center rounded-full bg-primary text-xs font-semibold text-primary-foreground">
+              {index + 1}
+            </span>
+            <p className="mt-3 text-sm font-medium">{step}</p>
+          </div>
+        ))}
+      </CardContent>
+    </Card>
+  );
+}
+
+function ConnectedSystemsTable({ workspace }: { workspace: HelpdeskWorkspace }) {
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>Connected systems</CardTitle>
+      </CardHeader>
+      <CardContent>
+        {workspace.connectors.length === 0 ? (
+          // Module 1 — everything on this page depends on a connector, so send them there.
+          <div className="space-y-3">
+            <p className="max-w-2xl text-sm text-muted-foreground">
+              No systems connected yet. A connector is what lets the Help Desk read your software&rsquo;s screens
+              and run approved actions inside it. Create one, download the package for your platform, and run it.
+            </p>
+            <Button asChild size="sm">
+              <Link href="/company/help-desk?tab=connect">Connect software</Link>
+            </Button>
+          </div>
+        ) : (
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Name</TableHead>
+                <TableHead>Platform</TableHead>
+                <TableHead>Status</TableHead>
+                <TableHead>Docs</TableHead>
+                <TableHead>Actions</TableHead>
+                <TableHead>Revision</TableHead>
+                <TableHead>Delivery</TableHead>
+                <TableHead>Last seen</TableHead>
+                <TableHead>Sync</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {workspace.connectors.map((connector) => (
+                <TableRow key={connector.id}>
+                  <TableCell>
+                    <div className="font-medium">{connector.name}</div>
+                    <div className="font-mono text-xs text-muted-foreground">{connector.publicId}</div>
+                  </TableCell>
+                  <TableCell>{platformLabel(connector.platform)}</TableCell>
+                  <TableCell>
+                    <Badge variant={statusVariant(connector.status)}>{connector.status}</Badge>
+                  </TableCell>
+                  <TableCell>
+                    {connector.approvedDocs} approved, {connector.draftDocs} draft
+                  </TableCell>
+                  <TableCell>
+                    {connector.enabledActions} enabled, {connector.actions} total
+                  </TableCell>
+                  <TableCell>
+                    <div className="font-mono text-sm">v{connector.manifestRevision}</div>
+                    {connector.resyncRequestedAt ? (
+                      <div className="text-xs text-muted-foreground">requested {formatDate(connector.resyncRequestedAt)}</div>
+                    ) : null}
+                  </TableCell>
+                  <TableCell>
+                    <div className="text-sm">{connector.activeDeliveryMode ?? 'unknown'}</div>
+                    <div className="text-xs text-muted-foreground">{connector.connectionState ?? 'unknown'}</div>
+                    {connector.lastEventLatencyMs != null ? (
+                      <Badge variant={latencyVariant(connector.lastEventLatencyMs)} className="mt-1">
+                        {connector.lastEventLatencyMs} ms
+                      </Badge>
+                    ) : null}
+                    {connector.lastError ? <div className="max-w-40 truncate text-xs text-destructive">{connector.lastError}</div> : null}
+                  </TableCell>
+                  <TableCell>{connector.lastSeenAt ? formatDate(connector.lastSeenAt) : 'Never'}</TableCell>
+                  <TableCell>
+                    <div className="flex items-center gap-1">
+                      <ConnectorTestButton connectorId={connector.id} />
+                      <ConnectorResyncButton connectorId={connector.id} />
+                    </div>
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
+function ReviewKnowledgeSection({
+  workspace,
+  draftGroups,
+}: {
+  workspace: HelpdeskWorkspace;
+  draftGroups: Array<{ connector: HelpdeskWorkspace['connectors'][number]; documents: HelpdeskWorkspace['draftDocuments'] }>;
+}) {
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>Review synced knowledge</CardTitle>
+        <p className="text-sm text-muted-foreground">
+          Screen docs arrive as drafts. Approve what staff can trust, edit unclear text, or ignore what does not belong.
+        </p>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        {draftGroups.length === 0 ? (
+          // Module 2 — the action differs depending on whether anything is connected at all.
+          <div className="space-y-3">
+            <p className="max-w-2xl text-sm text-muted-foreground">
+              {workspace.connectors.length === 0
+                ? 'Nothing to review yet. Screen documentation arrives once a connector is installed and synced.'
+                : 'Nothing waiting for review. Your connectors have sent everything they have, and approved docs stay available to the Help Desk. Run a resync after your software changes.'}
+            </p>
+            <Button asChild size="sm" variant="outline">
+              <Link href="/company/help-desk?tab=connect">
+                {workspace.connectors.length === 0 ? 'Connect software' : 'Open connector setup'}
+              </Link>
+            </Button>
+          </div>
+        ) : (
+          draftGroups.map((group) => (
+            <div key={group.connector.id} className="rounded-md border bg-muted/20 p-3">
+              <div className="mb-3 flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
+                <div>
+                  <p className="font-medium">{group.connector.name}</p>
+                  <p className="text-xs text-muted-foreground">
+                    {group.documents.length} draft item{group.documents.length === 1 ? '' : 's'} - resync updates the same stable keys.
+                  </p>
+                </div>
+                <ConnectorResyncButton connectorId={group.connector.id} />
+              </div>
+              <div className="space-y-3">
+                {group.documents.map((doc) => (
+                  <HelpdeskDocumentReview key={doc.id} doc={doc} platformLabel={platformLabel(doc.platform)} />
+                ))}
+              </div>
+            </div>
+          ))
+        )}
+        {workspace.draftDocuments.length === 0 ? null : (
+          <div className="rounded-md border border-amber-200 bg-amber-50 p-3 text-xs leading-5 text-amber-950">
+            Approving knowledge makes it searchable by the staff Help Desk. Ignoring hides the draft from this queue; resync can send it again if the connector still includes that screen.
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
+function ActionsSection({ workspace }: { workspace: HelpdeskWorkspace }) {
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>Approved action manifest</CardTitle>
+        <p className="text-sm text-muted-foreground">
+          These are event names the assistant may request. The real work still runs inside the customer system through local handlers.
+        </p>
+      </CardHeader>
+      <CardContent>
+        {workspace.actions.length === 0 ? (
+          // Module 3 — actions only exist after a connector syncs its manifest.
+          <div className="space-y-3">
+            <p className="max-w-2xl text-sm text-muted-foreground">
+              No actions registered yet. Actions arrive when a connector syncs its manifest — standard ones
+              include search product, check stock, and daily sales report. Until then the assistant can only
+              answer questions, not do things.
+            </p>
+            <Button asChild size="sm" variant="outline">
+              <Link href="/company/help-desk?tab=connect">Open connector setup</Link>
+            </Button>
+          </div>
+        ) : (
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Action</TableHead>
+                <TableHead>Connector</TableHead>
+                <TableHead>Type</TableHead>
+                <TableHead>Fields</TableHead>
+                <TableHead>Enabled</TableHead>
+                <TableHead>Test</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {workspace.actions.map((action) => (
+                <TableRow key={action.id}>
+                  <TableCell>
+                    <div className="font-mono text-sm">{action.name}</div>
+                    <div className="text-xs text-muted-foreground">{action.description}</div>
+                    {action.needsConfirmation ? (
+                      <Badge variant="warning" className="mt-1">Needs confirmation</Badge>
+                    ) : null}
+                  </TableCell>
+                  <TableCell>{action.connectorName}</TableCell>
+                  <TableCell>
+                    <Badge variant={action.risk === 'high' ? 'destructive' : action.risk === 'medium' ? 'warning' : 'secondary'}>
+                      {action.actionType} / {action.risk}
+                    </Badge>
+                  </TableCell>
+                  <TableCell className="text-xs text-muted-foreground">
+                    Required: {action.requiredFields.join(', ') || 'none'}
+                  </TableCell>
+                  <TableCell>
+                    <form action={setConnectorActionEnabledAction} className="flex items-center gap-2">
+                      <input type="hidden" name="actionId" value={action.id} />
+                      <label className="flex items-center gap-1 text-xs">
+                        <input name="enabled" type="checkbox" defaultChecked={action.isEnabled} className="h-4 w-4" />
+                        Enabled
+                      </label>
+                      {action.actionType === 'read' || action.actionType === 'report' ? (
+                        <label className="flex items-center gap-1 text-xs">
+                          <input
+                            name="confirmationRequired"
+                            type="checkbox"
+                            defaultChecked={action.needsConfirmation}
+                            className="h-4 w-4"
+                          />
+                          Confirm
+                        </label>
+                      ) : (
+                        <>
+                          <input type="hidden" name="confirmationRequired" value="on" />
+                          <span className="text-xs text-muted-foreground">Confirm always</span>
+                        </>
+                      )}
+                      <Button type="submit" size="sm" variant="outline">Save</Button>
+                    </form>
+                  </TableCell>
+                  <TableCell>
+                    {action.isEnabled ? <QueueConnectorEventForm actionId={action.id} /> : <span className="text-xs text-muted-foreground">Enable first</span>}
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
+function SupportEscalationSection({ automationEndpoints }: { automationEndpoints: WebhookEndpointRow[] }) {
+  const ticketEndpoints = automationEndpoints.filter(
+    (endpoint) => endpoint.active && endpoint.events.some((event) => event === 'ticket.created' || event === 'ticket.resolved'),
+  );
+  const supportItems = [
+    {
+      icon: Inbox,
+      title: 'Ticket manager',
+      body: 'When staff report an issue or the assistant cannot solve it, route the conversation into the team inbox and manage priority, tags, and internal notes.',
+      href: '/company/inbox',
+      cta: 'Open inbox',
+    },
+    {
+      icon: Bell,
+      title: 'Notifications',
+      body: 'Send important ticket, lead, or system alerts to email, WhatsApp, Slack, or webhook recipients.',
+      href: '/company/notifications',
+      cta: 'Notification rules',
+    },
+    {
+      icon: MessageSquare,
+      title: 'WhatsApp channel',
+      body: 'Connect company-owned WhatsApp for customer messaging, or use notifications for support escalation updates.',
+      href: '/company/channels',
+      cta: 'Connect WhatsApp',
+    },
+    {
+      icon: Settings,
+      title: 'Support rules',
+      body: 'Configure response-time targets, business hours, and routing rules for the team inbox.',
+      href: '/company/support-settings',
+      cta: 'Support settings',
+    },
+    {
+      icon: PlugZap,
+      title: 'Ticket automations',
+      body: 'Send ticket created/resolved events to Slack, Jira, Zapier, Make, webhooks, or your custom CRM.',
+      href: '/company/webhooks',
+      cta: 'Manage automations',
+    },
+  ];
+
+  return (
+    <div className="space-y-6">
+      <Card>
+        <CardHeader>
+          <CardTitle>Report a Help Desk issue</CardTitle>
+          <p className="text-sm text-muted-foreground">
+            Creates an unread company notification and sends it through configured email, WhatsApp, Slack, or webhook delivery rules.
+          </p>
+        </CardHeader>
+        <CardContent>
+          <HelpdeskIssueReportForm />
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Support and escalation</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="grid gap-3 md:grid-cols-5">
+            {supportItems.map((item) => {
+              const Icon = item.icon;
+              return (
+                <div key={item.title} className="rounded-md border p-3">
+                  <div className="flex items-center gap-2 text-sm font-semibold">
+                    <Icon className="h-4 w-4 text-primary" />
+                    {item.title}
+                  </div>
+                  <p className="mt-2 min-h-20 text-xs leading-5 text-muted-foreground">{item.body}</p>
+                  <Button asChild size="sm" variant="outline" className="mt-3">
+                    <Link href={item.href}>{item.cta}</Link>
+                  </Button>
+                </div>
+              );
+            })}
+          </div>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Automation delivery preview</CardTitle>
+          <p className="text-sm text-muted-foreground">
+            Ticket events will be sent to these active destinations when a ticket is created or resolved.
+          </p>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          {ticketEndpoints.length ? (
+            <div className="grid gap-3 md:grid-cols-3">
+              {ticketEndpoints.map((endpoint) => (
+                <div key={endpoint.id} className="rounded-md border p-3">
+                  <div className="flex items-center justify-between gap-2">
+                    <p className="text-sm font-semibold">{endpoint.label || (endpoint.kind === 'slack' ? 'Slack' : 'Webhook')}</p>
+                    <Badge variant={endpoint.lastStatus === 'failed' ? 'destructive' : 'success'}>{endpoint.kind}</Badge>
+                  </div>
+                  <p className="mt-1 truncate text-xs text-muted-foreground">{endpoint.urlPreview}</p>
+                  <p className="mt-2 text-xs text-muted-foreground">
+                    Events: {endpoint.events.filter((event) => event === 'ticket.created' || event === 'ticket.resolved').join(', ')}
+                  </p>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="rounded-md border border-amber-200 bg-amber-50 p-3 text-sm text-amber-950">
+              No active ticket automations yet. Add Slack, Jira, CRM, Zapier, Make, or a custom webhook so ticket.created and ticket.resolved events leave this dashboard.
+            </div>
+          )}
+          <div className="flex flex-wrap gap-2">
+            <TicketAutomationTestButton />
+            <Button asChild size="sm">
+              <Link href="/company/webhooks">Manage automations</Link>
+            </Button>
+            <Button asChild size="sm" variant="outline">
+              <Link href="/company/support-settings">Connector auto-ticket settings</Link>
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Recommended issue flow</CardTitle>
+        </CardHeader>
+        <CardContent className="grid gap-3 md:grid-cols-5">
+          {[
+            'Staff asks Help Desk',
+            'Assistant answers or runs a safe connector action',
+            'If unresolved, staff creates or escalates a ticket',
+            'Support team gets context, route, logs, and priority',
+            'Updates go through Inbox and optional WhatsApp notifications',
+          ].map((step, index) => (
+            <div key={step} className="rounded-md border p-3">
+              <span className="grid h-7 w-7 place-items-center rounded-full bg-primary text-xs font-semibold text-primary-foreground">
+                {index + 1}
+              </span>
+              <p className="mt-3 text-sm font-medium">{step}</p>
+            </div>
+          ))}
+        </CardContent>
+      </Card>
+    </div>
+  );
+}
+
 function ConnectorPowerMap() {
   const steps = [
     {
@@ -422,10 +1012,17 @@ function ConnectorPowerMap() {
 }
 
 export default async function HelpDeskPage({ searchParams }: { searchParams?: { tab?: string } }) {
-  const [workspace, bots] = await Promise.all([getHelpdeskConnectorWorkspace(), listBots()]);
+  const companyId = await getCompanyId();
+  const [workspace, bots, replyUsage, automationEndpoints] = await Promise.all([
+    getHelpdeskConnectorWorkspace(),
+    listBots(),
+    getReplyAllowanceUsage(companyId),
+    listWebhookEndpoints(),
+  ]);
   const draftCount = workspace.draftDocuments.length;
   const enabledActionCount = workspace.actions.filter((action) => action.isEnabled).length;
   const onlineCount = workspace.connectors.filter((connector) => connector.connectionState === 'connected').length;
+  const healthAlerts = connectorHealthAlerts(workspace.connectors);
   const internalBot = bots.find((bot) => bot.assistantAudience === 'internal');
   const assistantHref = internalBot ? `/company/bots/${internalBot.id}/settings` : '/company/bots/new';
   const assistantLabel = internalBot ? 'Edit help desk bot' : 'Create help desk bot';
@@ -441,9 +1038,9 @@ export default async function HelpDeskPage({ searchParams }: { searchParams?: { 
     <div className="mx-auto max-w-7xl space-y-6">
       <div className="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
         <div>
-          <h1 className="text-2xl font-semibold tracking-tight">Help Desk Connectors</h1>
+          <h1 className="text-2xl font-semibold tracking-tight">Internal Help Desk</h1>
           <p className="mt-1 max-w-3xl text-sm text-muted-foreground">
-            Connect .NET POS and Android apps, sync reviewed help docs, and expose approved events without storing customer database records.
+            One staff assistant for software help, connector knowledge, safe local actions, support escalation, and reply usage.
           </p>
         </div>
         <Button asChild variant="outline">
@@ -481,21 +1078,35 @@ export default async function HelpDeskPage({ searchParams }: { searchParams?: { 
       <HelpDeskTabs active={activeTab} />
 
       {activeTab === 'overview' ? (
-        <>
-          <HelpdeskInternalChat initialPills={workspace.quickPills} settings={workspace.chatSettings} />
-          <HelpdeskChatPreview suggestions={workspace.quickPills} />
-          <ConnectorPowerMap />
-          <DeliveryExplanation />
-        </>
+        <HelpDeskOverview
+          workspace={workspace}
+          replyUsage={replyUsage}
+          assistantHref={assistantHref}
+          assistantLabel={assistantLabel}
+          draftCount={draftCount}
+          enabledActionCount={enabledActionCount}
+          onlineCount={onlineCount}
+        />
       ) : null}
 
-      {activeTab === 'checks' ? (
+      {activeTab === 'ask' ? (
+        <HelpdeskInternalChat
+          initialPills={workspace.quickPills}
+          settings={workspace.chatSettings}
+          initialReplyUsage={replyUsage}
+          connectorHealthAlerts={healthAlerts}
+        />
+      ) : null}
+
+      {activeTab === 'connect' ? (
         <>
+          <HowConnectorsWork />
+          <ConnectorPowerMap />
           <WhatIsChecked />
           <DeliveryExplanation />
           <Card>
             <CardHeader>
-              <CardTitle>Why the chat can say “not available”</CardTitle>
+              <CardTitle>Why the chat can say not available</CardTitle>
             </CardHeader>
             <CardContent className="grid gap-3 md:grid-cols-3">
               <div className="rounded-md border p-3">
@@ -523,7 +1134,7 @@ export default async function HelpDeskPage({ searchParams }: { searchParams?: { 
         </>
       ) : null}
 
-      {activeTab === 'manual' ? (
+      {activeTab === 'connect' ? (
         <>
           <ManualSetupGuide />
           <DeveloperPackages />
@@ -538,7 +1149,7 @@ export default async function HelpDeskPage({ searchParams }: { searchParams?: { 
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="rounded-md border border-blue-200 bg-blue-50 p-3 text-xs leading-5 text-blue-950">
-                If “Ask failed: Help Desk chat is not available” appears, check this form first. Add the staff role and current route, or remove an over-broad blocked route.
+                If Ask failed: Help Desk chat is not available appears, check this form first. Add the current route or remove an over-broad blocked route.
               </div>
               <HelpdeskChatSettingsForm settings={workspace.chatSettings} />
             </CardContent>
@@ -569,7 +1180,7 @@ export default async function HelpDeskPage({ searchParams }: { searchParams?: { 
         </div>
       ) : null}
 
-      {activeTab === 'install' ? (
+      {activeTab === 'connect' ? (
         <>
           <div className="grid gap-6 lg:grid-cols-[0.9fr_1.1fr]">
             <Card>
@@ -616,7 +1227,7 @@ export default async function HelpDeskPage({ searchParams }: { searchParams?: { 
         </>
       ) : null}
 
-      {activeTab === 'review' ? (
+      {activeTab === 'knowledge' ? (
         <>
           <Card>
         <CardHeader>
@@ -624,7 +1235,16 @@ export default async function HelpDeskPage({ searchParams }: { searchParams?: { 
         </CardHeader>
         <CardContent>
           {workspace.connectors.length === 0 ? (
-            <p className="text-sm text-muted-foreground">No connectors yet. Create one above, then run the .NET or Android starter.</p>
+            // Module 4 — same story as the Connect tab, so use the same destination.
+            <div className="space-y-3">
+              <p className="max-w-2xl text-sm text-muted-foreground">
+                No systems connected yet. There is nothing to review until a connector is installed in your
+                software and has synced its screens.
+              </p>
+              <Button asChild size="sm">
+                <Link href="/company/help-desk?tab=connect">Connect software</Link>
+              </Button>
+            </div>
           ) : (
             <Table>
               <TableHeader>
@@ -697,7 +1317,16 @@ export default async function HelpDeskPage({ searchParams }: { searchParams?: { 
         </CardHeader>
         <CardContent className="space-y-4">
           {draftGroups.length === 0 ? (
-            <p className="text-sm text-muted-foreground">No draft docs waiting. Run connector sync to generate editable help drafts.</p>
+            // Module 5 — review queue is empty; a resync is the only thing that refills it.
+            <div className="space-y-3">
+              <p className="max-w-2xl text-sm text-muted-foreground">
+                Nothing waiting for review. Each screen keeps one row here, so a resync updates what you already
+                approved rather than adding copies.
+              </p>
+              <Button asChild size="sm" variant="outline">
+                <Link href="/company/help-desk?tab=connect">Open connector setup</Link>
+              </Button>
+            </div>
           ) : (
             draftGroups.map((group) => (
               <div key={group.connector.id} className="rounded-md border bg-muted/20 p-3">
@@ -727,7 +1356,16 @@ export default async function HelpDeskPage({ searchParams }: { searchParams?: { 
         </CardHeader>
         <CardContent>
           {workspace.actions.length === 0 ? (
-            <p className="text-sm text-muted-foreground">No actions registered yet. The starter connectors include POS-style actions like search product and end-of-day report.</p>
+            // Module 6 — mirrors the Actions tab empty state.
+            <div className="space-y-3">
+              <p className="max-w-2xl text-sm text-muted-foreground">
+                No actions registered yet. The starter connectors ship with POS-style actions like search product
+                and end-of-day report; they appear here after the first sync.
+              </p>
+              <Button asChild size="sm" variant="outline">
+                <Link href="/company/help-desk?tab=connect">Open connector setup</Link>
+              </Button>
+            </div>
           ) : (
             <Table>
               <TableHeader>
@@ -798,6 +1436,14 @@ export default async function HelpDeskPage({ searchParams }: { searchParams?: { 
         </>
       ) : null}
 
+      {activeTab === 'actions' ? (
+        <ActionsSection workspace={workspace} />
+      ) : null}
+
+      {activeTab === 'support' ? (
+        <SupportEscalationSection automationEndpoints={automationEndpoints} />
+      ) : null}
+
       {activeTab === 'logs' ? (
         <>
           <Card>
@@ -849,7 +1495,9 @@ export default async function HelpDeskPage({ searchParams }: { searchParams?: { 
                     ) : (
                       <TableRow>
                         <TableCell colSpan={4} className="py-6 text-center text-sm text-muted-foreground">
-                          No health logs yet.
+                          {/* Module 7 — a log, not a task: explain what fills it, no button. */}
+                          No health logs yet. Connections, syncs, and errors are recorded here once a connector
+                          starts reporting in.
                         </TableCell>
                       </TableRow>
                     )}
@@ -865,7 +1513,11 @@ export default async function HelpDeskPage({ searchParams }: { searchParams?: { 
         </CardHeader>
         <CardContent>
           {workspace.auditLogs.length === 0 ? (
-            <p className="text-sm text-muted-foreground">No Help Desk chat or action audit logs yet.</p>
+            // Module 8 — a log, not a task: explain what fills it, no button.
+            <p className="max-w-2xl text-sm text-muted-foreground">
+              No audit trail yet. Every staff question and every action the assistant runs is recorded here, with
+              who confirmed it and whether it was a dry run.
+            </p>
           ) : (
             <Table>
               <TableHeader>
@@ -892,7 +1544,7 @@ export default async function HelpDeskPage({ searchParams }: { searchParams?: { 
                     <TableCell>
                       <Badge variant={statusVariant(log.status)}>{log.status}</Badge>
                     </TableCell>
-                    <TableCell className="space-x-1">
+                    <TableCell className="space-x-1 rtl:space-x-reverse">
                       {log.confirmationRequired ? <Badge variant="warning">confirm</Badge> : null}
                       {log.confirmed ? <Badge variant="success">confirmed</Badge> : null}
                       {log.dryRun ? <Badge variant="secondary">dry-run</Badge> : null}
@@ -911,7 +1563,16 @@ export default async function HelpDeskPage({ searchParams }: { searchParams?: { 
         </CardHeader>
         <CardContent>
           {workspace.events.length === 0 ? (
-            <p className="text-sm text-muted-foreground">No events yet. Queue a sandbox event after actions sync.</p>
+            // Module 9 — testing an action is the sensible next step here.
+            <div className="space-y-3">
+              <p className="max-w-2xl text-sm text-muted-foreground">
+                No events yet. Each time the assistant asks your software to do something, the request and its
+                result land here. Send a test event from an enabled action to see one.
+              </p>
+              <Button asChild size="sm" variant="outline">
+                <Link href="/company/help-desk?tab=actions">Test an action</Link>
+              </Button>
+            </div>
           ) : (
             <Table>
               <TableHeader>

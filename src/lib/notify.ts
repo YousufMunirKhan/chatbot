@@ -1,7 +1,13 @@
 import { createSupabaseServiceClient } from '@/lib/db/server';
 import { sendEmail } from '@/lib/email';
 import { sendNotificationEvent } from '@/lib/notification-delivery';
-import { dispatchWebhookEvent, NOTIFICATION_TO_EVENT } from '@/lib/webhooks';
+import {
+  dispatchWebhookEvent,
+  NOTIFICATION_TO_EVENT,
+  NO_WEBHOOK_COVERAGE,
+  type WebhookEventCoverage,
+} from '@/lib/webhooks';
+import type { DeliveryChannel } from '@/lib/notification-delivery';
 
 /**
  * Notifications (Module 24). Writes an in-dashboard notification and (optionally)
@@ -15,6 +21,8 @@ export type NotificationType =
   | 'missed_conversation'
   | 'new_appointment'
   | 'new_order'
+  | 'helpdesk_issue_reported'
+  | 'helpdesk_issue_resolved'
   | 'failed_payment'
   | 'failed_sync'
   | 'over_usage_limit'
@@ -40,8 +48,9 @@ export async function notify(params: {
   // Fan the event out to the company's own systems (generic webhook / Slack /
   // Zapier). Guarded internally — never breaks the in-app notification or email.
   const webhookEvent = NOTIFICATION_TO_EVENT[params.type];
+  let coverage: WebhookEventCoverage = NO_WEBHOOK_COVERAGE;
   if (webhookEvent) {
-    await dispatchWebhookEvent({
+    coverage = await dispatchWebhookEvent({
       companyId: params.companyId,
       event: webhookEvent,
       title: params.title,
@@ -50,12 +59,22 @@ export async function notify(params: {
     });
   }
 
+  // The notification-settings Slack / generic-webhook channels below cover the
+  // same events as the webhook endpoints above, so a company that pasted its
+  // Slack URL into both screens received every alert twice. Hand the endpoint
+  // coverage down and let the second system stand aside for exactly the
+  // channels already delivered. Email and WhatsApp are never affected.
+  const suppressedChannels: DeliveryChannel[] = [];
+  if (coverage.slack) suppressedChannels.push('slack');
+  if (coverage.generic) suppressedChannels.push('webhook');
+
   await sendNotificationEvent({
     companyId: params.companyId,
     eventType: params.type,
     title: params.title,
     body: params.body,
     data: params.data,
+    suppressedChannels,
   });
 
   if (params.email) {

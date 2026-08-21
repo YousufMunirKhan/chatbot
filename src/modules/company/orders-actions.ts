@@ -26,4 +26,5 @@ export async function setChatOrderStatusAction(formData: FormData): Promise<void
     .eq('id', parsed.data.orderId)
     .eq('company_id', companyId); // scope guard
   revalidatePath('/company/orders');
+  revalidatePath('/company/customers'); // the Customers workspace lists orders too
 }

@@ -55,6 +55,22 @@ class HelpdeskChatController(
         }
     }
 
+    fun eventStatus(eventId: String): JSONObject {
+        val request = Request.Builder()
+            .url(baseUrl.trimEnd('/') + "/api/helpdesk/events/" + eventId)
+            .addHeader("Authorization", "Bearer ${tokenProvider.getToken()}")
+            .get()
+            .build()
+        httpClient.newCall(request).execute().use { response ->
+            val responseText = response.body?.string().orEmpty()
+            if (!response.isSuccessful) {
+                val message = runCatching { JSONObject(responseText).optString("message") }.getOrNull()
+                error(message?.takeIf { it.isNotBlank() } ?: "Help Desk event status failed ${response.code}")
+            }
+            return JSONObject(responseText)
+        }
+    }
+
     fun openRoute(routeId: String): Boolean {
         return navigationRegistry.open(routeId)
     }

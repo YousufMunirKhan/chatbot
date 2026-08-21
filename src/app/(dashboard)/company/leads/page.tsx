@@ -1,3 +1,4 @@
+import Link from 'next/link';
 import { requireRole } from '@/lib/auth';
 import { ROLES } from '@/lib/constants';
 import { Button } from '@/components/ui/button';
@@ -9,6 +10,7 @@ import { listLeadsPaged } from '@/modules/company/leads-data';
 import { updateLeadStatusAction } from '@/modules/company/leads-actions';
 import { LeadForm } from '@/modules/company/components/lead-form';
 import { ListFilters, Pagination } from '@/modules/company/components/list-controls';
+import { RefreshOnFocus } from '@/components/refresh-on-focus';
 
 type BadgeVariant = 'default' | 'secondary' | 'success' | 'warning' | 'destructive' | 'outline';
 
@@ -39,9 +41,11 @@ export default async function LeadsPage({
     search,
     status,
   });
+  const filtered = Boolean(search) || status !== 'all';
 
   return (
     <div className="space-y-6">
+      <RefreshOnFocus />
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h1 className="text-2xl font-semibold">Leads</h1>
@@ -54,7 +58,7 @@ export default async function LeadsPage({
         </Button>
       </div>
 
-      <Card>
+      <Card id="add-lead">
         <CardHeader>
           <CardTitle>Add a lead</CardTitle>
         </CardHeader>
@@ -75,10 +79,30 @@ export default async function LeadsPage({
 
       <Card>
         <CardContent className="p-0">
-          {leads.length === 0 ? (
-            <p className="p-6 text-sm text-muted-foreground">
-              {search || status !== 'all' ? 'No leads match your filters.' : 'No leads yet.'}
-            </p>
+          {leads.length === 0 && filtered ? (
+            // Module 1 — a filter is hiding everything, so offer the way back.
+            <div className="space-y-3 p-6">
+              <p className="text-sm font-medium">No leads match your filters</p>
+              <p className="text-sm text-muted-foreground">
+                Nothing matches {search ? <>&ldquo;{search}&rdquo;</> : 'this search'}
+                {status !== 'all' ? ` with status ${status}` : ''}. Try a different term or start over.
+              </p>
+              <Button asChild size="sm" variant="outline">
+                <Link href="/company/leads">Clear filters</Link>
+              </Button>
+            </div>
+          ) : leads.length === 0 ? (
+            // Module 2 — genuinely no leads yet.
+            <div className="space-y-3 p-6">
+              <p className="text-sm font-medium">No leads yet</p>
+              <p className="max-w-xl text-sm text-muted-foreground">
+                When a visitor leaves their name and contact details in chat, they show up here. You can also add
+                someone you spoke to by phone.
+              </p>
+              <Button asChild size="sm">
+                <a href="#add-lead">Add a lead</a>
+              </Button>
+            </div>
           ) : (
             <Table>
               <TableHeader>

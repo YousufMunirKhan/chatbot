@@ -6,6 +6,7 @@ import { Card, CardContent } from '@/components/ui/card';
 import { listCannedResponses } from '@/modules/company/inbox-data';
 import { deleteCannedResponseAction } from '@/modules/company/inbox-actions';
 import { CannedResponseForm } from '@/modules/company/components/canned-response-form';
+import { ConfirmSubmit } from '@/components/confirm-submit';
 
 async function handleDelete(formData: FormData) {
   'use server';
@@ -20,7 +21,7 @@ export default async function CannedResponsesPage() {
     <div className="mx-auto max-w-3xl space-y-6">
       <div>
         <Link href="/company/inbox" className="text-sm text-muted-foreground hover:underline">
-          ← Inbox
+          <span className="dir-arrow" aria-hidden="true">←</span> Inbox
         </Link>
         <h1 className="mt-2 text-2xl font-semibold">Saved replies</h1>
         <p className="text-sm text-muted-foreground">
@@ -48,9 +49,7 @@ export default async function CannedResponsesPage() {
                   </div>
                   <form action={handleDelete}>
                     <input type="hidden" name="id" value={c.id} />
-                    <Button type="submit" variant="ghost" size="sm">
-                      Delete
-                    </Button>
+                    <ConfirmSubmit label="Delete" question="This cannot be undone." />
                   </form>
                 </li>
               ))}

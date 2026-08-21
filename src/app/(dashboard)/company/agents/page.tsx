@@ -12,6 +12,7 @@ import { AgentInviteForm } from '@/modules/company/components/agent-invite-form'
 import { setAgentPresenceAction } from '@/modules/company/agent-presence-actions';
 import { createSupabaseServiceClient } from '@/lib/db/server';
 import { env } from '@/lib/env';
+import { ConfirmSubmit } from '@/components/confirm-submit';
 
 export default async function AgentsPage() {
   await requireRole([ROLES.COMPANY_ADMIN]);
@@ -94,7 +95,8 @@ export default async function AgentsPage() {
               {invites.length === 0 ? (
                 <TableRow>
                   <TableCell colSpan={4} className="py-6 text-center text-muted-foreground">
-                    No invites yet.
+                    {/* Module 1 — the invite form sits directly above, so no button here. */}
+                    No pending invites. Invite a teammate above and they stay on this list until they accept.
                   </TableCell>
                 </TableRow>
               ) : (
@@ -143,13 +145,11 @@ export default async function AgentsPage() {
                       {m.presenceStatus ?? 'offline'}
                     </Badge>
                   </TableCell>
-                  <TableCell className="text-right">
+                  <TableCell className="text-end">
                     {m.role === 'agent' ? (
                       <form action={removeAgentAction}>
                         <input type="hidden" name="membershipId" value={m.membershipId} />
-                        <Button type="submit" variant="ghost" size="sm">
-                          Remove
-                        </Button>
+                        <ConfirmSubmit label="Remove" confirmLabel="Yes, remove" question="They lose access to this workspace immediately." />
                       </form>
                     ) : null}
                   </TableCell>

@@ -9,6 +9,7 @@ import { MANAGED_CREDENTIAL_FIELDS } from '@/lib/helpdesk/managed';
 import { listManagedConnectors } from '@/modules/company/managed-connectors-data';
 import { deleteManagedConnectorAction } from '@/modules/company/managed-connectors-actions';
 import { ManagedConnectorForm } from '@/modules/company/components/managed-connector-form';
+import { ConfirmSubmit } from '@/components/confirm-submit';
 
 async function remove(formData: FormData) {
   'use server';
@@ -24,7 +25,7 @@ export default async function ManagedConnectorsPage() {
     <div className="space-y-6">
       <div>
         <Link href="/company/help-desk" className="text-sm text-muted-foreground hover:underline">
-          ← Help Desk
+          <span className="dir-arrow" aria-hidden="true">←</span> Help Desk
         </Link>
         <h1 className="mt-2 text-2xl font-semibold">Managed connectors</h1>
         <p className="text-sm text-muted-foreground">
@@ -61,9 +62,7 @@ export default async function ManagedConnectorsPage() {
                   </div>
                   <form action={remove}>
                     <input type="hidden" name="connectorId" value={c.connectorId} />
-                    <Button type="submit" variant="ghost" size="sm">
-                      Disconnect
-                    </Button>
+                    <ConfirmSubmit label="Disconnect" confirmLabel="Yes, disconnect" question="The assistant loses live access to this system." />
                   </form>
                 </li>
               ))}

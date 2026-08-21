@@ -2,6 +2,10 @@
 
 Use this for SaaS dashboards, website admin panels, or browser-based business software.
 
+## Upgrading an existing integration
+
+Do not overwrite a customized `HelpdeskWebAppDetails.js`. That file usually contains the customer app's real pages, route URLs, and handlers. Read `../docs/UPGRADE_GUIDE.md`, replace SDK files, and merge new helpers manually.
+
 ## Give This Zip To A Developer Or AI
 
 After unzipping, start with:

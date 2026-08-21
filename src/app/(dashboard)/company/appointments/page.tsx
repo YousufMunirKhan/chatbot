@@ -1,3 +1,4 @@
+import Link from 'next/link';
 import { requireRole } from '@/lib/auth';
 import { ROLES } from '@/lib/constants';
 import { Button } from '@/components/ui/button';
@@ -8,6 +9,7 @@ import { formatDate } from '@/lib/format';
 import { listAppointmentsPaged } from '@/modules/company/appointments-data';
 import { setAppointmentStatusAction } from '@/modules/company/appointments-actions';
 import { ListFilters, Pagination } from '@/modules/company/components/list-controls';
+import { RefreshOnFocus } from '@/components/refresh-on-focus';
 
 type BadgeVariant = 'default' | 'secondary' | 'success' | 'warning' | 'destructive' | 'outline';
 
@@ -44,9 +46,11 @@ export default async function AppointmentsPage({
     pageCount,
     pageSize,
   } = await listAppointmentsPaged({ page, search, status });
+  const filtered = Boolean(search) || status !== 'all';
 
   return (
     <div className="space-y-6">
+      <RefreshOnFocus />
       <div>
         <h1 className="text-2xl font-semibold">Appointments</h1>
         <p className="text-sm text-muted-foreground">
@@ -66,12 +70,31 @@ export default async function AppointmentsPage({
 
       <Card>
         <CardContent className="p-0">
-          {appointments.length === 0 ? (
-            <p className="p-6 text-sm text-muted-foreground">
-              {search || status !== 'all'
-                ? 'No appointments match your filters.'
-                : 'No appointment requests yet.'}
-            </p>
+          {appointments.length === 0 && filtered ? (
+            // Module 1 — a filter is hiding everything, so offer the way back.
+            <div className="space-y-3 p-6">
+              <p className="text-sm font-medium">No appointments match your filters</p>
+              <p className="text-sm text-muted-foreground">
+                Nothing matches {search ? <>&ldquo;{search}&rdquo;</> : 'this search'}
+                {status !== 'all' ? ` with status ${status.replace(/_/g, ' ')}` : ''}. Try a different term or start
+                over.
+              </p>
+              <Button asChild size="sm" variant="outline">
+                <Link href="/company/appointments">Clear filters</Link>
+              </Button>
+            </div>
+          ) : appointments.length === 0 ? (
+            // Module 2 — no requests yet; bookings start with a bookable service.
+            <div className="space-y-3 p-6">
+              <p className="text-sm font-medium">No appointment requests yet</p>
+              <p className="max-w-xl text-sm text-muted-foreground">
+                Mark a service as bookable and the assistant can take requests in chat, with the customer&rsquo;s
+                preferred day and time.
+              </p>
+              <Button asChild size="sm">
+                <Link href="/company/business-data?tab=services">Set up a bookable service</Link>
+              </Button>
+            </div>
           ) : (
             <Table>
               <TableHeader>

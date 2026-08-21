@@ -7,6 +7,7 @@ import { ROLES } from '@/lib/constants';
 import { createSupabaseServiceClient } from '@/lib/db/server';
 import { ingestText } from '@/lib/ai/ingest';
 import { getCompanyId } from './data';
+import { findDocumentReferences } from './knowledge-data';
 
 export type ActionState = { error?: string; ok?: boolean };
 export type WebsiteImportState = ActionState & {
@@ -45,6 +46,21 @@ function extractPageText(html: string): string {
 
 function normalizeWebsiteUrl(value: string): URL {
   return new URL(value.includes('://') ? value : `https://${value}`);
+}
+
+/** Host without `www.` and case, so `WWW.X.com` and `x.com` count as the same site. */
+function comparableHost(value: string): string {
+  try {
+    return normalizeWebsiteUrl(value).hostname.toLowerCase().replace(/^www\./, '');
+  } catch {
+    return value.trim().toLowerCase().replace(/^https?:\/\//, '').split('/')[0]?.replace(/^www\./, '') ?? '';
+  }
+}
+
+/** Origin + path (no query/hash/trailing slash) so an explicit `/en` survives. */
+function websiteValue(url: URL): string {
+  const path = url.pathname.replace(/\/+$/, '');
+  return `${url.origin}${path}`;
 }
 
 function titleFromHtml(html: string, fallback: string): string {
@@ -334,8 +350,16 @@ export async function importWebsiteOnboardingAction(
     return { error: err instanceof Error ? err.message : String(err) };
   }
 
+  // Issue #17: the profile form is the admin's own typed website. Only fill it in
+  // when it is still empty, or when the imported site is a genuinely different host
+  // (the stored value is then stale). Never rewrite it just to strip a path the
+  // admin set on purpose — `https://x.com/en` must not become `https://x.com`.
   const sb = createSupabaseServiceClient();
-  await sb.from('companies').update({ website: startUrl.origin }).eq('id', companyId);
+  const { data: company } = await sb.from('companies').select('website').eq('id', companyId).maybeSingle();
+  const currentWebsite = ((company as { website?: string | null } | null)?.website ?? '').trim();
+  if (!currentWebsite || comparableHost(currentWebsite) !== comparableHost(startUrl.toString())) {
+    await sb.from('companies').update({ website: websiteValue(startUrl) }).eq('id', companyId);
+  }
 
   revalidatePath('/company/knowledge');
   revalidatePath('/company/business-data');
@@ -393,6 +417,21 @@ export async function deleteDocumentAction(formData: FormData): Promise<void> {
   const companyId = await getCompanyId();
   const v = deleteSchema.parse(Object.fromEntries(formData));
   const sb = createSupabaseServiceClient();
+
+  // Issue #15: policies and FAQs own the document they generated (their
+  // `document_id` points at it). Deleting it from here would leave the policy/FAQ
+  // listed in Business Data with a dangling reference and zero RAG coverage, so
+  // refuse and say what owns it. Both delete forms are typed
+  // `(formData) => Promise<void>`, so throwing is the only channel that reaches
+  // the admin instead of failing silently.
+  const reference = (await findDocumentReferences(companyId, [v.documentId])).get(v.documentId);
+  if (reference) {
+    const owner = reference.kind === 'policy' ? 'policy' : 'FAQ';
+    throw new Error(
+      `This document is generated from the ${owner} "${reference.label}" and cannot be deleted on its own. ` +
+        `Delete or edit that ${owner} in Business Data — it keeps its knowledge in sync automatically.`,
+    );
+  }
 
   // Scope guard: only delete a document owned by THIS company. Chunks cascade.
   await sb.from('documents').delete().eq('id', v.documentId).eq('company_id', companyId);

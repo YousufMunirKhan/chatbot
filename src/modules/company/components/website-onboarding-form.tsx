@@ -56,7 +56,12 @@ export function WebsiteOnboardingForm() {
                 <li key={url} className="break-all">{url}</li>
               ))}
             </ul>
-          ) : null}
+          ) : (
+            <p className="text-xs">
+              We could not read any public pages at that address. Check the URL, or paste your key details as text
+              knowledge instead.
+            </p>
+          )}
           {state.missingPrompts?.length ? (
             <div>
               <p className="font-medium">Ask the client for these missing details next:</p>

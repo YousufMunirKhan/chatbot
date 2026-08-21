@@ -100,7 +100,7 @@ export async function computeQualityRoom(companyId: string): Promise<QualityRoom
       description: 'Customers ask how to reach you. Add a phone, WhatsApp, or support email so the assistant can share it.',
       impact: 'high',
       ctaLabel: 'Edit profile',
-      ctaHref: '/company/profile',
+      ctaHref: '/company/business-data?tab=basics',
     });
   }
   if (!hasHours) {
@@ -110,7 +110,7 @@ export async function computeQualityRoom(companyId: string): Promise<QualityRoom
       description: 'Without opening hours the assistant can’t answer “are you open?” reliably.',
       impact: 'high',
       ctaLabel: 'Edit profile',
-      ctaHref: '/company/profile',
+      ctaHref: '/company/business-data?tab=basics',
     });
   }
   if (!hasPolicy) {
@@ -120,7 +120,7 @@ export async function computeQualityRoom(companyId: string): Promise<QualityRoom
       description: 'Add returns, shipping, and refund policies so the assistant can answer them accurately.',
       impact: 'high',
       ctaLabel: 'Add policy',
-      ctaHref: '/company/profile',
+      ctaHref: '/company/business-data?tab=basics',
     });
   }
   if (!hasDocs && !hasFaq) {
@@ -130,7 +130,7 @@ export async function computeQualityRoom(companyId: string): Promise<QualityRoom
       description: 'Add FAQs or documents (policies, guides) so the assistant answers from your real content.',
       impact: 'high',
       ctaLabel: 'Add knowledge',
-      ctaHref: '/company/knowledge',
+      ctaHref: '/company/business-data?tab=knowledge',
     });
   }
   if (!hasProducts && !hasIntegration) {
@@ -166,7 +166,7 @@ export async function computeQualityRoom(companyId: string): Promise<QualityRoom
           : 'A customer asked this and the assistant had no matching knowledge.',
       impact: gap.count >= 3 ? 'high' : 'medium',
       ctaLabel: 'Add knowledge',
-      ctaHref: '/company/knowledge',
+      ctaHref: '/company/business-data?tab=knowledge',
     });
   }
 

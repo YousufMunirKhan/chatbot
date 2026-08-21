@@ -130,13 +130,18 @@ final class HelpdeskLaravelStarter
                 $this->screen('reports.daily_sales', 'Reports', 'Daily Sales', 'Dashboard > Reports > Daily Sales', 'Review daily sales totals, order count, cash, and card totals.', ['daily_sales_report', 'end_of_day_report'], '/admin/reports/daily-sales'),
             ],
             'actions' => [
-                $this->action('search_product', 'Search products by name, SKU, or barcode.', 'read', 'low', ['query']),
-                $this->action('get_product', 'Return one product by id.', 'read', 'low', ['product_id']),
-                $this->action('check_stock', 'Return current stock for one product.', 'read', 'low', ['product_id']),
-                $this->action('daily_sales_report', 'Return sales summary for a date.', 'report', 'low', ['date']),
-                $this->action('end_of_day_report', 'Return end-of-day close summary.', 'report', 'low', ['date']),
-                $this->action('update_product_quantity', 'Update stock quantity for one product.', 'update', 'medium', ['product_id', 'quantity'], true),
-                $this->action('update_product_price', 'Update product sale price.', 'update', 'medium', ['product_id', 'price'], true),
+                ...array_values(array_filter(
+                    StandardHelpdeskEvents::all(),
+                    fn (array $action) => in_array($action['name'], [
+                        'search_product',
+                        'get_product',
+                        'check_stock',
+                        'daily_sales_report',
+                        'end_of_day_report',
+                        'update_product_quantity',
+                        'update_product_price',
+                    ], true),
+                )),
             ],
         ];
     }

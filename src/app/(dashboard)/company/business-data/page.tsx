@@ -34,22 +34,23 @@ import {
 import { KnowledgeForm } from '@/modules/company/components/knowledge-form';
 import { BusinessDataTabs, type BusinessDataTab } from '@/modules/company/components/business-data-tabs';
 import { categoryLabel } from '@/modules/company/business-categories';
+import { ConfirmSubmit } from '@/components/confirm-submit';
 
 function DeleteButton({
   id,
   fieldName = 'id',
   action,
+  question,
 }: {
   id: string;
   fieldName?: string;
   action: (formData: FormData) => Promise<void>;
+  question?: string;
 }) {
   return (
     <form action={action}>
       <input type="hidden" name={fieldName} value={id} />
-      <Button type="submit" variant="ghost" size="sm">
-        Delete
-      </Button>
+      <ConfirmSubmit label="Delete" question={question ?? 'This cannot be undone.'} />
     </form>
   );
 }
@@ -192,7 +193,7 @@ export default async function BusinessDataWorkspacePage() {
                       <TableHead>Address</TableHead>
                       <TableHead>Phone</TableHead>
                       <TableHead>Timezone</TableHead>
-                      <TableHead className="text-right">Actions</TableHead>
+                      <TableHead className="text-end">Actions</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -202,7 +203,7 @@ export default async function BusinessDataWorkspacePage() {
                         <TableCell>{[location.address, location.city, location.country].filter(Boolean).join(', ') || '-'}</TableCell>
                         <TableCell>{location.phone ?? '-'}</TableCell>
                         <TableCell>{location.timezone ?? '-'}</TableCell>
-                        <TableCell className="text-right">
+                        <TableCell className="text-end">
                           <DeleteButton id={location.id} action={deleteLocationAction} />
                         </TableCell>
                       </TableRow>
@@ -210,7 +211,11 @@ export default async function BusinessDataWorkspacePage() {
                   </TableBody>
                 </Table>
               ) : (
-                <p className="text-sm text-muted-foreground">No locations added yet.</p>
+                // Module 1 — the add form sits directly above, so no button is needed here.
+                <p className="text-sm text-muted-foreground">
+                  No locations yet. Add each branch or service area you cover so the assistant can answer
+                  &ldquo;where are you&rdquo; and &ldquo;do you deliver to me&rdquo; without guessing.
+                </p>
               )}
             </CardContent>
           </Card>
@@ -224,7 +229,7 @@ export default async function BusinessDataWorkspacePage() {
       badge: String(memory.services.length),
       content: (
         <div className="space-y-4">
-          <Card>
+          <Card id="add-service">
             <CardHeader>
               <SectionHeader title="Add service or offer" description="This fixes the Services or offers readiness item and helps the assistant answer sales questions." />
             </CardHeader>
@@ -239,7 +244,16 @@ export default async function BusinessDataWorkspacePage() {
             </CardHeader>
             <CardContent>
               {memory.services.length === 0 ? (
-                <p className="text-sm text-muted-foreground">No services added yet. Add your first service above.</p>
+                // Module 2 — empty state points back to the add form on this same tab.
+                <div className="space-y-3">
+                  <p className="max-w-2xl text-sm text-muted-foreground">
+                    No services yet. List what you sell, with prices, and the assistant can answer cost and
+                    availability questions instead of asking customers to call you.
+                  </p>
+                  <Button asChild size="sm">
+                    <a href="#add-service">Add a service</a>
+                  </Button>
+                </div>
               ) : (
                 <Table>
                   <TableHeader>
@@ -248,7 +262,7 @@ export default async function BusinessDataWorkspacePage() {
                       <TableHead>Type</TableHead>
                       <TableHead>Price</TableHead>
                       <TableHead>Booking</TableHead>
-                      <TableHead className="text-right">Actions</TableHead>
+                      <TableHead className="text-end">Actions</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -259,7 +273,7 @@ export default async function BusinessDataWorkspacePage() {
                           <TableCell>{categoryLabel(service.category)}</TableCell>
                           <TableCell>{servicePrice(service)}</TableCell>
                           <TableCell>{service.bookingRequired ? 'Required' : 'Optional'}</TableCell>
-                          <TableCell className="text-right">
+                          <TableCell className="text-end">
                             <DeleteButton id={service.id} action={deleteServiceAction} />
                           </TableCell>
                         </TableRow>
@@ -288,7 +302,7 @@ export default async function BusinessDataWorkspacePage() {
       badge: String(memory.policies.length),
       content: (
         <div className="space-y-4">
-          <Card>
+          <Card id="add-policy">
             <CardHeader>
               <SectionHeader title="Add policy" description="Policies are also indexed into knowledge so the assistant can quote them accurately." />
             </CardHeader>
@@ -303,7 +317,16 @@ export default async function BusinessDataWorkspacePage() {
             </CardHeader>
             <CardContent>
               {memory.policies.length === 0 ? (
-                <p className="text-sm text-muted-foreground">No policies added yet.</p>
+                // Module 3 — highest-value empty state on this tab, so it carries a button.
+                <div className="space-y-3">
+                  <p className="max-w-2xl text-sm text-muted-foreground">
+                    No policies yet. Add your refund, delivery, or privacy policy so the assistant quotes it
+                    exactly instead of guessing.
+                  </p>
+                  <Button asChild size="sm">
+                    <a href="#add-policy">Add a policy</a>
+                  </Button>
+                </div>
               ) : (
                 <Table>
                   <TableHeader>
@@ -311,7 +334,7 @@ export default async function BusinessDataWorkspacePage() {
                       <TableHead>Title</TableHead>
                       <TableHead>Category</TableHead>
                       <TableHead>Preview</TableHead>
-                      <TableHead className="text-right">Actions</TableHead>
+                      <TableHead className="text-end">Actions</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -321,7 +344,7 @@ export default async function BusinessDataWorkspacePage() {
                           <TableCell className="font-medium">{policy.title}</TableCell>
                           <TableCell>{categoryLabel(policy.category)}</TableCell>
                           <TableCell className="max-w-md truncate text-muted-foreground">{policy.content}</TableCell>
-                          <TableCell className="text-right">
+                          <TableCell className="text-end">
                             <DeleteButton id={policy.id} action={deletePolicyAction} />
                           </TableCell>
                         </TableRow>
@@ -350,7 +373,7 @@ export default async function BusinessDataWorkspacePage() {
       badge: String(memory.faqs.length),
       content: (
         <div className="space-y-4">
-          <Card>
+          <Card id="add-faq">
             <CardHeader>
               <SectionHeader title="Add FAQ" description="Best for questions where you want the assistant to use a precise approved answer." />
             </CardHeader>
@@ -365,7 +388,15 @@ export default async function BusinessDataWorkspacePage() {
             </CardHeader>
             <CardContent>
               {memory.faqs.length === 0 ? (
-                <p className="text-sm text-muted-foreground">No FAQs added yet.</p>
+                // Module 4 — cheapest quality win, so the copy names the exact first step.
+                <div className="space-y-3">
+                  <p className="max-w-2xl text-sm text-muted-foreground">
+                    No FAQs yet. The fastest way to improve answers: add the five questions customers ask most.
+                  </p>
+                  <Button asChild size="sm">
+                    <a href="#add-faq">Add an FAQ</a>
+                  </Button>
+                </div>
               ) : (
                 <Table>
                   <TableHeader>
@@ -373,7 +404,7 @@ export default async function BusinessDataWorkspacePage() {
                       <TableHead>Question</TableHead>
                       <TableHead>Answer</TableHead>
                       <TableHead>Topic</TableHead>
-                      <TableHead className="text-right">Actions</TableHead>
+                      <TableHead className="text-end">Actions</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -383,7 +414,7 @@ export default async function BusinessDataWorkspacePage() {
                           <TableCell className="font-medium">{faq.question}</TableCell>
                           <TableCell className="max-w-md truncate text-muted-foreground">{faq.answer}</TableCell>
                           <TableCell>{categoryLabel(faq.category)}</TableCell>
-                          <TableCell className="text-right">
+                          <TableCell className="text-end">
                             <DeleteButton id={faq.id} action={deleteFaqAction} />
                           </TableCell>
                         </TableRow>
@@ -412,7 +443,7 @@ export default async function BusinessDataWorkspacePage() {
       badge: String(docs.length),
       content: (
         <div className="space-y-4">
-          <Card>
+          <Card id="add-knowledge">
             <CardHeader>
               <SectionHeader title="Add knowledge" description="Use this for small files, pages, support docs, pricing pages, or longer text. Keep it concise to control AI cost." />
             </CardHeader>
@@ -427,7 +458,15 @@ export default async function BusinessDataWorkspacePage() {
             </CardHeader>
             <CardContent>
               {docs.length === 0 ? (
-                <p className="text-sm text-muted-foreground">No knowledge documents yet.</p>
+                // Module 5 — website import is the least work for the owner, so lead with it.
+                <div className="space-y-3">
+                  <p className="max-w-2xl text-sm text-muted-foreground">
+                    Nothing imported yet. Paste your website address and we&rsquo;ll read your public pages for you.
+                  </p>
+                  <Button asChild size="sm">
+                    <a href="#add-knowledge">Import my website</a>
+                  </Button>
+                </div>
               ) : (
                 <Table>
                   <TableHeader>
@@ -437,7 +476,7 @@ export default async function BusinessDataWorkspacePage() {
                       <TableHead>Status</TableHead>
                       <TableHead>Size</TableHead>
                       <TableHead>Created</TableHead>
-                      <TableHead className="text-right">Actions</TableHead>
+                      <TableHead className="text-end">Actions</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -448,7 +487,7 @@ export default async function BusinessDataWorkspacePage() {
                         <TableCell><Badge variant="secondary">{doc.status}</Badge></TableCell>
                         <TableCell>{formatNumber(doc.charCount)} chars</TableCell>
                         <TableCell className="text-muted-foreground">{formatDate(doc.createdAt)}</TableCell>
-                        <TableCell className="text-right">
+                        <TableCell className="text-end">
                           <DeleteButton id={doc.id} fieldName="documentId" action={deleteDocumentAction} />
                         </TableCell>
                       </TableRow>

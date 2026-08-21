@@ -2,6 +2,10 @@
 
 Use this for Windows POS, ERP, inventory, or local .NET software.
 
+## Upgrading an existing integration
+
+Do not overwrite a customized `HelpdeskDotnetAppDetails.cs`. That file usually contains the customer app's real forms, route commands, and handlers. Read `../docs/UPGRADE_GUIDE.md`, replace SDK files, and merge new helpers manually.
+
 ## Give This Zip To A Developer Or AI
 
 After unzipping, start with:

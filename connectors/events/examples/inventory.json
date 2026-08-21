@@ -1,0 +1,34 @@
+{
+  "search_product": {
+    "input": {
+      "query": "pepsi"
+    },
+    "customerHandler": "productService.search(query)",
+    "exampleResult": {
+      "results": [
+        {
+          "id": "p_100",
+          "name": "Pepsi 500ml",
+          "sku": "PEP500",
+          "price": 120,
+          "quantity": 24
+        }
+      ]
+    }
+  },
+  "create_product": {
+    "input": {
+      "name": "Water 500ml",
+      "price": 60,
+      "category_name": "Drinks",
+      "confirmed": true
+    },
+    "customerHandler": "productService.create(input)",
+    "categoryRule": "Resolve category_name locally. Ask for clarification if no category or multiple categories match.",
+    "exampleResult": {
+      "success": true,
+      "product_id": "p_200",
+      "message": "Product created."
+    }
+  }
+}

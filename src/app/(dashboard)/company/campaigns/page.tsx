@@ -6,6 +6,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { listCampaigns } from '@/modules/company/campaigns-data';
 import { toggleCampaignAction, deleteCampaignAction } from '@/modules/company/campaigns-actions';
 import { CampaignForm } from '@/modules/company/components/campaign-form';
+import { ConfirmSubmit } from '@/components/confirm-submit';
 
 async function toggle(formData: FormData) {
   'use server';
@@ -29,7 +30,7 @@ export default async function CampaignsPage() {
         </p>
       </div>
 
-      <Card>
+      <Card id="new-campaign">
         <CardHeader>
           <CardTitle>New campaign</CardTitle>
           <CardDescription>Behaviour-triggered in-widget nudge.</CardDescription>
@@ -42,7 +43,17 @@ export default async function CampaignsPage() {
       <Card>
         <CardContent className="p-0">
           {campaigns.length === 0 ? (
-            <p className="p-6 text-sm text-muted-foreground">No campaigns yet.</p>
+            // Module 1 — the create form is on this page, so link straight to it.
+            <div className="space-y-3 p-6">
+              <p className="text-sm font-medium">No campaigns yet</p>
+              <p className="max-w-xl text-sm text-muted-foreground">
+                A campaign opens the chat with a message you choose, on the pages you choose, after a delay you
+                set. A good first one: offer help on your pricing page after 20 seconds.
+              </p>
+              <Button asChild size="sm">
+                <a href="#new-campaign">Create a campaign</a>
+              </Button>
+            </div>
           ) : (
             <ul className="divide-y">
               {campaigns.map((c) => (
@@ -68,9 +79,7 @@ export default async function CampaignsPage() {
                     </form>
                     <form action={remove}>
                       <input type="hidden" name="id" value={c.id} />
-                      <Button type="submit" size="sm" variant="ghost">
-                        Delete
-                      </Button>
+                      <ConfirmSubmit label="Delete" question="This cannot be undone." />
                     </form>
                   </div>
                 </li>

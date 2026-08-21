@@ -1,25 +1,18 @@
 'use client';
 
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { ThemeProvider } from 'next-themes';
-import { useState } from 'react';
 
 /**
- * Client providers (TanStack Query + theme). Wrapped once at the root layout.
+ * Client providers, wrapped once at the root layout.
+ *
+ * TanStack Query was removed: the dashboard renders every screen server-side and
+ * the repo contained no useQuery/useMutation call anywhere, so the provider only
+ * shipped an unused client to every page.
  */
 export function Providers({ children }: { children: React.ReactNode }) {
-  const [queryClient] = useState(
-    () =>
-      new QueryClient({
-        defaultOptions: { queries: { staleTime: 60 * 1000, refetchOnWindowFocus: false } },
-      }),
-  );
-
   return (
-    <QueryClientProvider client={queryClient}>
-      <ThemeProvider attribute="class" defaultTheme="light" enableSystem>
-        {children}
-      </ThemeProvider>
-    </QueryClientProvider>
+    <ThemeProvider attribute="class" defaultTheme="light" enableSystem>
+      {children}
+    </ThemeProvider>
   );
 }

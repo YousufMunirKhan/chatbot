@@ -93,7 +93,7 @@ export function HelpdeskChatPreview({ suggestions = fallbackSuggestions }: { sug
               <button
                 key={item}
                 type="button"
-                className="flex min-h-12 w-full items-center gap-3 border-b border-slate-100 px-2 text-left text-sm text-slate-700 hover:bg-slate-50"
+                className="flex min-h-12 w-full items-center gap-3 border-b border-slate-100 px-2 text-start text-sm text-slate-700 hover:bg-slate-50"
               >
                 <Sparkles className="h-4 w-4 shrink-0 text-[#5b3ff4]" />
                 <span>{item}</span>

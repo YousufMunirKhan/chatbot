@@ -244,11 +244,14 @@ export async function testAiSettingsAction(
       model,
       provider: provider.name,
     });
+    // The event row is rendered in the settings activity feed (settings-data.ts).
+    revalidatePath('/super-admin/settings');
     return { ok: true, message: result.text || 'AI settings test completed.' };
   } catch (err) {
     await settingEvent(admin.userId, 'ai_test_failed', 'ai.chat_provider', {
       error: err instanceof Error ? err.message : String(err),
     });
+    revalidatePath('/super-admin/settings');
     return { error: err instanceof Error ? err.message : 'AI settings test failed' };
   }
 }
@@ -275,6 +278,8 @@ export async function sendTestEmailAction(
       to: parsed.data.testEmail,
     },
   );
+  // The event row is rendered in the settings activity feed (settings-data.ts).
+  revalidatePath('/super-admin/settings');
   return result.sent
     ? { ok: true, message: 'Test email sent.' }
     : { error: 'Email was not sent. Check provider settings.' };

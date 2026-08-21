@@ -7,17 +7,37 @@ import { BotForm } from '@/modules/company/components/bot-form';
 import { createBotAction } from '@/modules/company/actions';
 import { getCurrentCompany, listBots } from '@/modules/company/data';
 
+/**
+ * The company website is already known from onboarding, so a new assistant should
+ * not ask for the same domain a second time. Returns apex + www so the widget
+ * loads on both, or nothing when the saved website is not a usable host.
+ */
+function suggestedDomainsFrom(website: string | null | undefined): string[] {
+  const raw = (website ?? '').trim();
+  if (!raw) return [];
+  let host = '';
+  try {
+    host = new URL(/^https?:\/\//i.test(raw) ? raw : `https://${raw}`).hostname.toLowerCase();
+  } catch {
+    return [];
+  }
+  if (!host.includes('.') || host === 'localhost') return [];
+  const apex = host.startsWith('www.') ? host.slice(4) : host;
+  return apex ? [apex, `www.${apex}`] : [];
+}
+
 export default async function NewBotPage() {
   await requireRole([ROLES.COMPANY_ADMIN]);
   const [company, bots] = await Promise.all([getCurrentCompany(), listBots()]);
   const botLimit = company.subscription.botLimit;
   const atBotLimit = botLimit != null && bots.length >= botLimit;
+  const suggestedDomains = suggestedDomainsFrom(company.website);
 
   return (
     <div className="mx-auto max-w-3xl space-y-6">
       <div>
         <Link href="/company/bots" className="text-sm text-muted-foreground hover:underline">
-          ← Assistants
+          <span className="dir-arrow" aria-hidden="true">←</span> Assistants
         </Link>
         <h1 className="mt-2 text-2xl font-semibold">New assistant</h1>
         <p className="text-sm text-muted-foreground">
@@ -55,7 +75,12 @@ export default async function NewBotPage() {
       ) : (
         <Card>
           <CardContent className="pt-6">
-            <BotForm action={createBotAction} companyName={company.name} submitLabel="Create assistant" />
+            <BotForm
+              action={createBotAction}
+              companyName={company.name}
+              suggestedDomains={suggestedDomains}
+              submitLabel="Create assistant"
+            />
           </CardContent>
         </Card>
       )}

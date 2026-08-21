@@ -1,7 +1,6 @@
 'use server';
 
 import { cookies } from 'next/headers';
-import { redirect } from 'next/navigation';
 import { z } from 'zod';
 import { requireRole, getSessionUser } from '@/lib/auth';
 import { ROLES } from '@/lib/constants';
@@ -9,16 +8,30 @@ import { createSupabaseServiceClient } from '@/lib/db/server';
 import { logSecurityEvent } from '@/lib/security';
 import { IMPERSONATION_COOKIE } from '@/lib/impersonation';
 
+/**
+ * Switching tenant identity must land as a full page load, not a soft
+ * navigation. (dashboard)/layout.tsx renders the brand, nav and impersonation
+ * banner, and Next never re-executes a layout on a client-side navigation — so
+ * a redirect() here would leave the previous company's shell on screen. These
+ * actions therefore hand the target back to the caller, which assigns
+ * window.location. That also drops every client cache holding the old tenant's
+ * data, which is what we want when identity changes.
+ */
+export type ImpersonationState = { error?: string; redirectTo?: string };
+
 const startSchema = z.object({
   companyId: z.string().uuid(),
   reason: z.string().min(8, 'Reason is required and must be specific.').max(500),
   durationMinutes: z.coerce.number().int().min(5).max(120).default(60),
 });
 
-export async function startImpersonationAction(formData: FormData): Promise<void> {
+export async function startImpersonationAction(
+  _prev: ImpersonationState,
+  formData: FormData,
+): Promise<ImpersonationState> {
   const admin = await requireRole([ROLES.SUPER_ADMIN]);
   const parsed = startSchema.safeParse(Object.fromEntries(formData));
-  if (!parsed.success) return;
+  if (!parsed.success) return { error: parsed.error.errors[0]?.message ?? 'Invalid request.' };
   const v = parsed.data;
   const sb = createSupabaseServiceClient();
   const expiresAt = new Date(Date.now() + v.durationMinutes * 60_000).toISOString();
@@ -33,7 +46,7 @@ export async function startImpersonationAction(formData: FormData): Promise<void
     })
     .select('id')
     .single();
-  if (error || !session) return;
+  if (error || !session) return { error: error?.message ?? 'Could not start impersonation.' };
 
   cookies().set(IMPERSONATION_COOKIE, session.id, {
     httpOnly: true,
@@ -67,10 +80,13 @@ export async function startImpersonationAction(formData: FormData): Promise<void
     }),
   ]);
 
-  redirect('/company');
+  return { redirectTo: '/company' };
 }
 
-export async function endImpersonationAction(): Promise<void> {
+export async function endImpersonationAction(
+  _prev: ImpersonationState,
+  _formData: FormData,
+): Promise<ImpersonationState> {
   const user = await getSessionUser({ skipTwoFactorCheck: true });
   const sessionId = cookies().get(IMPERSONATION_COOKIE)?.value;
   cookies().delete(IMPERSONATION_COOKIE);
@@ -101,7 +117,7 @@ export async function endImpersonationAction(): Promise<void> {
         metadata: { sessionId },
       }),
     ]);
-    redirect(companyId ? `/super-admin/companies/${companyId}` : '/super-admin');
+    return { redirectTo: companyId ? `/super-admin/companies/${companyId}` : '/super-admin' };
   }
-  redirect('/super-admin');
+  return { redirectTo: '/super-admin' };
 }

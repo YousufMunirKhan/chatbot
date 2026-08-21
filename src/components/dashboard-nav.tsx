@@ -86,7 +86,13 @@ export function MobileNav({ sections, brand }: { sections: NavSection[]; brand: 
       {open ? (
         <div className="fixed inset-0 z-50">
           <div className="absolute inset-0 bg-black/40" onClick={() => setOpen(false)} aria-hidden="true" />
-          <aside className="absolute left-0 top-0 flex h-full w-72 max-w-[82%] flex-col overflow-y-auto bg-brand-sidebar p-4 text-white shadow-xl">
+          {/*
+            Module 21 (RTL): pinned with the logical `start-0`, not `left-0`. The
+            hamburger that opens this drawer sits in a flex row that reverses under
+            RTL, so a physically-pinned drawer would fly out from the opposite edge
+            of the screen to the button that summoned it.
+          */}
+          <aside className="absolute start-0 top-0 flex h-full w-72 max-w-[82%] flex-col overflow-y-auto bg-brand-sidebar p-4 text-white shadow-xl">
             <div className="mb-6 flex items-center justify-between">
               <Link href={brandHref} prefetch={false} onClick={() => setOpen(false)} className="rounded-2xl bg-white p-3">
                 <Image src="/brand/switch-save-logo.png" alt={brand} width={205} height={41} priority className="h-auto w-48" />

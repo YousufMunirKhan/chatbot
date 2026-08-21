@@ -41,7 +41,7 @@ export async function saveQualityFeedbackAction(
   let chunksCreated = 0;
   let structuredType: string | null = null;
   let structuredId: string | null = null;
-  let editHref = '/company/knowledge';
+  let editHref = '/company/business-data?tab=knowledge';
   if (v.createKnowledge) {
     const question = String(log.question ?? '').trim() || 'Customer question';
     if (v.fixType === 'faq') {
@@ -69,7 +69,7 @@ export async function saveQualityFeedbackAction(
       if (faqError) return { error: faqError.message };
       structuredType = 'faq';
       structuredId = data.id as string;
-      editHref = '/company/profile#faqs';
+      editHref = '/company/business-data?tab=faqs';
     } else if (v.fixType === 'policy') {
       const title = question.slice(0, 80);
       const doc = await ingestText({
@@ -96,7 +96,7 @@ export async function saveQualityFeedbackAction(
       if (policyError) return { error: policyError.message };
       structuredType = 'policy';
       structuredId = data.id as string;
-      editHref = '/company/profile#policies';
+      editHref = '/company/business-data?tab=policies';
     } else if (v.fixType === 'service') {
       const { data: profile } = await sb
         .from('company_business_profiles')
@@ -117,7 +117,7 @@ export async function saveQualityFeedbackAction(
       if (serviceError) return { error: serviceError.message };
       structuredType = 'service';
       structuredId = data.id as string;
-      editHref = '/company/profile#services';
+      editHref = '/company/business-data?tab=services';
     } else {
       const titlePrefix: Record<typeof v.fixType, string> = {
         knowledge: 'Quality fix',
@@ -158,5 +158,9 @@ export async function saveQualityFeedbackAction(
   revalidatePath('/company/quality');
   revalidatePath('/company/knowledge');
   revalidatePath('/company/profile');
+  // A structured fix writes business data and rewrites every bot's system
+  // prompt, so both of those surfaces are stale as well.
+  revalidatePath('/company/business-data');
+  revalidatePath('/company/bots');
   return { ok: true };
 }

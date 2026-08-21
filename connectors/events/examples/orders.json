@@ -1,0 +1,36 @@
+{
+  "search_order": {
+    "input": {
+      "query": "INV-1001"
+    },
+    "customerHandler": "orderService.search(query)",
+    "exampleResult": {
+      "results": [
+        {
+          "order_id": "o_1001",
+          "status": "paid",
+          "total": 2500,
+          "currency": "PKR"
+        }
+      ]
+    }
+  },
+  "create_purchase_order": {
+    "input": {
+      "supplier_id": "sup_10",
+      "items": [
+        {
+          "product_id": "p_100",
+          "quantity": 24,
+          "cost": 80
+        }
+      ],
+      "confirmed": true
+    },
+    "customerHandler": "purchaseService.createOrder(input)",
+    "exampleResult": {
+      "success": true,
+      "purchase_order_id": "po_5001"
+    }
+  }
+}

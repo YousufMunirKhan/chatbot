@@ -6,7 +6,10 @@ const nextConfig = {
     // copy on navigation — always re-fetch dynamic routes (Next 14.2+).
     // Without this, navigating between routes showed ~30s-old data until a full
     // URL reload.
-    staleTimes: { dynamic: 0 },
+    // `static` must be pinned too: lazily-created prefetch entries (the ones the
+    // router builds on hover/viewport in dev) are tagged `PrefetchKind.AUTO` and
+    // land in the `static` bucket, which otherwise defaults to 300s.
+    staleTimes: { dynamic: 0, static: 0 },
   },
   // The embeddable widget is served as a static asset and must be loadable
   // cross-origin from any customer website (domain allow-listing is enforced

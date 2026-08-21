@@ -2,6 +2,10 @@
 
 Use these files inside an Android POS or mobile business app. The Android connector keeps customer data inside the app and only syncs reviewed help docs, action metadata, health logs, and action results.
 
+## Upgrading an existing integration
+
+Do not overwrite a customized `HelpdeskAndroidAppDetails.kt`. That file usually contains the customer app's real screens, route IDs, and handlers. Read `../docs/UPGRADE_GUIDE.md`, replace SDK files, and merge new helpers manually.
+
 ## ⚡ Quick start (the whole thing in one file)
 
 New here? Open **[`HelpdeskQuickStartExample.kt`](HelpdeskQuickStartExample.kt)** — it shows the complete wiring end-to-end with comments. The 5 steps:

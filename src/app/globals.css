@@ -69,8 +69,34 @@
   }
 }
 
-/* RTL support for Arabic (Module 21). The dashboard and widget switch the
-   document direction based on the active language. */
+/* RTL support for Arabic (Module 21).
+   - Widget: `public/widget/widget.js` sets dir="rtl" on its own window when the
+     bot language is Arabic.
+   - Dashboard: `src/app/(dashboard)/layout.tsx` sets dir="rtl" on the shell
+     wrapper when the signed-in user's company has default_language = 'ar'.
+   Everything under either element inherits the direction, so Tailwind's logical
+   utilities (ps-/pe-/ms-/me-/start-/end-/border-s/border-e) flip on their own. */
 [dir='rtl'] {
   direction: rtl;
+}
+
+/* Direction-aware arrow glyph (Module 21). Back-links and "then" separators are
+   written with a literal LTR arrow in the JSX; mirroring the glyph under RTL
+   keeps one source of truth instead of forking the copy per direction. */
+.dir-arrow {
+  display: inline-block;
+}
+
+[dir='rtl'] .dir-arrow {
+  transform: scaleX(-1);
+}
+
+/* Code, payload samples and URLs are always Latin-script and left-to-right. Left
+   in an RTL paragraph the bidi algorithm reorders their punctuation (brackets,
+   slashes, trailing semicolons) and right-aligns the block, which makes snippets
+   unreadable and un-copyable. Scoped to [dir='rtl'] so LTR output is untouched. */
+[dir='rtl'] pre,
+[dir='rtl'] code {
+  direction: ltr;
+  text-align: left;
 }

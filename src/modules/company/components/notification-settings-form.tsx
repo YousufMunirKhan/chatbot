@@ -1,5 +1,6 @@
 'use client';
 
+import Link from 'next/link';
 import { useFormState, useFormStatus } from 'react-dom';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -212,15 +213,34 @@ export function NotificationSettingsForm({ settings }: { settings: CompanyNotifi
 
       <section className="space-y-4">
         <div>
-          <h2 className="text-base font-semibold">Slack and Webhook</h2>
+          <h2 className="text-base font-semibold">Slack and Webhook (moving to Webhooks)</h2>
           <p className="text-sm text-muted-foreground">
             Optional team alerts and system-to-system delivery for automation tools.
+          </p>
+        </div>
+        {/*
+          Module 26 owns Slack and webhook delivery now. These fields still work
+          for anyone who configured them here, but they are being retired: if the
+          same event is covered by an endpoint on /company/webhooks, that endpoint
+          delivers it and the channels below stay quiet, so nothing is ever sent
+          twice. Email and WhatsApp above are unaffected.
+        */}
+        <div className="rounded-md border border-amber-500/40 bg-amber-500/10 p-3 text-sm">
+          <p className="font-medium">Set these up on the Webhooks page instead.</p>
+          <p className="mt-1 text-muted-foreground">
+            <Link href="/company/webhooks" className="font-medium underline underline-offset-4">
+              Webhooks
+            </Link>{' '}
+            is where Slack and outgoing webhooks live now — it adds per-endpoint event
+            selection, signing secrets, delivery logs and a test button. Anything you set
+            up there takes over from the fields below, so you will not get duplicate
+            alerts. These fields will be removed in a future release.
           </p>
         </div>
         <div className="grid gap-4 sm:grid-cols-2">
           <label className="flex items-center gap-2 rounded-md border p-3 text-sm">
             <input type="checkbox" name="slackEnabled" defaultChecked={settings.slackEnabled} className="h-4 w-4" />
-            Send Slack notifications
+            Send Slack notifications (legacy)
           </label>
           <div className="space-y-1.5">
             <Label htmlFor="slackWebhookUrl">Slack incoming webhook</Label>
@@ -233,7 +253,7 @@ export function NotificationSettingsForm({ settings }: { settings: CompanyNotifi
           </div>
           <label className="flex items-center gap-2 rounded-md border p-3 text-sm">
             <input type="checkbox" name="webhookEnabled" defaultChecked={settings.webhookEnabled} className="h-4 w-4" />
-            Send generic webhook
+            Send generic webhook (legacy)
           </label>
           <div className="space-y-1.5">
             <Label htmlFor="genericWebhookUrl">Webhook URL</Label>
@@ -267,9 +287,9 @@ export function NotificationSettingsForm({ settings }: { settings: CompanyNotifi
           <table className="w-full min-w-[620px] text-sm">
             <thead className="bg-muted/40">
               <tr>
-                <th className="px-3 py-2 text-left font-medium">Event</th>
+                <th className="px-3 py-2 text-start font-medium">Event</th>
                 {DELIVERY_CHANNELS.map((channel) => (
-                  <th key={channel.key} className="px-3 py-2 text-left font-medium">{channel.label}</th>
+                  <th key={channel.key} className="px-3 py-2 text-start font-medium">{channel.label}</th>
                 ))}
               </tr>
             </thead>

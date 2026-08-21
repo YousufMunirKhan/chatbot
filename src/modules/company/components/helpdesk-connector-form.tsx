@@ -4,6 +4,7 @@ import { useFormState, useFormStatus } from 'react-dom';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { RefreshDashboardShell } from '@/components/refresh-dashboard-shell';
 import {
   createHelpdeskConnectorAction,
   queueConnectorEventAction,
@@ -28,6 +29,7 @@ export function HelpdeskConnectorForm() {
 
   return (
     <form action={action} className="space-y-4">
+      <RefreshDashboardShell state={state} />
       <div className="grid gap-4 sm:grid-cols-2">
         <div className="space-y-1.5">
           <Label htmlFor="connector-name">Connector name</Label>

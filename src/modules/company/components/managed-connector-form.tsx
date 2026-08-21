@@ -5,6 +5,7 @@ import { useFormState, useFormStatus } from 'react-dom';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { RefreshDashboardShell } from '@/components/refresh-dashboard-shell';
 import { createManagedConnectorAction, type ActionState } from '../managed-connectors-actions';
 
 const initial: ActionState = {};
@@ -31,6 +32,7 @@ export function ManagedConnectorForm({ fields }: { fields: Record<string, Field[
 
   return (
     <form ref={ref} action={action} className="space-y-4">
+      <RefreshDashboardShell state={state} />
       <div className="space-y-1.5">
         <Label htmlFor="platform">Platform</Label>
         <select

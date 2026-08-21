@@ -109,13 +109,10 @@ const INTERNAL_CAPABILITIES = [
   },
 ] as const;
 
-const DEFAULT_CUSTOMER_CAPABILITIES = new Set([
-  'sales_agent',
-  'appointment_booking',
-  'lead_capture',
-  'help_desk',
-  'human_agent_takeover',
-]);
+// A brand-new assistant starts with support answers only. Pre-checking five
+// capabilities made day one open with eleven failing readiness checks, so the
+// rest are opt-in. Existing bots keep whatever they were saved with.
+const DEFAULT_CUSTOMER_CAPABILITIES = new Set(['help_desk']);
 
 type ActionFn = (prev: ActionState, formData: FormData) => Promise<ActionState>;
 
@@ -132,11 +129,14 @@ export function BotForm({
   action,
   bot,
   companyName,
+  /** Host(s) derived from the company website, used to seed a new bot only. */
+  suggestedDomains,
   submitLabel,
 }: {
   action: ActionFn;
   bot?: BotRow;
   companyName?: string;
+  suggestedDomains?: string[];
   submitLabel: string;
 }) {
   const [state, formAction] = useFormState(action, initial);
@@ -157,6 +157,10 @@ export function BotForm({
   const enableDefaultPills = appearance.enableDefaultPills !== false;
   const enableContextualPills = appearance.enableContextualPills !== false;
   const enableConnectorGeneratedPills = appearance.enableConnectorGeneratedPills !== false;
+  const isNewCustomerBot = !bot && assistantAudience === 'customer';
+  const domainAllowlistDefault = bot
+    ? (bot.domainAllowlist ?? []).join('\n')
+    : (suggestedDomains ?? []).join('\n');
 
   useEffect(() => {
     setAssistantAudience(initialAudience);
@@ -271,6 +275,13 @@ export function BotForm({
         <h2 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground">
           Capabilities
         </h2>
+        {isNewCustomerBot ? (
+          <p className="text-sm text-muted-foreground">
+            Your first assistant starts with support answers, because that only needs the FAQs and
+            policies you already have. Turn the others on when you are ready — each one asks for its
+            own business data before it can go live.
+          </p>
+        ) : null}
         <div className="grid gap-2 sm:grid-cols-2">
           {capabilityOptions.map((cap) => (
             <label key={cap.key} className="flex items-start gap-2 rounded-md border p-2.5 text-sm">
@@ -387,12 +398,15 @@ export function BotForm({
             <Textarea
               id="domainAllowlist"
               name="domainAllowlist"
-              defaultValue={(bot?.domainAllowlist ?? []).join('\n')}
+              defaultValue={domainAllowlistDefault}
               placeholder={'acme.com\nwww.acme.com'}
               rows={3}
             />
             <p className="text-xs text-muted-foreground">
               One website domain per line. The widget only loads on these domains.
+              {isNewCustomerBot && domainAllowlistDefault
+                ? ' Filled in from your company website — edit it if the widget goes somewhere else.'
+                : ''}
             </p>
           </div>
           <div className="rounded-md border bg-muted/30 p-3 text-sm text-muted-foreground">

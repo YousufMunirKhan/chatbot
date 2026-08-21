@@ -217,7 +217,7 @@ export function WidgetDesignStudio({
                       onClick={() => applyPreset(preset)}
                       className="rounded-md border px-3 py-2 text-xs font-medium hover:bg-muted"
                     >
-                      <span className="mr-2 inline-block h-3 w-3 rounded-full" style={{ background: preset.color }} />
+                      <span className="me-2 inline-block h-3 w-3 rounded-full" style={{ background: preset.color }} />
                       {preset.name}
                     </button>
                   ))}
@@ -339,10 +339,23 @@ export function WidgetDesignStudio({
                   <option value="bottom_sheet">Bottom sheet</option>
                 </select>
               </Field>
-              <Field label="Position">
+              {/*
+                Module 21 (RTL): this setting is deliberately PHYSICAL, not logical.
+                `public/widget/widget.js` pins the launcher and window with
+                `style.left` / `style.right`, so an Arabic (RTL) widget still lands in
+                the same physical corner of the page. Under an RTL dashboard the bare
+                words "left"/"right" would read to the admin as start/end and invert
+                their mental model, so the copy names the visitor's screen explicitly
+                and the hint states that reading direction does not move it.
+                The submitted field name stays `position` with values right/left.
+              */}
+              <Field
+                label="Launcher corner"
+                hint="The fixed corner of the visitor's browser window. Arabic (right-to-left) chats still open in this same corner."
+              >
                 <select name="position" className={selectCls} value={position} onChange={(e) => setPosition(e.target.value)}>
-                  <option value="right">Bottom right</option>
-                  <option value="left">Bottom left</option>
+                  <option value="right">Bottom right of the visitor&apos;s screen</option>
+                  <option value="left">Bottom left of the visitor&apos;s screen</option>
                 </select>
               </Field>
               <Field label="Desktop auto-open delay" hint="Seconds before the chat opens on laptops/desktops.">
@@ -438,7 +451,10 @@ export function WidgetDesignStudio({
             <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
               <div>
                 <h2 className="text-base font-semibold">Live design preview</h2>
-                <p className="text-sm text-muted-foreground">This preview updates instantly. Save to push it to the embedded website widget.</p>
+                <p className="text-sm text-muted-foreground">
+                  Colors and labels update instantly. Save to push them to the embedded website widget. Nothing in the
+                  preview is clickable — send real questions from Test your assistant above.
+                </p>
               </div>
               <div className="flex flex-wrap gap-2">
                 {(['desktop', 'mobile'] as PreviewMode[]).map((mode) => (
@@ -471,6 +487,10 @@ export function WidgetDesignStudio({
                 <div className="mt-3 h-3 w-2/3 rounded bg-slate-200" />
               </div>
 
+              {/* Module 21 (RTL): `left-*`/`right-*` are intentionally physical here and
+                  must NOT become `start-*`/`end-*`. This is a mock of the visitor's page,
+                  and the real widget pins itself with physical style.left/style.right — so
+                  the preview has to stay put when the dashboard shell flips to RTL. */}
               <div
                 className={`absolute ${position === 'left' ? 'left-5' : 'right-5'} bottom-5 overflow-hidden rounded-[22px] bg-white shadow-2xl ring-1 ring-slate-200 ${
                   previewMode === 'mobile' ? 'h-[500px] w-[300px]' : 'h-[440px] w-[380px]'
@@ -521,8 +541,9 @@ export function WidgetDesignStudio({
 
                 <div className="border-t bg-white p-3">
                   <div className="flex gap-2">
+                    {/* Static mock, not an input — the label must not invite typing. */}
                     <div className="flex h-12 flex-1 items-center rounded-xl border px-3 text-sm text-slate-400" style={{ borderColor: primaryColor }}>
-                      Type your message...
+                      Message box (preview)
                     </div>
                     <div className="flex h-12 w-12 items-center justify-center rounded-xl text-xl font-black text-white" style={{ background: primaryColor }}>
                       &gt;
@@ -547,6 +568,7 @@ export function WidgetDesignStudio({
                 ) : null}
                 <span className="relative">{launcherIcon === 'initials' ? initials(launcherLabel || title) : launcherIcon === 'headset' ? '◔' : '●'}</span>
                 {launcherStyle === 'pill' ? <span className="relative">{launcherLabel || 'Chat with us'}</span> : null}
+                {/* Physical on purpose: the shipped widget draws this dot at `right:2px`. */}
                 {launcherDotMode !== 'hidden' ? <span className="absolute -right-0.5 -top-0.5 h-4 w-4 rounded-full border-[3px] border-white" style={{ background: launcherDotColor }} /> : null}
               </div>
             </div>

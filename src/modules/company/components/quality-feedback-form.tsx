@@ -79,7 +79,7 @@ export function QualityFeedbackForm({ qualityLogId }: { qualityLogId: string }) 
           <Submit />
           {fixType !== 'knowledge' && fixType !== 'faq' ? (
             <Button asChild variant="outline" size="sm">
-              <Link href={fixType === 'prompt' ? '/company/bots' : '/company/profile'}>Open full editor</Link>
+              <Link href={fixType === 'prompt' ? '/company/bots' : '/company/business-data?tab=basics'}>Open full editor</Link>
             </Button>
           ) : null}
         </div>

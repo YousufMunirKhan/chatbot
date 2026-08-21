@@ -1,3 +1,4 @@
+import Link from 'next/link';
 import { requireRole } from '@/lib/auth';
 import { ROLES } from '@/lib/constants';
 import { Button } from '@/components/ui/button';
@@ -14,6 +15,7 @@ import {
 import { formatCurrency, formatDate, formatNumber } from '@/lib/format';
 import { listChatOrders, listSyncedOrders } from '@/modules/company/orders-data';
 import { setChatOrderStatusAction } from '@/modules/company/orders-actions';
+import { RefreshOnFocus } from '@/components/refresh-on-focus';
 
 const CHAT_ORDER_STATUSES = ['pending', 'confirmed', 'paid', 'fulfilled', 'cancelled'] as const;
 
@@ -41,6 +43,7 @@ export default async function OrdersPage() {
 
   return (
     <div className="space-y-6">
+      <RefreshOnFocus />
       <div>
         <h1 className="text-2xl font-semibold">Orders</h1>
         <p className="text-sm text-muted-foreground">
@@ -54,7 +57,16 @@ export default async function OrdersPage() {
         </CardHeader>
         <CardContent>
           {chatOrders.length === 0 ? (
-            <p className="text-sm text-muted-foreground">No chat orders yet.</p>
+            // Module 1 — orders start in the widget, so send the owner to the catalog first.
+            <div className="space-y-3">
+              <p className="max-w-xl text-sm text-muted-foreground">
+                No chat orders yet. When a visitor places an order through the assistant, it lands here with its
+                items and total, and you move it through to fulfilled.
+              </p>
+              <Button asChild size="sm" variant="outline">
+                <Link href="/company/catalog">Check your catalog</Link>
+              </Button>
+            </div>
           ) : (
             <Table>
               <TableHeader>
@@ -110,7 +122,16 @@ export default async function OrdersPage() {
         </CardHeader>
         <CardContent>
           {syncedOrders.length === 0 ? (
-            <p className="text-sm text-muted-foreground">No synced orders yet.</p>
+            // Module 2 — nothing syncs until a store is connected.
+            <div className="space-y-3">
+              <p className="max-w-xl text-sm text-muted-foreground">
+                No synced orders yet. Connect your WooCommerce or Shopify store and its orders copy across
+                automatically, so the assistant can answer &ldquo;where is my order&rdquo;.
+              </p>
+              <Button asChild size="sm">
+                <Link href="/company/integrations">Connect a store</Link>
+              </Button>
+            </div>
           ) : (
             <Table>
               <TableHeader>

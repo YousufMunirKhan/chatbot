@@ -1,9 +1,9 @@
 import { requireUser, type SessionUser } from '@/lib/auth';
 import { ROLES } from '@/lib/constants';
 import { SignOutButton } from '@/components/sign-out-button';
-import { Button } from '@/components/ui/button';
 import { DesktopSidebar, MobileNav } from '@/components/dashboard-nav';
-import { endImpersonationAction } from '@/modules/super-admin/impersonation-actions';
+import { EndImpersonationButton } from '@/modules/super-admin/components/end-impersonation-button';
+import { RefreshOnHistoryNav } from '@/components/refresh-on-history-nav';
 import { createSupabaseServiceClient } from '@/lib/db/server';
 
 /**
@@ -50,11 +50,34 @@ const AGENT_NAV: NavSection = {
   ],
 };
 
-async function companyShellFor(user: SessionUser): Promise<{ nav: NavSection; brand: string }> {
-  if (!user.companyId) return { nav: { group: 'Company', items: COMPANY_ADMIN_NAV_ITEMS }, brand: 'Company' };
+/**
+ * Document direction for the dashboard shell (Module 21).
+ *
+ * The root `src/app/layout.tsx` cannot do this: it renders for the marketing,
+ * auth and widget-embed routes too and has no session, so it has no company to
+ * read `default_language` from. This layout already loads the company, so the
+ * direction is set on the shell wrapper element instead — `dir` on a container
+ * is valid HTML and inherits to every descendant exactly like `dir` on <html>.
+ *
+ * `lang` is deliberately NOT switched: the UI copy is still English (this change
+ * is direction support, not translation), and lying about the language would
+ * make screen readers pronounce English text with an Arabic voice.
+ *
+ * 'auto' and anything unrecognised stay LTR, so the un-configured and English
+ * cases render exactly as before.
+ */
+type ShellDir = 'ltr' | 'rtl';
+
+function shellDirFor(defaultLanguage: string | null | undefined): ShellDir {
+  return defaultLanguage === 'ar' ? 'rtl' : 'ltr';
+}
+
+async function companyShellFor(user: SessionUser): Promise<{ nav: NavSection; brand: string; dir: ShellDir }> {
+  if (!user.companyId)
+    return { nav: { group: 'Company', items: COMPANY_ADMIN_NAV_ITEMS }, brand: 'Company', dir: 'ltr' };
   const sb = createSupabaseServiceClient();
   const [{ data: company }, { data: internalBot }, { data: connector }] = await Promise.all([
-    sb.from('companies').select('name').eq('id', user.companyId).maybeSingle(),
+    sb.from('companies').select('name, default_language').eq('id', user.companyId).maybeSingle(),
     sb
       .from('bots')
       .select('id')
@@ -79,7 +102,11 @@ async function companyShellFor(user: SessionUser): Promise<{ nav: NavSection; br
         ...COMPANY_ADMIN_NAV_ITEMS.slice(4),
       ]
     : COMPANY_ADMIN_NAV_ITEMS;
-  return { nav: { group: 'Company', items }, brand: company?.name ?? 'Company' };
+  return {
+    nav: { group: 'Company', items },
+    brand: company?.name ?? 'Company',
+    dir: shellDirFor(company?.default_language as string | null | undefined),
+  };
 }
 
 export default async function DashboardLayout({ children }: { children: React.ReactNode }) {
@@ -87,6 +114,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
   const companyShell = await companyShellFor(user).catch(() => ({
     nav: { group: 'Company', items: COMPANY_ADMIN_NAV_ITEMS },
     brand: 'Company',
+    dir: 'ltr' as ShellDir,
   }));
 
   const sections: NavSection[] = user.impersonation
@@ -99,6 +127,13 @@ export default async function DashboardLayout({ children }: { children: React.Re
 
   const brand = user.isSuperAdmin && !user.impersonation ? 'Switch & Save' : companyShell.brand;
 
+  // Super admins on the platform surfaces stay LTR; once they impersonate they are
+  // looking at a company workspace, so they get that company's direction too.
+  const dir: ShellDir = user.isSuperAdmin && !user.impersonation ? 'ltr' : companyShell.dir;
+  // Rendered only for RTL: nothing above this element sets a direction, so an
+  // explicit "ltr" would be a no-op and the English markup stays untouched.
+  const shellDirAttr = dir === 'rtl' ? 'rtl' : undefined;
+
   const roleLabel = user.impersonation
     ? `Impersonating ${user.impersonation.companyName ?? 'company'}`
     : user.isSuperAdmin
@@ -110,7 +145,8 @@ export default async function DashboardLayout({ children }: { children: React.Re
         : 'Member';
 
   return (
-    <div className="flex min-h-screen">
+    <div dir={shellDirAttr} className="flex min-h-screen">
+      <RefreshOnHistoryNav />
       <DesktopSidebar sections={sections} brand={brand} />
 
       <div className="min-w-0 flex-1">
@@ -120,9 +156,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
               Super Admin impersonation is active for {user.impersonation.companyName ?? 'this company'} until{' '}
               {new Date(user.impersonation.expiresAt).toLocaleTimeString()}.
             </span>
-            <form action={endImpersonationAction}>
-              <Button type="submit" variant="outline" size="sm">End impersonation</Button>
-            </form>
+            <EndImpersonationButton />
           </div>
         ) : null}
         <header className="flex h-14 items-center justify-between gap-3 border-b px-4 sm:px-6">
@@ -131,7 +165,10 @@ export default async function DashboardLayout({ children }: { children: React.Re
             <span className="truncate text-sm text-muted-foreground">{roleLabel}</span>
           </div>
           <div className="flex items-center gap-3">
-            <span className="hidden max-w-[40vw] truncate text-sm sm:inline">{user.email}</span>
+            {/* Module 21 (RTL): an address is a Latin-script LTR token. Isolating it
+                keeps the local part before the domain instead of letting the bidi
+                algorithm reorder the run around the "@". No visual change under LTR. */}
+            <span dir="ltr" className="hidden max-w-[40vw] truncate text-sm sm:inline">{user.email}</span>
             <SignOutButton />
           </div>
         </header>

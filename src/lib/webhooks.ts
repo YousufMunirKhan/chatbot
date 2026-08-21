@@ -10,14 +10,46 @@ import { logger } from '@/lib/logger';
  * apps), or Slack. Deliveries are metered per plan to bound server cost.
  */
 
-export const WEBHOOK_EVENTS = ['lead.created', 'appointment.created', 'order.created'] as const;
+export const WEBHOOK_EVENTS = [
+  'lead.created',
+  'appointment.created',
+  'order.created',
+  'ticket.created',
+  'ticket.resolved',
+] as const;
 export type WebhookEvent = (typeof WEBHOOK_EVENTS)[number];
+
+/**
+ * Which endpoint kinds already own an event for a company (Module 24 / Module 26).
+ *
+ * Two systems can deliver the same event: these endpoints, and the older
+ * Slack / generic-webhook channels on `company_notification_settings`. When an
+ * active endpoint here is subscribed to the event, the notification-settings
+ * copy of that channel must stay silent or the company gets every alert twice.
+ * `dispatchWebhookEvent` returns this so the caller can suppress the duplicate
+ * without paying for a second lookup — the endpoint query already knows.
+ */
+export interface WebhookEventCoverage {
+  /** An active `kind: 'slack'` endpoint is subscribed to this event. */
+  slack: boolean;
+  /** An active `kind: 'generic'` endpoint is subscribed to this event. */
+  generic: boolean;
+}
+
+/** No endpoint owns the event — the notification-settings channels may fire. */
+export const NO_WEBHOOK_COVERAGE: WebhookEventCoverage = Object.freeze({
+  slack: false,
+  generic: false,
+});
 
 /** Map an internal notification type → public webhook event name. */
 export const NOTIFICATION_TO_EVENT: Record<string, WebhookEvent> = {
   new_lead: 'lead.created',
   new_appointment: 'appointment.created',
   new_order: 'order.created',
+  human_takeover: 'ticket.created',
+  helpdesk_issue_reported: 'ticket.created',
+  helpdesk_issue_resolved: 'ticket.resolved',
 };
 
 /**
@@ -155,6 +187,13 @@ function slackText(event: WebhookEvent, env: Record<string, unknown>): string {
  * Fire an event to all matching active endpoints for a company. Best-effort and
  * fully guarded — a webhook failure must never break the action that triggered
  * it. Enforces the monthly delivery budget for the plan.
+ *
+ * Returns which endpoint kinds took ownership of this event so the caller can
+ * suppress the duplicate `company_notification_settings` delivery (see
+ * `WebhookEventCoverage`). Anything that stops us actually handing the event to
+ * an endpoint — no endpoint, over budget, a thrown query — reports no coverage,
+ * so the older channel still fires. Failing open toward one delivery is always
+ * better than failing closed into silence.
  */
 export async function dispatchWebhookEvent(params: {
   companyId: string;
@@ -162,7 +201,7 @@ export async function dispatchWebhookEvent(params: {
   title?: string;
   body?: string;
   data?: Record<string, unknown>;
-}): Promise<void> {
+}): Promise<WebhookEventCoverage> {
   try {
     const sb = createSupabaseServiceClient();
     const { data: endpoints } = await sb
@@ -171,10 +210,20 @@ export async function dispatchWebhookEvent(params: {
       .eq('company_id', params.companyId)
       .eq('active', true)
       .contains('events', [params.event]);
-    if (!endpoints || endpoints.length === 0) return;
+    if (!endpoints || endpoints.length === 0) return NO_WEBHOOK_COVERAGE;
 
     const { used, limits } = await getWebhookUsage(params.companyId);
     const overBudget = limits.monthly != null && used >= limits.monthly;
+
+    // Coverage is derived from the rows this query already returned — no extra
+    // round-trip. Over budget we deliver nothing, so we claim nothing either;
+    // the company keeps getting exactly one alert from the older channel.
+    const coverage: WebhookEventCoverage = overBudget
+      ? NO_WEBHOOK_COVERAGE
+      : {
+          slack: (endpoints as EndpointRow[]).some((ep) => ep.kind === 'slack'),
+          generic: (endpoints as EndpointRow[]).some((ep) => ep.kind === 'generic'),
+        };
 
     const envelope = {
       event: params.event,
@@ -210,12 +259,15 @@ export async function dispatchWebhookEvent(params: {
           .eq('id', ep.id);
       }),
     );
+
+    return coverage;
   } catch (err) {
     logger.error('Webhook dispatch failed', {
       companyId: params.companyId,
       event: params.event,
       error: err instanceof Error ? err.message : String(err),
     });
+    return NO_WEBHOOK_COVERAGE;
   }
 }
 
@@ -233,18 +285,18 @@ export async function sendTestWebhook(
     .maybeSingle();
   if (!data) return { ok: false, status: 0 };
   const envelope = {
-    event: 'lead.created' as WebhookEvent,
+    event: 'ticket.created' as WebhookEvent,
     created_at: new Date().toISOString(),
     company_id: companyId,
     title: 'Test webhook',
-    body: 'This is a test event from your AI assistant.',
-    data: { test: true, name: 'Test Customer', email: 'test@example.com' },
+    body: 'This is a test ticket event from your AI assistant.',
+    data: { test: true, conversationId: 'test-conversation', priority: 'normal' },
   };
-  const result = await deliver(data as EndpointRow, 'lead.created', envelope);
+  const result = await deliver(data as EndpointRow, 'ticket.created', envelope);
   await recordDelivery(
     companyId,
     endpointId,
-    'lead.created',
+    'ticket.created',
     result.ok ? 'success' : 'failed',
     result.status || null,
     result.attempts,

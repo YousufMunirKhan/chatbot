@@ -8,7 +8,13 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { cn } from '@/lib/utils';
 import type { CompanySetupProgress } from '../setup-data';
 
-const STORAGE_KEY = 'company-onboarding-active-step';
+// Scoped per company — a bare key leaked the wizard position across account
+// switches and super-admin impersonation.
+const STORAGE_PREFIX = 'company-onboarding-active-step';
+
+function storageKey(companyId: string) {
+  return `${STORAGE_PREFIX}:${companyId}`;
+}
 
 function StepDot({
   complete,
@@ -40,15 +46,17 @@ export function OnboardingWizard({ setup }: { setup: CompanySetupProgress }) {
   const [activeKey, setActiveKey] = useState(firstIncompleteKey);
 
   useEffect(() => {
-    const saved = window.localStorage.getItem(STORAGE_KEY);
-    if (saved && setup.steps.some((step) => step.key === saved)) {
-      setActiveKey(saved);
-    }
-  }, [setup.steps]);
+    const saved = window.localStorage.getItem(storageKey(setup.companyId));
+    const savedStep = setup.steps.find((step) => step.key === saved);
+    // Restore the remembered step only while it is still outstanding. Once the
+    // server reports it complete, the freshly computed first-incomplete step
+    // wins — otherwise a cached key pins the wizard to finished work.
+    if (savedStep && !savedStep.complete) setActiveKey(savedStep.key);
+  }, [setup.companyId, setup.steps]);
 
   useEffect(() => {
-    if (activeKey) window.localStorage.setItem(STORAGE_KEY, activeKey);
-  }, [activeKey]);
+    if (activeKey) window.localStorage.setItem(storageKey(setup.companyId), activeKey);
+  }, [activeKey, setup.companyId]);
 
   const activeIndex = Math.max(
     0,
@@ -102,7 +110,7 @@ export function OnboardingWizard({ setup }: { setup: CompanySetupProgress }) {
       <Card className="overflow-hidden">
         <CardContent className="p-0">
           <div className="grid gap-0 lg:grid-cols-[0.85fr_1.15fr]">
-            <div className="border-b bg-muted/30 p-5 lg:border-b-0 lg:border-r">
+            <div className="border-b bg-muted/30 p-5 lg:border-b-0 lg:border-e">
               <div className="mb-4 flex items-center justify-between gap-3">
                 <div>
                   <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
@@ -130,7 +138,7 @@ export function OnboardingWizard({ setup }: { setup: CompanySetupProgress }) {
                       type="button"
                       onClick={() => setActiveKey(step.key)}
                       className={cn(
-                        'flex w-full gap-3 rounded-md border p-3 text-left transition-colors',
+                        'flex w-full gap-3 rounded-md border p-3 text-start transition-colors',
                         active
                           ? 'border-primary bg-background shadow-sm'
                           : 'bg-background/70 hover:bg-background',

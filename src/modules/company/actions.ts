@@ -19,22 +19,13 @@ import { seedDefaultQuickActions } from '@/lib/quick-actions-defaults';
 export type ActionState = { error?: string; ok?: boolean };
 
 const optText = z.preprocess((x) => (x === '' || x == null ? undefined : x), z.string().optional());
-const optNum = z.preprocess((x) => (x === '' || x == null ? undefined : x), z.coerce.number().int().optional());
 const optEnabled = z.preprocess((x) => (x == null ? true : x === 'on'), z.boolean());
-const optColor = z.preprocess(
-  (x) => (x === '' || x == null ? undefined : x),
-  z.string().regex(/^#[0-9a-f]{6}$/i, 'Choose a valid color').optional(),
-);
 
-function clamp(value: number | undefined, fallback: number, min: number, max: number): number {
-  if (value == null || !Number.isFinite(value)) return fallback;
-  return Math.min(max, Math.max(min, value));
-}
-
-function textOr(value: string | undefined, fallback: string): string {
-  return value?.trim() ? value : fallback;
-}
-
+/**
+ * Copy/colour seed for a BRAND-NEW assistant only (Issue #38). Everything else in
+ * `appearance_json` is left unset so the widget config route's own fallbacks apply;
+ * from then on the Widget Design Studio owns those fields.
+ */
 function appearanceDefaults(audience: 'customer' | 'internal', botName: string) {
   if (audience === 'internal') {
     return {
@@ -124,45 +115,21 @@ export async function updateProfileAction(_prev: ActionState, formData: FormData
 // ---------------------------------------------------------------------------
 // Assistants (create / update). Deeper prompt assembly is Module 6.
 // ---------------------------------------------------------------------------
+/**
+ * Only the fields the Configuration form (`bot-form.tsx`) actually renders. The
+ * ~40 widget appearance fields this schema used to parse were dead — the form
+ * stopped rendering them when the Widget Design Studio took over — and rebuilding
+ * a full `appearance_json` from them turned every save into a read-modify-write
+ * race against `widget-design-actions.ts` on the same JSON cell (Issues #38/#18).
+ */
 const botBaseSchema = z.object({
   name: z.string().min(2, 'Assistant name is required'),
   assistantAudience: z.enum(ASSISTANT_AUDIENCES).default('customer'),
   botType: z.enum(BOT_TYPES),
   languageDefault: z.enum(['en', 'ar', 'auto']),
-  welcomeMessage: optText,
-  title: optText,
-  agentLabel: optText,
-  agentAvatarUrl: optText,
-  avatarMode: z.enum(['initials', 'image', 'headset', 'chat', 'spark']).default('initials'),
-  launcherIcon: z.enum(['chat', 'headset', 'spark', 'help', 'question', 'initials', 'custom']).default('chat'),
-  launcherImageUrl: optText,
-  launcherLabel: optText,
-  launcherDotMode: z.enum(['unread', 'always', 'hidden']).default('unread'),
-  launcherDotColor: optColor,
-  headerTextColor: optColor,
-  headerStyle: z.enum(['solid', 'gradient']).default('solid'),
-  onlineLabel: optText,
-  offlineLabel: optText,
-  typingLabel: optText,
-  footerBranding: optText,
-  proactiveMessage: optText,
-  autoOpen: z.preprocess((x) => x === 'on', z.boolean()),
-  autoOpenOnce: z.preprocess((x) => x === 'on', z.boolean()),
-  autoOpenDelaySeconds: optNum,
-  launcherStyle: z.enum(['circle', 'pill']).default('pill'),
-  launcherSize: z.enum(['compact', 'default', 'large']).default('default'),
-  windowSize: z.enum(['compact', 'default', 'large']).default('default'),
-  mobileMode: z.enum(['fullscreen', 'bottom_sheet']).default('fullscreen'),
-  showOnMobile: z.preprocess((x) => x === 'on', z.boolean()),
-  showOnDesktop: z.preprocess((x) => x === 'on', z.boolean()),
   enableDefaultPills: optEnabled,
   enableContextualPills: optEnabled,
   enableConnectorGeneratedPills: optEnabled,
-  bottomOffset: optNum,
-  sideOffset: optNum,
-  zIndex: optNum,
-  primaryColor: optColor,
-  position: z.enum(['left', 'right']).default('right'),
 });
 
 function readBotFields(formData: FormData) {
@@ -174,7 +141,6 @@ function readBotFields(formData: FormData) {
     .filter((c) => (BOT_CAPABILITIES as readonly string[]).includes(c));
   const domainAllowlist = domainListToArray(formData.get('domainAllowlist'));
   const v = parsed.data;
-  const defaults = appearanceDefaults(v.assistantAudience, v.name);
   return {
     value: {
       name: v.name,
@@ -182,43 +148,13 @@ function readBotFields(formData: FormData) {
       language_default: v.languageDefault,
       capability_flags: capabilities,
       domain_allowlist: domainAllowlist,
-      appearance_json: {
-        assistantAudience: v.assistantAudience,
-        title: textOr(v.title, defaults.title),
-        welcomeMessage: textOr(v.welcomeMessage, defaults.welcomeMessage),
-        agentLabel: textOr(v.agentLabel, defaults.agentLabel),
-        agentAvatarUrl: v.agentAvatarUrl ?? null,
-        avatarMode: v.avatarMode,
-        launcherIcon: v.launcherIcon,
-        launcherImageUrl: v.launcherImageUrl ?? null,
-        launcherLabel: v.launcherLabel ?? null,
-        launcherDotMode: v.launcherDotMode,
-        launcherDotColor: v.launcherDotColor ?? '#ef4444',
-        headerTextColor: v.headerTextColor ?? '#ffffff',
-        headerStyle: v.headerStyle,
-        onlineLabel: textOr(v.onlineLabel, defaults.onlineLabel),
-        offlineLabel: textOr(v.offlineLabel, defaults.offlineLabel),
-        typingLabel: textOr(v.typingLabel, defaults.typingLabel),
-        footerBranding: textOr(v.footerBranding, defaults.footerBranding),
-        proactiveMessage: textOr(v.proactiveMessage, defaults.proactiveMessage),
-        autoOpen: v.autoOpen,
-        autoOpenOnce: v.autoOpenOnce,
-        autoOpenDelaySeconds: clamp(v.autoOpenDelaySeconds, 3, 0, 120),
-        launcherStyle: v.launcherStyle,
-        launcherSize: v.launcherSize,
-        windowSize: v.windowSize,
-        mobileMode: v.mobileMode,
-        showOnMobile: v.showOnMobile,
-        showOnDesktop: v.showOnDesktop,
-        enableDefaultPills: v.enableDefaultPills,
-        enableContextualPills: v.enableContextualPills,
-        enableConnectorGeneratedPills: v.enableConnectorGeneratedPills,
-        bottomOffset: clamp(v.bottomOffset, 20, 0, 120),
-        sideOffset: clamp(v.sideOffset, 20, 0, 120),
-        zIndex: clamp(v.zIndex, 2147483000, 1000, 2147483000),
-        primaryColor: v.primaryColor ?? defaults.primaryColor,
-        position: v.position,
-      },
+    },
+    /** The only `appearance_json` keys this form owns — everything else is design. */
+    appearance: {
+      assistantAudience: v.assistantAudience,
+      enableDefaultPills: v.enableDefaultPills,
+      enableContextualPills: v.enableContextualPills,
+      enableConnectorGeneratedPills: v.enableConnectorGeneratedPills,
     },
   } as const;
 }
@@ -280,9 +216,16 @@ export async function createBotAction(_prev: ActionState, formData: FormData): P
     }
   }
 
+  // A new bot gets the audience-appropriate copy seed plus the fields this form
+  // owns; the Design Studio fills in the rest the first time it is saved.
+  const appearance = {
+    ...appearanceDefaults(fields.appearance.assistantAudience, fields.value.name),
+    ...fields.appearance,
+  };
+
   const { data: bot, error } = await sb
     .from('bots')
-    .insert({ company_id: companyId, ...fields.value })
+    .insert({ company_id: companyId, ...fields.value, appearance_json: appearance })
     .select('id')
     .single();
   if (error || !bot) return { error: error?.message ?? 'Could not create assistant' };
@@ -294,15 +237,15 @@ export async function createBotAction(_prev: ActionState, formData: FormData): P
     companyId,
     bot.id,
     fields.value.capability_flags,
-    fields.value.appearance_json.assistantAudience,
-    fields.value.appearance_json.enableDefaultPills !== false,
+    appearance.assistantAudience,
+    appearance.enableDefaultPills !== false,
   );
   await recomputeBotPrompt(sb, companyId, bot.id); // assemble initial system prompt
   if (isHelpdeskBot(fields.value)) {
     await requestHelpdeskConnectorResync(companyId, 'A Help Desk bot was created.');
   }
   revalidatePath('/company/bots');
-  redirect(`/company/bots/${bot.id}/settings`);
+  redirect(`/company/bots/${bot.id}/settings?created=1`);
 }
 
 const updateBotSchema = z.object({ botId: z.string().uuid(), aiEnabled: optText });
@@ -317,24 +260,27 @@ export async function updateBotAction(_prev: ActionState, formData: FormData): P
   const sb = createSupabaseServiceClient();
 
   // Widget design (colors, launcher, labels, layout) is owned by the Design Studio
-  // (/company/widget). This Configuration form no longer edits those, so we must NOT
-  // overwrite them here — preserve the existing appearance and only patch the audience
-  // (the one appearance field this form still controls). Form defaults fill any gaps
-  // for legacy bots that never had a full appearance saved.
+  // (/company/widget). This form patches ONLY the handful of appearance keys it owns
+  // on top of whatever the Design Studio last saved, so a Configuration save can no
+  // longer clobber live design.
   const { data: existing } = await sb
     .from('bots')
-    .select('appearance_json')
+    .select('name, appearance_json')
     .eq('company_id', companyId)
     .eq('id', meta.data.botId)
     .maybeSingle();
   const prevAppearance = (existing?.appearance_json as Record<string, unknown> | null) ?? {};
+  const previousName = typeof existing?.name === 'string' ? existing.name.trim() : '';
+  const previousTitle = typeof prevAppearance.title === 'string' ? prevAppearance.title.trim() : '';
+  // Renaming a bot used to leave the widget header on the old name because the
+  // previous appearance always won. A title that is still just the old bot name
+  // (or missing) follows the rename; a custom Design Studio title is left alone.
+  const followsName = !previousTitle || previousTitle === previousName;
+
   const mergedAppearance = {
-    ...fields.value.appearance_json,
     ...prevAppearance,
-    assistantAudience: fields.value.appearance_json.assistantAudience,
-    enableDefaultPills: fields.value.appearance_json.enableDefaultPills,
-    enableContextualPills: fields.value.appearance_json.enableContextualPills,
-    enableConnectorGeneratedPills: fields.value.appearance_json.enableConnectorGeneratedPills,
+    ...fields.appearance,
+    ...(followsName ? { title: fields.value.name } : {}),
   };
 
   const { error } = await sb
@@ -350,8 +296,8 @@ export async function updateBotAction(_prev: ActionState, formData: FormData): P
     companyId,
     meta.data.botId,
     fields.value.capability_flags,
-    fields.value.appearance_json.assistantAudience,
-    fields.value.appearance_json.enableDefaultPills !== false,
+    fields.appearance.assistantAudience,
+    fields.appearance.enableDefaultPills !== false,
   );
   // Capabilities/type/language may have changed — keep the system prompt in sync.
   await recomputeBotPrompt(sb, companyId, meta.data.botId);

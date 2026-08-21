@@ -219,7 +219,7 @@ export function QuickActionForm({ bots, action, compact }: { bots: BotRow[]; act
                     type="button"
                     onClick={() => setActionType(option.value)}
                     className={cn(
-                      'rounded-lg border p-3 text-left transition hover:border-primary/50 hover:bg-blue-50/40',
+                      'rounded-lg border p-3 text-start transition hover:border-primary/50 hover:bg-blue-50/40',
                       active ? 'border-primary bg-blue-50 shadow-sm' : 'bg-white',
                     )}
                   >
@@ -335,7 +335,7 @@ export function QuickActionForm({ bots, action, compact }: { bots: BotRow[]; act
                   <p className="text-sm text-muted-foreground">Add the details visitors should provide. No code or pipe syntax needed.</p>
                 </div>
                 <Button type="button" variant="outline" size="sm" onClick={addField}>
-                  <Plus className="mr-2 h-4 w-4" /> Add field
+                  <Plus className="me-2 h-4 w-4" /> Add field
                 </Button>
               </div>
               <div className="space-y-3">

@@ -8,7 +8,13 @@ import { Label } from '@/components/ui/label';
 import { createWebhookAction, type ActionState } from '../webhooks-actions';
 
 const initial: ActionState = {};
-const EVENTS = ['lead.created', 'appointment.created', 'order.created'] as const;
+const EVENTS = [
+  { value: 'lead.created', label: 'New lead' },
+  { value: 'appointment.created', label: 'Appointment request' },
+  { value: 'order.created', label: 'New order' },
+  { value: 'ticket.created', label: 'Ticket created' },
+  { value: 'ticket.resolved', label: 'Ticket resolved' },
+] as const;
 
 function Submit({ disabled }: { disabled?: boolean }) {
   const { pending } = useFormStatus();
@@ -59,10 +65,10 @@ export function WebhookForm({ atLimit }: { atLimit?: boolean }) {
       <div className="space-y-2">
         <Label>Send these events</Label>
         <div className="flex flex-wrap gap-4">
-          {EVENTS.map((e) => (
-            <label key={e} className="flex items-center gap-2 text-sm">
-              <input type="checkbox" name="events" value={e} defaultChecked className="h-4 w-4" />
-              {e}
+          {EVENTS.map((event) => (
+            <label key={event.value} className="flex items-center gap-2 text-sm">
+              <input type="checkbox" name="events" value={event.value} defaultChecked className="h-4 w-4" />
+              {event.label}
             </label>
           ))}
         </div>
