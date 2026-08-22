@@ -1,5 +1,6 @@
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
+import { Select } from '@/components/ui/select';
 
 /**
  * Shared, server-rendered list controls for the leads / appointments tables:
@@ -8,10 +9,11 @@ import { Button } from '@/components/ui/button';
  * inside server components.
  */
 
+// The select here is now `<Select size="sm">`. `inputCls` survives because the
+// filter bar runs its controls at 36px and `Input` is fixed at 40px with no
+// size variant — the one control that could not adopt its primitive.
 const inputCls =
   'flex h-9 w-56 rounded-md border border-input bg-background px-3 py-1 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring';
-const selectCls =
-  'flex h-9 rounded-md border border-input bg-background px-3 py-1 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring';
 
 export function ListFilters({
   basePath,
@@ -35,14 +37,16 @@ export function ListFilters({
         placeholder={placeholder}
         className={inputCls}
       />
-      <select name="status" defaultValue={status ?? 'all'} className={selectCls}>
+      {/* `w-auto`: this select sizes to its options in the filter row, where
+          `Select`'s default `w-full` would stretch it across the bar. */}
+      <Select size="sm" name="status" defaultValue={status ?? 'all'} className="w-auto">
         <option value="all">All statuses</option>
         {statuses.map((s) => (
           <option key={s} value={s}>
             {s.replace(/_/g, ' ')}
           </option>
         ))}
-      </select>
+      </Select>
       <Button type="submit" variant="outline" size="sm">
         Filter
       </Button>

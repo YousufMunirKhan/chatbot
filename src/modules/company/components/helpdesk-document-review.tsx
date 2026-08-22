@@ -79,26 +79,23 @@ export function HelpdeskDocumentReview({ doc, platformLabel }: { doc: HelpdeskCo
           <div className="flex flex-wrap items-center gap-2">
             <h2 className="font-semibold">{doc.module} / {doc.screen}</h2>
             <Badge variant="secondary">{platformLabel}</Badge>
-            <Badge variant="warning">Draft</Badge>
+            <Badge variant="warning">Waiting for you</Badge>
             <Badge variant={doc.changeType === 'updated' ? 'warning' : doc.changeType === 'new' ? 'success' : 'secondary'}>
-              {doc.changeType}
+              {doc.changeType === 'updated' ? 'Changed' : doc.changeType === 'new' ? 'New' : 'Unchanged'}
             </Badge>
           </div>
           <p className="mt-1 text-sm text-muted-foreground">
             {doc.path ?? 'No menu path'} - {doc.connectorName}
           </p>
-          <p className="mt-1 font-mono text-xs text-muted-foreground">Key: {doc.externalKey}</p>
-          {doc.navigation?.routeId ? (
-            <p className="mt-1 text-xs text-muted-foreground">
-              Navigation: {doc.navigation.label ?? doc.screen} {'->'} {doc.navigation.routeId}
-            </p>
-          ) : null}
+          {/* The internal key and route ID are developer identifiers. They stay
+              available for support, but inside the details disclosure below rather
+              than on the face of a card a shop owner is asked to approve. */}
         </div>
         <div className="flex flex-wrap gap-2">
           <form action={approveConnectorDocumentAction}>
             <input type="hidden" name="documentId" value={doc.id} />
-            <ReviewActionButton icon={<CheckCircle2 className="h-4 w-4" />} pendingLabel="Indexing...">
-              Approve and index
+            <ReviewActionButton icon={<CheckCircle2 className="h-4 w-4" />} pendingLabel="Saving...">
+              Approve and save
             </ReviewActionButton>
           </form>
           <form action={handleIgnore}>
@@ -112,10 +109,21 @@ export function HelpdeskDocumentReview({ doc, platformLabel }: { doc: HelpdeskCo
 
       <details className="border-t">
         <summary className="cursor-pointer px-4 py-3 text-sm font-medium text-muted-foreground hover:text-foreground">
-          Review details and edit answer text
+          See the details, or reword the answer
         </summary>
         <div className="grid gap-4 p-4 pt-1 lg:grid-cols-[0.9fr_1.1fr]">
           <div className="space-y-3 rounded-md bg-muted/30 p-3">
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                For your developer
+              </p>
+              <p className="mt-2 font-mono text-xs text-muted-foreground">{doc.externalKey}</p>
+              {doc.navigation?.routeId ? (
+                <p className="mt-1 font-mono text-xs text-muted-foreground">
+                  {doc.navigation.label ?? doc.screen} {'->'} {doc.navigation.routeId}
+                </p>
+              ) : null}
+            </div>
             <div>
               <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Steps</p>
               {doc.steps.length ? (

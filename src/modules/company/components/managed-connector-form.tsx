@@ -1,25 +1,18 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
-import { useFormState, useFormStatus } from 'react-dom';
-import { Button } from '@/components/ui/button';
+import { useFormState } from 'react-dom';
 import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
+import { Select } from '@/components/ui/select';
+import { FormField } from '@/components/ui/form-field';
+import { FormMessage } from '@/components/ui/form-message';
+import { SubmitButton } from '@/components/ui/submit-button';
 import { RefreshDashboardShell } from '@/components/refresh-dashboard-shell';
 import { createManagedConnectorAction, type ActionState } from '../managed-connectors-actions';
 
 const initial: ActionState = {};
 
 type Field = { key: string; label: string; required: boolean };
-
-function Save() {
-  const { pending } = useFormStatus();
-  return (
-    <Button type="submit" disabled={pending}>
-      {pending ? 'Connecting…' : 'Connect & activate'}
-    </Button>
-  );
-}
 
 export function ManagedConnectorForm({ fields }: { fields: Record<string, Field[]> }) {
   const [state, action] = useFormState(createManagedConnectorAction, initial);
@@ -33,40 +26,36 @@ export function ManagedConnectorForm({ fields }: { fields: Record<string, Field[
   return (
     <form ref={ref} action={action} className="space-y-4">
       <RefreshDashboardShell state={state} />
-      <div className="space-y-1.5">
-        <Label htmlFor="platform">Platform</Label>
-        <select
-          id="platform"
+      <FormField label="Platform" htmlFor="platform">
+        {/* Second of the two inline-styled selects: `Select` upgrades its bare
+            `border` to `border-input` and adds the standard focus ring. */}
+        <Select
           name="platform"
           value={platform as string}
           onChange={(e) => setPlatform(e.target.value)}
-          className="h-10 w-full rounded-md border bg-background px-3 text-sm"
         >
           <option value="shopify">Shopify</option>
           <option value="square">Square</option>
           <option value="foodics">Foodics</option>
-        </select>
-      </div>
+        </Select>
+      </FormField>
 
       {activeFields.map((f) => (
-        <div key={f.key} className="space-y-1.5">
-          <Label htmlFor={f.key}>{f.label}</Label>
+        <FormField key={f.key} label={f.label} htmlFor={f.key}>
           <Input
-            id={f.key}
             name={f.key}
             type={f.key === 'token' ? 'password' : 'text'}
             autoComplete="off"
             required={f.required}
           />
-        </div>
+        </FormField>
       ))}
 
       <p className="text-xs text-muted-foreground">
         Credentials are encrypted at rest. We run the platform&apos;s read actions server-side — no SDK to install.
       </p>
-      {state.error ? <p className="text-sm text-destructive">{state.error}</p> : null}
-      {state.ok ? <p className="text-sm text-green-600">Connected. The assistant can now use it.</p> : null}
-      <Save />
+      <FormMessage state={state} okText="Connected. The assistant can now use it." />
+      <SubmitButton pendingLabel="Connecting…">Connect &amp; activate</SubmitButton>
     </form>
   );
 }

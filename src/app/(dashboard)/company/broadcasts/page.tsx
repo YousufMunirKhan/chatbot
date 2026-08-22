@@ -4,6 +4,8 @@ import { ROLES } from '@/lib/constants';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { EmptyState } from '@/components/ui/empty-state';
+import { PageHeader } from '@/components/ui/page-header';
 import { formatDate } from '@/lib/format';
 import { listBroadcasts } from '@/modules/company/broadcasts-data';
 import { deleteBroadcastAction } from '@/modules/company/broadcasts-actions';
@@ -27,17 +29,19 @@ export default async function BroadcastsPage() {
   const broadcasts = await listBroadcasts();
 
   return (
-    <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-semibold">Broadcasts</h1>
-        <p className="text-sm text-muted-foreground">
-          Send a WhatsApp or email campaign to your lead list. Requires a connected{' '}
-          <Link href="/company/channels" className="text-primary hover:underline">
-            channel
-          </Link>
-          .
-        </p>
-      </div>
+    <div className="mx-auto max-w-6xl space-y-6">
+      <PageHeader
+        title="Broadcasts"
+        description={
+          <>
+            Send a WhatsApp or email campaign to your lead list. Requires a connected{' '}
+            <Link href="/company/channels" className="text-primary hover:underline">
+              channel
+            </Link>
+            .
+          </>
+        }
+      />
 
       <Card id="new-broadcast">
         <CardHeader>
@@ -53,16 +57,15 @@ export default async function BroadcastsPage() {
         <CardContent className="p-0">
           {broadcasts.length === 0 ? (
             // Module 1 — the compose form is on this page, so link straight to it.
-            <div className="space-y-3 p-6">
-              <p className="text-sm font-medium">No broadcasts yet</p>
-              <p className="max-w-xl text-sm text-muted-foreground">
-                Send one WhatsApp or email to every lead with a matching contact detail. Sent and scheduled
-                broadcasts stay on this list with their delivery count.
-              </p>
-              <Button asChild size="sm">
-                <a href="#new-broadcast">Write a broadcast</a>
-              </Button>
-            </div>
+            <EmptyState
+              title="No broadcasts yet"
+              body="Send one WhatsApp or email to every lead with a matching contact detail. Sent and scheduled broadcasts stay on this list with their delivery count."
+              action={
+                <Button asChild size="sm">
+                  <a href="#new-broadcast">Write a broadcast</a>
+                </Button>
+              }
+            />
           ) : (
             <ul className="divide-y">
               {broadcasts.map((b) => (

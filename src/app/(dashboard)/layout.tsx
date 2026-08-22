@@ -1,9 +1,10 @@
 import { requireUser, type SessionUser } from '@/lib/auth';
 import { ROLES } from '@/lib/constants';
 import { SignOutButton } from '@/components/sign-out-button';
-import { DesktopSidebar, MobileNav } from '@/components/dashboard-nav';
+import { DesktopSidebar, ImpersonationBanner, MobileNav } from '@/components/dashboard-nav';
 import { EndImpersonationButton } from '@/modules/super-admin/components/end-impersonation-button';
 import { RefreshOnHistoryNav } from '@/components/refresh-on-history-nav';
+import { ThemeToggle } from '@/components/ui/theme-toggle';
 import { createSupabaseServiceClient } from '@/lib/db/server';
 
 /**
@@ -20,9 +21,18 @@ const PLATFORM_NAV: NavSection = {
     { href: '/super-admin/companies', label: 'Companies' },
     { href: '/super-admin/billing', label: 'Billing & Plans' },
     { href: '/super-admin/quality', label: 'Quality & Usage' },
+    // Reachable only by typed URL until now. /costs and /profit are the two
+    // screens the platform's money questions are answered from, so an operator
+    // having to know the URL was a real gap, not a cosmetic one.
+    { href: '/super-admin/subscriptions', label: 'Subscriptions' },
+    { href: '/super-admin/usage', label: 'Usage' },
+    { href: '/super-admin/costs', label: 'AI Cost' },
+    { href: '/super-admin/profit', label: 'Profit / Loss' },
     { href: '/super-admin/chat-logs', label: 'Chat Logs' },
+    { href: '/super-admin/integrations', label: 'Integrations' },
     { href: '/super-admin/notifications', label: 'Notifications' },
     { href: '/super-admin/audit-logs', label: 'Audit Logs' },
+    { href: '/super-admin/security', label: 'Security Logs' },
     { href: '/super-admin/error-logs', label: 'Error Logs' },
     { href: '/super-admin/settings', label: 'Settings' },
   ],
@@ -147,28 +157,41 @@ export default async function DashboardLayout({ children }: { children: React.Re
   return (
     <div dir={shellDirAttr} className="flex min-h-screen">
       <RefreshOnHistoryNav />
-      <DesktopSidebar sections={sections} brand={brand} />
+      <DesktopSidebar sections={sections} brand={brand} impersonating={Boolean(user.impersonation)} />
 
       <div className="min-w-0 flex-1">
         {user.impersonation ? (
-          <div className="flex flex-col items-start justify-between gap-2 border-b bg-amber-50 px-4 py-2 text-sm text-amber-950 sm:flex-row sm:items-center sm:gap-4 sm:px-6">
-            <span>
-              Super Admin impersonation is active for {user.impersonation.companyName ?? 'this company'} until{' '}
-              {new Date(user.impersonation.expiresAt).toLocaleTimeString()}.
-            </span>
+          <ImpersonationBanner
+            companyName={user.impersonation.companyName ?? 'this customer account'}
+            expiresAt={user.impersonation.expiresAt}
+          >
             <EndImpersonationButton />
-          </div>
+          </ImpersonationBanner>
         ) : null}
-        <header className="flex h-14 items-center justify-between gap-3 border-b px-4 sm:px-6">
+        {/* `bg-background` is stated rather than inherited from <body>: the
+            header is the boundary between the sidebar gradient and the page,
+            and in dark mode an unpainted strip there reads as a gap. */}
+        <header className="flex h-14 items-center justify-between gap-3 border-b bg-background px-4 sm:px-6">
           <div className="flex min-w-0 items-center gap-3">
-            <MobileNav sections={sections} brand={brand} />
+            <MobileNav sections={sections} brand={brand} impersonating={Boolean(user.impersonation)} />
             <span className="truncate text-sm text-muted-foreground">{roleLabel}</span>
           </div>
-          <div className="flex items-center gap-3">
+          <div className="flex min-w-0 items-center gap-3">
             {/* Module 21 (RTL): an address is a Latin-script LTR token. Isolating it
                 keeps the local part before the domain instead of letting the bidi
-                algorithm reorder the run around the "@". No visual change under LTR. */}
-            <span dir="ltr" className="hidden max-w-[40vw] truncate text-sm sm:inline">{user.email}</span>
+                algorithm reorder the run around the "@". No visual change under LTR.
+
+                Shown on mobile too: while impersonating, this is the last signal of
+                *whose* session is looking at the data, and hiding it below `sm`
+                meant a phone screen gave no answer at all. It truncates rather
+                than wraps, so it still costs one line. */}
+            <span dir="ltr" className="max-w-[45vw] truncate text-sm sm:max-w-[40vw]">{user.email}</span>
+            {/* Module 23. Next to sign-out because that is where a user looks
+                for "settings about me rather than about the data". It is the
+                only entry point to dark mode in the product: `enableSystem` is
+                on, so before this existed a user with a dark OS got the dark
+                token block and no way to leave it. */}
+            <ThemeToggle />
             <SignOutButton />
           </div>
         </header>

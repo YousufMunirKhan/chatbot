@@ -3,6 +3,7 @@ import { requireRole } from '@/lib/auth';
 import { ROLES } from '@/lib/constants';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
+import { PageHeader } from '@/components/ui/page-header';
 import { BotForm } from '@/modules/company/components/bot-form';
 import { createBotAction } from '@/modules/company/actions';
 import { getCurrentCompany, listBots } from '@/modules/company/data';
@@ -34,16 +35,12 @@ export default async function NewBotPage() {
   const suggestedDomains = suggestedDomainsFrom(company.website);
 
   return (
-    <div className="mx-auto max-w-3xl space-y-6">
-      <div>
-        <Link href="/company/bots" className="text-sm text-muted-foreground hover:underline">
-          <span className="dir-arrow" aria-hidden="true">←</span> Assistants
-        </Link>
-        <h1 className="mt-2 text-2xl font-semibold">New assistant</h1>
-        <p className="text-sm text-muted-foreground">
-          Pick a type and capabilities. Prompt templates &amp; advanced tuning come in Module 6.
-        </p>
-      </div>
+    <div className="mx-auto max-w-6xl space-y-6">
+      <PageHeader
+        backTo={{ href: '/company/bots', label: 'Assistants' }}
+        title="New assistant"
+        description={<>Pick a type and capabilities. Prompt templates &amp; advanced tuning come in Module 6.</>}
+      />
       {atBotLimit ? (
         <Card>
           <CardContent className="space-y-4 pt-6">

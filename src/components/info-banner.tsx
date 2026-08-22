@@ -1,8 +1,14 @@
-/** Small inline notice — used to flag data that fills in once a later module ships. */
+import { Alert } from '@/components/ui/alert';
+
+/**
+ * Small inline notice — used to flag data that fills in once a later module
+ * ships.
+ *
+ * Module 22: now a thin wrapper over `Alert`, which fixes the dark-mode bug
+ * (the old hardcoded `bg-amber-50` / `text-amber-900` never flipped) without
+ * changing the amber reading of the existing call sites. New code should reach
+ * for `Alert` directly, which offers the info/success/danger tones too.
+ */
 export function InfoBanner({ children }: { children: React.ReactNode }) {
-  return (
-    <div className="rounded-md border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
-      {children}
-    </div>
-  );
+  return <Alert tone="warning">{children}</Alert>;
 }

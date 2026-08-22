@@ -8,31 +8,37 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
+import { Button } from '@/components/ui/button';
+import { PageHeader } from '@/components/ui/page-header';
+import { requireRole } from '@/lib/auth';
+import { ROLES } from '@/lib/constants';
 import { listCompanies } from '@/modules/super-admin/data';
 import { SubStatusBadge } from '@/modules/super-admin/components/badges';
 import { formatDate, formatNumber } from '@/lib/format';
+import { gbp } from '@/modules/super-admin/money';
 import { listBillingPlans } from '@/modules/super-admin/billing-data';
 
-function gbp(value: number) {
-  return new Intl.NumberFormat('en-GB', {
-    style: 'currency',
-    currency: 'GBP',
-    maximumFractionDigits: 0,
-  }).format(value);
-}
-
 export default async function SubscriptionsPage() {
+  await requireRole([ROLES.SUPER_ADMIN]);
   const [companies, plans] = await Promise.all([listCompanies(), listBillingPlans()]);
   const planByKey = new Map(plans.map((plan) => [plan.key, plan]));
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-semibold">Subscriptions</h1>
-        <p className="text-sm text-muted-foreground">
-          Plans, statuses, limits, and Stripe-backed package pricing per company.
-        </p>
-      </div>
+      <PageHeader
+        title="Subscriptions"
+        description="Plans, statuses, limits, and Stripe-backed package pricing per company."
+        actions={
+          <>
+            <Button asChild variant="outline" size="sm">
+              <Link href="/super-admin/billing">Billing &amp; plans</Link>
+            </Button>
+            <Button asChild variant="outline" size="sm">
+              <Link href="/super-admin/profit">Profit / loss</Link>
+            </Button>
+          </>
+        }
+      />
 
       <Card>
         <CardContent className="p-0">
@@ -41,7 +47,7 @@ export default async function SubscriptionsPage() {
               <TableRow>
                 <TableHead>Company</TableHead>
                 <TableHead>Plan</TableHead>
-                <TableHead>Price/mo</TableHead>
+                <TableHead>Price/mo (GBP)</TableHead>
                 <TableHead>Status</TableHead>
                 <TableHead>Message limit</TableHead>
                 <TableHead>Free until</TableHead>
@@ -80,6 +86,12 @@ export default async function SubscriptionsPage() {
           </Table>
         </CardContent>
       </Card>
+
+      <p className="text-xs text-muted-foreground">
+        <strong className="font-medium text-foreground">Free until</strong> is a note shown to the
+        company on their billing page. Nothing in plan enforcement reads it — to actually stop
+        charging or lift limits, change the subscription status or the limits themselves.
+      </p>
     </div>
   );
 }

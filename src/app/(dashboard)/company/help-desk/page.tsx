@@ -9,11 +9,9 @@ import {
   ClipboardCheck,
   Database,
   Download,
-  FilePenLine,
   Inbox,
   LifeBuoy,
   MessageSquare,
-  Package,
   PlugZap,
   RefreshCw,
   Settings,
@@ -23,10 +21,15 @@ import {
 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { Alert } from '@/components/ui/alert';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { EmptyState } from '@/components/ui/empty-state';
+import { PageHeader } from '@/components/ui/page-header';
+import { StatTile } from '@/components/ui/stat-tile';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { env } from '@/lib/env';
 import { formatDate } from '@/lib/format';
+import { companyLabel } from '@/lib/labels';
 import { getReplyAllowanceUsage, type ReplyAllowanceUsage } from '@/lib/billing';
 import { getHelpdeskConnectorWorkspace } from '@/modules/company/helpdesk-data';
 import {
@@ -46,11 +49,10 @@ import { TicketAutomationTestButton } from '@/modules/company/components/ticket-
 import { getCompanyId, listBots } from '@/modules/company/data';
 import { listWebhookEndpoints, type WebhookEndpointRow } from '@/modules/company/webhooks-data';
 
+// One name per concept: platform names now come from the shared label map
+// rather than a private if-ladder that only knew three of the seven platforms.
 function platformLabel(platform: string) {
-  if (platform === 'dotnet') return '.NET';
-  if (platform === 'android') return 'Android';
-  if (platform === 'web') return 'Web';
-  return platform;
+  return companyLabel('connectorPlatform', platform);
 }
 
 function statusVariant(status: string): 'success' | 'warning' | 'secondary' | 'destructive' {
@@ -62,13 +64,13 @@ function statusVariant(status: string): 'success' | 'warning' | 'secondary' | 'd
 
 const helpDeskTabs = [
   { key: 'overview', label: 'Overview', hint: 'Status and next steps', icon: ClipboardCheck },
-  { key: 'ask', label: 'Ask', hint: 'One staff chat', icon: MessageSquare },
-  { key: 'connect', label: 'Connect Software', hint: 'Download SDKs', icon: PlugZap },
-  { key: 'knowledge', label: 'Review Knowledge', hint: 'Approve docs', icon: BookOpen },
-  { key: 'actions', label: 'Actions', hint: 'Enable and test', icon: ShieldCheck },
-  { key: 'support', label: 'Support', hint: 'Tickets and WhatsApp', icon: LifeBuoy },
-  { key: 'settings', label: 'Settings', hint: 'Roles and routes', icon: Settings },
-  { key: 'logs', label: 'Logs', hint: 'Sync and events', icon: Terminal },
+  { key: 'ask', label: 'Ask', hint: 'The chat your team uses', icon: MessageSquare },
+  { key: 'connect', label: 'Connect your software', hint: 'Link it to your shop system', icon: PlugZap },
+  { key: 'knowledge', label: 'What it learned', hint: 'Approve before your team relies on it', icon: BookOpen },
+  { key: 'actions', label: 'What it can do', hint: 'Turn things on and try them', icon: ShieldCheck },
+  { key: 'support', label: 'Support', hint: 'Requests and WhatsApp', icon: LifeBuoy },
+  { key: 'settings', label: 'Settings', hint: 'Where the chat appears', icon: Settings },
+  { key: 'logs', label: 'History', hint: 'What has happened', icon: Terminal },
 ] as const;
 
 type HelpDeskTab = (typeof helpDeskTabs)[number]['key'];
@@ -161,18 +163,30 @@ function WhatIsChecked() {
     },
   ];
 
+  // Route IDs, manifests, local handlers and sandbox events. Real, useful, and
+  // addressed to a developer — so it says so, and stays collapsed by default.
   return (
     <Card>
       <CardHeader>
-        <CardTitle>What the system is checking</CardTitle>
+        <CardTitle>For your developer: what each check does</CardTitle>
+        <p className="mt-1 text-sm text-muted-foreground">
+          Hand this to whoever is installing the connector. You do not need to read it.
+        </p>
       </CardHeader>
-      <CardContent className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-        {checks.map((check) => (
-          <div key={check.title} className="rounded-md border p-3">
-            <p className="text-sm font-semibold">{check.title}</p>
-            <p className="mt-1 text-xs leading-5 text-muted-foreground">{check.body}</p>
+      <CardContent>
+        <details>
+          <summary className="cursor-pointer text-sm font-medium text-muted-foreground hover:text-foreground">
+            Show the technical checks
+          </summary>
+          <div className="mt-3 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+            {checks.map((check) => (
+              <div key={check.title} className="rounded-md border p-3">
+                <p className="text-sm font-semibold">{check.title}</p>
+                <p className="mt-1 text-xs leading-5 text-muted-foreground">{check.body}</p>
+              </div>
+            ))}
           </div>
-        ))}
+        </details>
       </CardContent>
     </Card>
   );
@@ -200,7 +214,7 @@ function ManualSetupGuide() {
     <div className="grid gap-6 lg:grid-cols-[0.9fr_1.1fr]">
       <Card>
         <CardHeader>
-          <CardTitle>Manual setup flow</CardTitle>
+          <CardTitle>For your developer: setup steps</CardTitle>
         </CardHeader>
         <CardContent>
           <ol className="space-y-2 text-sm">
@@ -217,7 +231,7 @@ function ManualSetupGuide() {
       </Card>
       <Card>
         <CardHeader>
-          <CardTitle>Where to add your own screens/actions</CardTitle>
+          <CardTitle>For your developer: where to add screens and actions</CardTitle>
         </CardHeader>
         <CardContent className="space-y-3">
           {files.map(([platform, file, purpose]) => (
@@ -229,9 +243,9 @@ function ManualSetupGuide() {
               <p className="mt-1 text-xs text-muted-foreground">{purpose}</p>
             </div>
           ))}
-          <div className="rounded-md border border-amber-200 bg-amber-50 p-3 text-xs leading-5 text-amber-950">
+          <Alert tone="warning" className="px-3 py-2 text-xs leading-5">
             If your POS only shows seven screens, that means only seven screens were included in the manifest. Add more screens in the details file, then run Sync again.
-          </div>
+          </Alert>
         </CardContent>
       </Card>
     </div>
@@ -349,9 +363,23 @@ function DeveloperPackages() {
             </div>
           ))}
         </div>
-        <Button asChild variant="outline" size="sm">
-          <Link href="/api/helpdesk/connectors/schema">View required action format</Link>
-        </Button>
+        {/*
+          This link opens a raw JSON schema. That is a perfectly good thing to
+          hand a developer and a baffling thing to put in front of a business
+          owner, so it now sits behind a disclosure that says who it is for.
+        */}
+        <details className="rounded-md border bg-muted/20 p-3">
+          <summary className="cursor-pointer text-sm font-medium">For your developer</summary>
+          <div className="mt-3 space-y-3">
+            <p className="text-sm text-muted-foreground">
+              The exact format the Help Desk expects, as JSON. Your developer will know what to do
+              with it.
+            </p>
+            <Button asChild variant="outline" size="sm">
+              <Link href="/api/helpdesk/connectors/schema">Open the action format (JSON)</Link>
+            </Button>
+          </div>
+        </details>
       </CardContent>
     </Card>
   );
@@ -506,7 +534,7 @@ function HelpDeskOverview({
             {steps.map((step, index) => (
               <Link key={step.label} href={step.href} className="rounded-md border p-3 hover:bg-muted/40">
                 <div className="flex items-center gap-2">
-                  <span className={step.done ? 'grid h-6 w-6 place-items-center rounded-full bg-emerald-600 text-xs font-semibold text-white' : 'grid h-6 w-6 place-items-center rounded-full bg-muted text-xs font-semibold'}>
+                  <span className={step.done ? 'grid h-6 w-6 place-items-center rounded-full bg-success text-xs font-semibold text-background' : 'grid h-6 w-6 place-items-center rounded-full bg-muted text-xs font-semibold'}>
                     {step.done ? 'OK' : index + 1}
                   </span>
                   <span className="text-sm font-medium">{step.label}</span>
@@ -540,7 +568,7 @@ function HelpDeskOverview({
               When staff need help
             </div>
             <p className="mt-1 text-muted-foreground">
-              Use Support for tickets, WhatsApp notifications, and escalation rules when the assistant cannot solve an issue.
+              Set up what happens when the assistant cannot solve something: who gets told, and how.
             </p>
             <Button asChild size="sm" variant="outline" className="mt-3">
               <Link href="/company/help-desk?tab=support">Open support options</Link>
@@ -554,18 +582,28 @@ function HelpDeskOverview({
 
 function HowConnectorsWork() {
   const steps = [
-    'Download the connector package.',
-    'Paste the hdk_ connector key in the customer system.',
-    'Map real screens, routes, and local event handlers.',
-    'Run Preview, Audit, and Sync.',
-    'Approve knowledge and enable safe actions.',
-    'Staff ask Help Desk from the internal app.',
+    'Download the package for your software.',
+    'Your developer installs it and pastes in your key.',
+    'It sends over your screens and the tasks it can run.',
+    'You check what it sent and approve it.',
+    'You choose which tasks it is allowed to run.',
+    'Your team starts asking the Help Desk.',
   ];
 
   return (
     <Card>
       <CardHeader>
-        <CardTitle>How software integration works</CardTitle>
+        <CardTitle>How the link to your shop system works</CardTitle>
+        {/*
+          Rescued from a component that was written, never rendered, and about to
+          be deleted — it held the only plain-English definition of "connector"
+          anywhere in the product. Everything else assumed the reader already
+          knew, which for a shop owner is exactly the wrong assumption.
+        */}
+        <p className="mt-1 max-w-3xl text-sm text-muted-foreground">
+          A connector is what lets the Help Desk read your software&rsquo;s screens and run approved
+          actions inside it. Your developer sets it up once, and then your team can just ask.
+        </p>
       </CardHeader>
       <CardContent className="grid gap-3 md:grid-cols-6">
         {steps.map((step, index) => (
@@ -581,156 +619,13 @@ function HowConnectorsWork() {
   );
 }
 
-function ConnectedSystemsTable({ workspace }: { workspace: HelpdeskWorkspace }) {
-  return (
-    <Card>
-      <CardHeader>
-        <CardTitle>Connected systems</CardTitle>
-      </CardHeader>
-      <CardContent>
-        {workspace.connectors.length === 0 ? (
-          // Module 1 — everything on this page depends on a connector, so send them there.
-          <div className="space-y-3">
-            <p className="max-w-2xl text-sm text-muted-foreground">
-              No systems connected yet. A connector is what lets the Help Desk read your software&rsquo;s screens
-              and run approved actions inside it. Create one, download the package for your platform, and run it.
-            </p>
-            <Button asChild size="sm">
-              <Link href="/company/help-desk?tab=connect">Connect software</Link>
-            </Button>
-          </div>
-        ) : (
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Name</TableHead>
-                <TableHead>Platform</TableHead>
-                <TableHead>Status</TableHead>
-                <TableHead>Docs</TableHead>
-                <TableHead>Actions</TableHead>
-                <TableHead>Revision</TableHead>
-                <TableHead>Delivery</TableHead>
-                <TableHead>Last seen</TableHead>
-                <TableHead>Sync</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {workspace.connectors.map((connector) => (
-                <TableRow key={connector.id}>
-                  <TableCell>
-                    <div className="font-medium">{connector.name}</div>
-                    <div className="font-mono text-xs text-muted-foreground">{connector.publicId}</div>
-                  </TableCell>
-                  <TableCell>{platformLabel(connector.platform)}</TableCell>
-                  <TableCell>
-                    <Badge variant={statusVariant(connector.status)}>{connector.status}</Badge>
-                  </TableCell>
-                  <TableCell>
-                    {connector.approvedDocs} approved, {connector.draftDocs} draft
-                  </TableCell>
-                  <TableCell>
-                    {connector.enabledActions} enabled, {connector.actions} total
-                  </TableCell>
-                  <TableCell>
-                    <div className="font-mono text-sm">v{connector.manifestRevision}</div>
-                    {connector.resyncRequestedAt ? (
-                      <div className="text-xs text-muted-foreground">requested {formatDate(connector.resyncRequestedAt)}</div>
-                    ) : null}
-                  </TableCell>
-                  <TableCell>
-                    <div className="text-sm">{connector.activeDeliveryMode ?? 'unknown'}</div>
-                    <div className="text-xs text-muted-foreground">{connector.connectionState ?? 'unknown'}</div>
-                    {connector.lastEventLatencyMs != null ? (
-                      <Badge variant={latencyVariant(connector.lastEventLatencyMs)} className="mt-1">
-                        {connector.lastEventLatencyMs} ms
-                      </Badge>
-                    ) : null}
-                    {connector.lastError ? <div className="max-w-40 truncate text-xs text-destructive">{connector.lastError}</div> : null}
-                  </TableCell>
-                  <TableCell>{connector.lastSeenAt ? formatDate(connector.lastSeenAt) : 'Never'}</TableCell>
-                  <TableCell>
-                    <div className="flex items-center gap-1">
-                      <ConnectorTestButton connectorId={connector.id} />
-                      <ConnectorResyncButton connectorId={connector.id} />
-                    </div>
-                  </TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        )}
-      </CardContent>
-    </Card>
-  );
-}
-
-function ReviewKnowledgeSection({
-  workspace,
-  draftGroups,
-}: {
-  workspace: HelpdeskWorkspace;
-  draftGroups: Array<{ connector: HelpdeskWorkspace['connectors'][number]; documents: HelpdeskWorkspace['draftDocuments'] }>;
-}) {
-  return (
-    <Card>
-      <CardHeader>
-        <CardTitle>Review synced knowledge</CardTitle>
-        <p className="text-sm text-muted-foreground">
-          Screen docs arrive as drafts. Approve what staff can trust, edit unclear text, or ignore what does not belong.
-        </p>
-      </CardHeader>
-      <CardContent className="space-y-4">
-        {draftGroups.length === 0 ? (
-          // Module 2 — the action differs depending on whether anything is connected at all.
-          <div className="space-y-3">
-            <p className="max-w-2xl text-sm text-muted-foreground">
-              {workspace.connectors.length === 0
-                ? 'Nothing to review yet. Screen documentation arrives once a connector is installed and synced.'
-                : 'Nothing waiting for review. Your connectors have sent everything they have, and approved docs stay available to the Help Desk. Run a resync after your software changes.'}
-            </p>
-            <Button asChild size="sm" variant="outline">
-              <Link href="/company/help-desk?tab=connect">
-                {workspace.connectors.length === 0 ? 'Connect software' : 'Open connector setup'}
-              </Link>
-            </Button>
-          </div>
-        ) : (
-          draftGroups.map((group) => (
-            <div key={group.connector.id} className="rounded-md border bg-muted/20 p-3">
-              <div className="mb-3 flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
-                <div>
-                  <p className="font-medium">{group.connector.name}</p>
-                  <p className="text-xs text-muted-foreground">
-                    {group.documents.length} draft item{group.documents.length === 1 ? '' : 's'} - resync updates the same stable keys.
-                  </p>
-                </div>
-                <ConnectorResyncButton connectorId={group.connector.id} />
-              </div>
-              <div className="space-y-3">
-                {group.documents.map((doc) => (
-                  <HelpdeskDocumentReview key={doc.id} doc={doc} platformLabel={platformLabel(doc.platform)} />
-                ))}
-              </div>
-            </div>
-          ))
-        )}
-        {workspace.draftDocuments.length === 0 ? null : (
-          <div className="rounded-md border border-amber-200 bg-amber-50 p-3 text-xs leading-5 text-amber-950">
-            Approving knowledge makes it searchable by the staff Help Desk. Ignoring hides the draft from this queue; resync can send it again if the connector still includes that screen.
-          </div>
-        )}
-      </CardContent>
-    </Card>
-  );
-}
-
 function ActionsSection({ workspace }: { workspace: HelpdeskWorkspace }) {
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Approved action manifest</CardTitle>
+        <CardTitle>What it is allowed to do</CardTitle>
         <p className="text-sm text-muted-foreground">
-          These are event names the assistant may request. The real work still runs inside the customer system through local handlers.
+          Nothing here happens unless you switch it on. The work runs inside your own software, not on our servers.
         </p>
       </CardHeader>
       <CardContent>
@@ -771,7 +666,7 @@ function ActionsSection({ workspace }: { workspace: HelpdeskWorkspace }) {
                   <TableCell>{action.connectorName}</TableCell>
                   <TableCell>
                     <Badge variant={action.risk === 'high' ? 'destructive' : action.risk === 'medium' ? 'warning' : 'secondary'}>
-                      {action.actionType} / {action.risk}
+                      {companyLabel('actionRisk', action.risk)}
                     </Badge>
                   </TableCell>
                   <TableCell className="text-xs text-muted-foreground">
@@ -838,7 +733,7 @@ function SupportEscalationSection({ automationEndpoints }: { automationEndpoints
     {
       icon: MessageSquare,
       title: 'WhatsApp channel',
-      body: 'Connect company-owned WhatsApp for customer messaging, or use notifications for support escalation updates.',
+      body: 'Connect your own WhatsApp for customer messages, or get notified when something needs a person.',
       href: '/company/channels',
       cta: 'Connect WhatsApp',
     },
@@ -874,7 +769,7 @@ function SupportEscalationSection({ automationEndpoints }: { automationEndpoints
 
       <Card>
         <CardHeader>
-          <CardTitle>Support and escalation</CardTitle>
+          <CardTitle>Getting help to a person</CardTitle>
         </CardHeader>
         <CardContent>
           <div className="grid gap-3 md:grid-cols-5">
@@ -921,9 +816,9 @@ function SupportEscalationSection({ automationEndpoints }: { automationEndpoints
               ))}
             </div>
           ) : (
-            <div className="rounded-md border border-amber-200 bg-amber-50 p-3 text-sm text-amber-950">
+            <Alert tone="warning" className="px-3 py-2">
               No active ticket automations yet. Add Slack, Jira, CRM, Zapier, Make, or a custom webhook so ticket.created and ticket.resolved events leave this dashboard.
-            </div>
+            </Alert>
           )}
           <div className="flex flex-wrap gap-2">
             <TicketAutomationTestButton />
@@ -945,7 +840,7 @@ function SupportEscalationSection({ automationEndpoints }: { automationEndpoints
           {[
             'Staff asks Help Desk',
             'Assistant answers or runs a safe connector action',
-            'If unresolved, staff creates or escalates a ticket',
+            'If it is still not sorted, your team raises a request',
             'Support team gets context, route, logs, and priority',
             'Updates go through Inbox and optional WhatsApp notifications',
           ].map((step, index) => (
@@ -1035,44 +930,22 @@ export default async function HelpDeskPage({ searchParams }: { searchParams?: { 
     .filter((group) => group.documents.length > 0);
 
   return (
-    <div className="mx-auto max-w-7xl space-y-6">
-      <div className="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
-        <div>
-          <h1 className="text-2xl font-semibold tracking-tight">Internal Help Desk</h1>
-          <p className="mt-1 max-w-3xl text-sm text-muted-foreground">
-            One staff assistant for software help, connector knowledge, safe local actions, support escalation, and reply usage.
-          </p>
-        </div>
-        <Button asChild variant="outline">
-          <Link href={assistantHref}>{assistantLabel}</Link>
-        </Button>
-      </div>
+    <div className="mx-auto max-w-6xl space-y-6">
+      <PageHeader
+        title="Internal Help Desk"
+        description="One place for your team to ask questions about your software, get things done in it, and hand anything tricky to a person."
+        actions={
+          <Button asChild variant="outline">
+            <Link href={assistantHref}>{assistantLabel}</Link>
+          </Button>
+        }
+      />
 
       <div className="grid gap-3 md:grid-cols-4">
-        <Card>
-          <CardContent className="p-4">
-            <p className="text-xs uppercase tracking-wider text-muted-foreground">Connectors</p>
-            <p className="mt-1 text-2xl font-semibold">{workspace.connectors.length}</p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="p-4">
-            <p className="text-xs uppercase tracking-wider text-muted-foreground">Draft docs</p>
-            <p className="mt-1 text-2xl font-semibold">{draftCount}</p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="p-4">
-            <p className="text-xs uppercase tracking-wider text-muted-foreground">Enabled actions</p>
-            <p className="mt-1 text-2xl font-semibold">{enabledActionCount}</p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="p-4">
-            <p className="text-xs uppercase tracking-wider text-muted-foreground">Online connectors</p>
-            <p className="mt-1 text-2xl font-semibold">{onlineCount}</p>
-          </CardContent>
-        </Card>
+        <StatTile label="Connectors" value={workspace.connectors.length} />
+        <StatTile label="Draft docs" value={draftCount} />
+        <StatTile label="Enabled actions" value={enabledActionCount} />
+        <StatTile label="Online connectors" value={onlineCount} />
       </div>
 
       <HelpDeskTabs active={activeTab} />
@@ -1134,12 +1007,10 @@ export default async function HelpDeskPage({ searchParams }: { searchParams?: { 
         </>
       ) : null}
 
-      {activeTab === 'connect' ? (
-        <>
-          <ManualSetupGuide />
-          <DeveloperPackages />
-        </>
-      ) : null}
+      {/* `DeveloperPackages` used to render here as well as further down the same
+          tab, putting sixteen identical Download buttons and two "Base URL"
+          blocks on one screen. It now appears exactly once, below. */}
+      {activeTab === 'connect' ? <ManualSetupGuide /> : null}
 
       {activeTab === 'settings' ? (
         <div className="grid gap-6 lg:grid-cols-[0.95fr_1.05fr]">
@@ -1148,9 +1019,9 @@ export default async function HelpDeskPage({ searchParams }: { searchParams?: { 
               <CardTitle>Where the Help Desk chat appears</CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
-              <div className="rounded-md border border-blue-200 bg-blue-50 p-3 text-xs leading-5 text-blue-950">
+              <Alert tone="info" className="px-3 py-2 text-xs leading-5">
                 If Ask failed: Help Desk chat is not available appears, check this form first. Add the current route or remove an over-broad blocked route.
-              </div>
+              </Alert>
               <HelpdeskChatSettingsForm settings={workspace.chatSettings} />
             </CardContent>
           </Card>
@@ -1197,13 +1068,24 @@ export default async function HelpDeskPage({ searchParams }: { searchParams?: { 
 
             <Card>
               <CardHeader>
-                <CardTitle>Connector API</CardTitle>
+                <CardTitle>For your developer</CardTitle>
               </CardHeader>
               <CardContent className="space-y-4">
                 <p className="text-sm text-muted-foreground">
-                  Every request sends <span className="font-mono">Authorization: Bearer YOUR_TOKEN</span>. Sync creates draft docs/actions; polling receives events when WebSocket is unavailable.
+                  Everything below is for whoever installs this in your software. You do not need to
+                  read it.
                 </p>
-                <ApiEndpoints />
+                {/* Raw endpoints and auth headers, kept but clearly labelled and
+                    collapsed, so the business owner is not asked to parse them. */}
+                <details className="rounded-md border bg-muted/20 p-3">
+                  <summary className="cursor-pointer text-sm font-medium">Technical details</summary>
+                  <div className="mt-3 space-y-4">
+                    <p className="text-sm text-muted-foreground">
+                      Every request sends <span className="font-mono">Authorization: Bearer YOUR_TOKEN</span>. Sync creates draft docs/actions; polling receives events when WebSocket is unavailable.
+                    </p>
+                    <ApiEndpoints />
+                  </div>
+                </details>
               </CardContent>
             </Card>
           </div>
@@ -1269,7 +1151,7 @@ export default async function HelpDeskPage({ searchParams }: { searchParams?: { 
                     </TableCell>
                     <TableCell>{platformLabel(connector.platform)}</TableCell>
                     <TableCell>
-                      <Badge variant={statusVariant(connector.status)}>{connector.status}</Badge>
+                      <Badge variant={statusVariant(connector.status)}>{companyLabel('connectorStatus', connector.status)}</Badge>
                     </TableCell>
                     <TableCell>
                       {connector.approvedDocs} approved, {connector.draftDocs} draft
@@ -1284,8 +1166,8 @@ export default async function HelpDeskPage({ searchParams }: { searchParams?: { 
                       ) : null}
                     </TableCell>
                     <TableCell>
-                      <div className="text-sm">{connector.activeDeliveryMode ?? 'unknown'}</div>
-                      <div className="text-xs text-muted-foreground">{connector.connectionState ?? 'unknown'}</div>
+                      <div className="text-sm">{companyLabel('deliveryMode', connector.activeDeliveryMode ?? 'unknown')}</div>
+                      <div className="text-xs text-muted-foreground">{companyLabel('connectionState', connector.connectionState ?? 'unknown')}</div>
                       {connector.lastEventLatencyMs != null ? (
                         <Badge variant={latencyVariant(connector.lastEventLatencyMs)} className="mt-1">
                           {connector.lastEventLatencyMs} ms
@@ -1352,7 +1234,7 @@ export default async function HelpDeskPage({ searchParams }: { searchParams?: { 
 
       <Card>
         <CardHeader>
-          <CardTitle>Approved action manifest</CardTitle>
+          <CardTitle>What it is allowed to do</CardTitle>
         </CardHeader>
         <CardContent>
           {workspace.actions.length === 0 ? (
@@ -1391,7 +1273,7 @@ export default async function HelpDeskPage({ searchParams }: { searchParams?: { 
                     <TableCell>{action.connectorName}</TableCell>
                     <TableCell>
                       <Badge variant={action.risk === 'high' ? 'destructive' : action.risk === 'medium' ? 'warning' : 'secondary'}>
-                        {action.actionType} / {action.risk}
+                        {companyLabel('actionRisk', action.risk)}
                       </Badge>
                     </TableCell>
                     <TableCell className="text-xs text-muted-foreground">
@@ -1493,11 +1375,13 @@ export default async function HelpDeskPage({ searchParams }: { searchParams?: { 
                         </TableRow>
                       ))
                     ) : (
-                      <TableRow>
-                        <TableCell colSpan={4} className="py-6 text-center text-sm text-muted-foreground">
+                      <TableRow className="hover:bg-transparent">
+                        <TableCell colSpan={4} className="p-0">
                           {/* Module 7 — a log, not a task: explain what fills it, no button. */}
-                          No health logs yet. Connections, syncs, and errors are recorded here once a connector
-                          starts reporting in.
+                          <EmptyState
+                            title="No health logs yet."
+                            body="Connections, syncs, and errors are recorded here once a connector starts reporting in."
+                          />
                         </TableCell>
                       </TableRow>
                     )}
@@ -1542,7 +1426,7 @@ export default async function HelpDeskPage({ searchParams }: { searchParams?: { 
                     </TableCell>
                     <TableCell>{log.connectorName ?? '-'}</TableCell>
                     <TableCell>
-                      <Badge variant={statusVariant(log.status)}>{log.status}</Badge>
+                      <Badge variant={statusVariant(log.status)}>{companyLabel('eventStatus', log.status)}</Badge>
                     </TableCell>
                     <TableCell className="space-x-1 rtl:space-x-reverse">
                       {log.confirmationRequired ? <Badge variant="warning">confirm</Badge> : null}
@@ -1590,7 +1474,7 @@ export default async function HelpDeskPage({ searchParams }: { searchParams?: { 
                     <TableCell className="font-mono text-sm">{event.eventName}</TableCell>
                     <TableCell>{event.connectorName}</TableCell>
                     <TableCell>
-                      <Badge variant={statusVariant(event.status)}>{event.status}</Badge>
+                      <Badge variant={statusVariant(event.status)}>{companyLabel('eventStatus', event.status)}</Badge>
                     </TableCell>
                     <TableCell>{formatDate(event.createdAt)}</TableCell>
                     <TableCell className="max-w-md truncate text-xs text-muted-foreground">{event.errorMessage ?? '-'}</TableCell>

@@ -3,6 +3,8 @@ import { ROLES } from '@/lib/constants';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { EmptyState } from '@/components/ui/empty-state';
+import { PageHeader } from '@/components/ui/page-header';
 import { listCampaigns } from '@/modules/company/campaigns-data';
 import { toggleCampaignAction, deleteCampaignAction } from '@/modules/company/campaigns-actions';
 import { CampaignForm } from '@/modules/company/components/campaign-form';
@@ -22,13 +24,11 @@ export default async function CampaignsPage() {
   const campaigns = await listCampaigns();
 
   return (
-    <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-semibold">Proactive campaigns</h1>
-        <p className="text-sm text-muted-foreground">
-          Trigger a targeted chat message after a delay on matching pages — turn passive visitors into conversations.
-        </p>
-      </div>
+    <div className="mx-auto max-w-6xl space-y-6">
+      <PageHeader
+        title="Proactive campaigns"
+        description="Trigger a targeted chat message after a delay on matching pages — turn passive visitors into conversations."
+      />
 
       <Card id="new-campaign">
         <CardHeader>
@@ -44,16 +44,15 @@ export default async function CampaignsPage() {
         <CardContent className="p-0">
           {campaigns.length === 0 ? (
             // Module 1 — the create form is on this page, so link straight to it.
-            <div className="space-y-3 p-6">
-              <p className="text-sm font-medium">No campaigns yet</p>
-              <p className="max-w-xl text-sm text-muted-foreground">
-                A campaign opens the chat with a message you choose, on the pages you choose, after a delay you
-                set. A good first one: offer help on your pricing page after 20 seconds.
-              </p>
-              <Button asChild size="sm">
-                <a href="#new-campaign">Create a campaign</a>
-              </Button>
-            </div>
+            <EmptyState
+              title="No campaigns yet"
+              body="A campaign opens the chat with a message you choose, on the pages you choose, after a delay you set. A good first one: offer help on your pricing page after 20 seconds."
+              action={
+                <Button asChild size="sm">
+                  <a href="#new-campaign">Create a campaign</a>
+                </Button>
+              }
+            />
           ) : (
             <ul className="divide-y">
               {campaigns.map((c) => (

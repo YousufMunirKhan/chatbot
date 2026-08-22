@@ -1,14 +1,19 @@
 import { unstable_noStore as noStore } from 'next/cache';
 import { createSupabaseServiceClient } from '@/lib/db/server';
 import { currentMonthStartIso, getReplyAllowanceUsage, type ReplyAllowanceUsage } from '@/lib/billing';
-import { PLANS } from './plans';
+import { usdToGbp } from './money';
+import { getPlanPriceMapGbp } from './plan-pricing';
 
 /**
  * Super-admin data layer (Module 4). Uses the service-role client (bypasses RLS)
  * for cross-company platform views. ALWAYS call requireRole([SUPER_ADMIN]) in the
  * page/layout before invoking these.
  *
- * AI cost is summed from `ai_usage_logs` (Module 20) for the current month.
+ * AI cost is summed from `ai_usage_logs` (Module 20) for the current month and is
+ * denominated in **USD** — the provider's invoicing currency. Plan revenue is
+ * **GBP**. Anything that combines the two converts first (see `./money`), and
+ * every exported money field is suffixed with its currency so a caller cannot
+ * subtract dollars from pounds by accident.
  */
 
 // PostgREST returns to-one embeds as an object and to-many as arrays; normalize.
@@ -130,16 +135,59 @@ export async function listCompanies(): Promise<CompanyRow[]> {
   }));
 }
 
-function monthlyRevenue(row: CompanyRow): number {
+/**
+ * Recurring plan revenue in GBP, read from `billing_plans.price_monthly_gbp`.
+ * See `./plan-pricing` for why the database — and not the `PLANS` constant — is
+ * the revenue source of record.
+ */
+function monthlyPlanRevenueGbp(
+  row: Pick<CompanyRow, 'status' | 'plan' | 'subStatus'>,
+  priceGbpByPlan: Map<string, number>,
+): number {
   if (row.status !== 'active' || !row.plan) return 0;
   if (row.subStatus === 'trialing') return 0;
-  return row.plan in PLANS ? PLANS[row.plan as keyof typeof PLANS].priceMonthly : 0;
+  return priceGbpByPlan.get(row.plan) ?? 0;
+}
+
+/**
+ * Recurring add-on revenue (GBP) per company, from `company_addons`. Previously
+ * ignored entirely, which made every margin figure under-report the revenue side
+ * for any company carrying the API/webhooks add-on.
+ *
+ * One-off `company_commercial_charges` (setup fees) are deliberately excluded:
+ * they are not recurring, so they do not belong in a monthly margin.
+ */
+export async function getAddonRevenueGbpByCompany(): Promise<Record<string, number>> {
+  noStore();
+  const sb = createSupabaseServiceClient();
+  const { data, error } = await sb
+    .from('company_addons')
+    .select('company_id,price_monthly,currency,status')
+    .eq('status', 'active');
+  if (error) throw error;
+  return ((data ?? []) as Array<Record<string, unknown>>).reduce<Record<string, number>>(
+    (acc, row) => {
+      const id = row.company_id as string;
+      if (!id) return acc;
+      // Add-ons are priced in GBP (schema default); anything else is skipped
+      // rather than silently mis-added to a GBP total.
+      if (((row.currency as string) ?? 'GBP') !== 'GBP') return acc;
+      acc[id] = (acc[id] ?? 0) + Number(row.price_monthly ?? 0);
+      return acc;
+    },
+    {},
+  );
 }
 
 export interface FinancialRow extends CompanyRow {
-  revenue: number;
-  aiCost: number;
-  profit: number;
+  planRevenueGbp: number;
+  addonRevenueGbp: number;
+  revenueGbp: number;
+  /** Raw provider cost, as invoiced by the AI vendor. */
+  aiCostUsd: number;
+  /** The same cost converted at `USD_TO_GBP`, so it is subtractable from revenue. */
+  aiCostGbp: number;
+  profitGbp: number;
 }
 
 /**
@@ -167,28 +215,46 @@ export async function getAiCostByCompany(): Promise<Record<string, number>> {
 }
 
 export async function listFinancials(): Promise<FinancialRow[]> {
-  const [companies, costByCompany] = await Promise.all([listCompanies(), getAiCostByCompany()]);
+  const [companies, costByCompany, addonRevenue, priceGbpByPlan] = await Promise.all([
+    listCompanies(),
+    getAiCostByCompany(),
+    getAddonRevenueGbpByCompany(),
+    getPlanPriceMapGbp(),
+  ]);
   return companies.map((c) => {
-    const revenue = monthlyRevenue(c);
-    const aiCost = costByCompany[c.id] ?? 0;
-    return { ...c, revenue, aiCost, profit: revenue - aiCost };
+    const planRevenueGbp = monthlyPlanRevenueGbp(c, priceGbpByPlan);
+    const addonRevenueGbp = addonRevenue[c.id] ?? 0;
+    const revenueGbp = planRevenueGbp + addonRevenueGbp;
+    const aiCostUsd = costByCompany[c.id] ?? 0;
+    const aiCostGbp = usdToGbp(aiCostUsd);
+    return {
+      ...c,
+      planRevenueGbp,
+      addonRevenueGbp,
+      revenueGbp,
+      aiCostUsd,
+      aiCostGbp,
+      profitGbp: revenueGbp - aiCostGbp,
+    };
   });
 }
 
 export async function getOverviewStats() {
-  const [companies, costByCompany] = await Promise.all([listCompanies(), getAiCostByCompany()]);
-  const mrr = companies.reduce((s, c) => s + monthlyRevenue(c), 0);
-  const aiCost = companies.reduce((s, c) => s + (costByCompany[c.id] ?? 0), 0);
+  const rows = await listFinancials();
+  const mrrGbp = rows.reduce((s, r) => s + r.revenueGbp, 0);
+  const aiCostUsd = rows.reduce((s, r) => s + r.aiCostUsd, 0);
+  const aiCostGbp = usdToGbp(aiCostUsd);
   return {
-    total: companies.length,
-    active: companies.filter((c) => c.status === 'active').length,
-    suspended: companies.filter((c) => c.status === 'suspended').length,
-    trialing: companies.filter((c) => c.subStatus === 'trialing' || c.plan === 'free_trial').length,
-    bots: companies.reduce((s, c) => s + c.botCount, 0),
-    mrr,
-    aiCost,
-    profit: mrr - aiCost,
-    recent: companies.slice(0, 5),
+    total: rows.length,
+    active: rows.filter((c) => c.status === 'active').length,
+    suspended: rows.filter((c) => c.status === 'suspended').length,
+    trialing: rows.filter((c) => c.subStatus === 'trialing' || c.plan === 'free_trial').length,
+    bots: rows.reduce((s, c) => s + c.botCount, 0),
+    mrrGbp,
+    aiCostUsd,
+    aiCostGbp,
+    profitGbp: mrrGbp - aiCostGbp,
+    recent: rows.slice(0, 5),
   };
 }
 
@@ -241,9 +307,13 @@ export interface CompanyDetail {
   }[];
   replyUsage: ReplyAllowanceUsage;
   totalChatMessagesThisMonth: number;
+  /** Provider cost as invoiced, in USD. */
   aiCostThisMonth: number;
-  estimatedRevenue: number;
-  estimatedProfit: number;
+  aiCostThisMonthGbp: number;
+  planRevenueGbp: number;
+  addonRevenueGbp: number;
+  estimatedRevenueGbp: number;
+  estimatedProfitGbp: number;
   whatsapp: {
     enabled: boolean;
     senderMode: string;
@@ -293,6 +363,7 @@ export async function getCompanyDetail(id: string): Promise<CompanyDetail | null
     totalChatMessagesThisMonth,
     aiCostThisMonth,
     whatsappSettings,
+    priceGbpByPlan,
   ] = await Promise.all([
     sb
       .from('bots')
@@ -355,29 +426,23 @@ export async function getCompanyDetail(id: string): Promise<CompanyDetail | null
       .select('whatsapp_enabled,whatsapp_sender_mode,whatsapp_provider,whatsapp_recipients')
       .eq('company_id', id)
       .maybeSingle(),
+    getPlanPriceMapGbp(),
   ]);
 
-  const estimatedRevenue = monthlyRevenue({
-    id: c.id as string,
-    name: c.name as string,
-    status: c.status as string,
-    createdAt: c.created_at as string,
-    plan: (sub.plan as string) ?? null,
-    subStatus: (sub.status as string) ?? null,
-    freeUntil: (sub.free_until as string) ?? null,
-    messageLimit: (sub.message_limit as number) ?? null,
-    repliesUsed: replyUsage.used,
-    extraReplies: replyUsage.extraReplies,
-    repliesAvailable: replyUsage.totalAvailable,
-    repliesRemaining: replyUsage.remaining,
-    aiCostThisMonth,
-    creditBalance: null,
-    creditUsed: null,
-    whatsappOwner: '',
-    whatsappProvider: '',
-    botCount: 0,
-    memberCount: 0,
-  });
+  const planRevenueGbp = monthlyPlanRevenueGbp(
+    {
+      status: c.status as string,
+      plan: (sub.plan as string) ?? null,
+      subStatus: (sub.status as string) ?? null,
+    },
+    priceGbpByPlan,
+  );
+  const addonRevenueGbp = (addons ?? [])
+    .map((addon) => addon as Record<string, unknown>)
+    .filter((x) => x.status === 'active' && ((x.currency as string) ?? 'GBP') === 'GBP')
+    .reduce((sum, x) => sum + Number(x.price_monthly ?? 0), 0);
+  const estimatedRevenueGbp = planRevenueGbp + addonRevenueGbp;
+  const aiCostThisMonthGbp = usdToGbp(aiCostThisMonth);
   const whatsRow = (whatsappSettings.data ?? {}) as Record<string, unknown>;
   const whatsRecipients = Array.isArray(whatsRow.whatsapp_recipients)
     ? whatsRow.whatsapp_recipients
@@ -477,8 +542,11 @@ export async function getCompanyDetail(id: string): Promise<CompanyDetail | null
     replyUsage,
     totalChatMessagesThisMonth: totalChatMessagesThisMonth.count ?? 0,
     aiCostThisMonth,
-    estimatedRevenue,
-    estimatedProfit: estimatedRevenue - aiCostThisMonth,
+    aiCostThisMonthGbp,
+    planRevenueGbp,
+    addonRevenueGbp,
+    estimatedRevenueGbp,
+    estimatedProfitGbp: estimatedRevenueGbp - aiCostThisMonthGbp,
     whatsapp: {
       enabled: Boolean(whatsRow.whatsapp_enabled),
       senderMode:

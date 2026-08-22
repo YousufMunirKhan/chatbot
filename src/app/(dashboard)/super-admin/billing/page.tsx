@@ -10,9 +10,12 @@ import {
 } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { EmptyState } from '@/components/ui/empty-state';
+import { PageHeader } from '@/components/ui/page-header';
 import { requireRole } from '@/lib/auth';
 import { ROLES } from '@/lib/constants';
 import { formatNumber } from '@/lib/format';
+import { gbp, usd } from '@/modules/super-admin/money';
 import { StripePriceForm } from '@/modules/super-admin/components/stripe-price-form';
 import { BillingPlanForm } from '@/modules/super-admin/components/billing-plan-form';
 import {
@@ -21,13 +24,8 @@ import {
   listBillingPlansWithStripe,
 } from '@/modules/super-admin/billing-data';
 
-function gbp(value: number) {
-  return new Intl.NumberFormat('en-GB', {
-    style: 'currency',
-    currency: 'GBP',
-    maximumFractionDigits: 0,
-  }).format(value);
-}
+/** Rows shown in the loss-risk table. Applied here, and stated on the card. */
+const LOSS_RISK_LIMIT = 8;
 
 function lim(value: number | null) {
   return value == null ? 'Unlimited' : formatNumber(value);
@@ -35,26 +33,24 @@ function lim(value: number | null) {
 
 export default async function SuperAdminBillingPage() {
   await requireRole([ROLES.SUPER_ADMIN]);
-  const [plans, plansWithStripe, riskRows] = await Promise.all([
+  const [plans, plansWithStripe, allRiskRows] = await Promise.all([
     listBillingPlans(),
     listBillingPlansWithStripe(),
     getCompanyPlanUsageSummary(),
   ]);
+  const riskRows = allRiskRows.slice(0, LOSS_RISK_LIMIT);
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <h1 className="text-2xl font-semibold">Billing & Plans</h1>
-          <p className="text-sm text-muted-foreground">
-            Customers see packages and message allowances. Super-admin sees Stripe, AI cost, and
-            margin risk.
-          </p>
-        </div>
-        <Button asChild variant="outline">
-          <Link href="/super-admin/settings">Stripe settings</Link>
-        </Button>
-      </div>
+      <PageHeader
+        title="Billing & Plans"
+        description="Customers see packages and message allowances. Super-admin sees Stripe, AI cost, and margin risk."
+        actions={
+          <Button asChild variant="outline">
+            <Link href="/super-admin/settings">Stripe settings</Link>
+          </Button>
+        }
+      />
 
       <div className="grid gap-4 lg:grid-cols-4">
         {plans
@@ -71,7 +67,7 @@ export default async function SuperAdminBillingPage() {
                 <CardDescription>{plan.description}</CardDescription>
               </CardHeader>
               <CardContent className="space-y-2 text-sm">
-                <p className="text-2xl font-semibold">{gbp(plan.priceMonthlyGbp)}/mo</p>
+                <p className="text-2xl font-semibold">{gbp(plan.priceMonthlyGbp, 0)}/mo</p>
                 <Row label="Messages" value={lim(plan.messageLimit)} />
                 <Row label="Assistants" value={lim(plan.botLimit)} />
                 <Row label="Integrations" value={lim(plan.integrationLimit)} />
@@ -169,7 +165,11 @@ export default async function SuperAdminBillingPage() {
           <CardTitle>Loss-risk companies</CardTitle>
           <CardDescription>
             Watch companies where AI cost is eating too much of plan revenue. Move heavy users to
-            Business, Pro, or custom.
+            Business, Pro, or custom. AI cost is invoiced in USD and converted to GBP before it is
+            compared with revenue.
+            {allRiskRows.length > LOSS_RISK_LIMIT
+              ? ` Top ${LOSS_RISK_LIMIT} of ${formatNumber(allRiskRows.length)} companies by AI cost — see Profit / loss for the full list.`
+              : ''}
           </CardDescription>
         </CardHeader>
         <CardContent className="p-0">
@@ -179,24 +179,33 @@ export default async function SuperAdminBillingPage() {
                 <TableHead>Company</TableHead>
                 <TableHead>Plan</TableHead>
                 <TableHead>Messages</TableHead>
-                <TableHead>AI cost</TableHead>
-                <TableHead>Revenue</TableHead>
+                <TableHead>AI cost (USD)</TableHead>
+                <TableHead>AI cost (GBP)</TableHead>
+                <TableHead>Revenue (GBP)</TableHead>
                 <TableHead>Action</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {riskRows.map((row) => (
                 <TableRow key={row.companyId}>
-                  <TableCell className="font-medium">{row.companyName}</TableCell>
+                  <TableCell className="font-medium">
+                    <Link
+                      href={`/super-admin/companies/${row.companyId}`}
+                      className="text-primary hover:underline"
+                    >
+                      {row.companyName}
+                    </Link>
+                  </TableCell>
                   <TableCell>{row.plan ?? '-'}</TableCell>
                   <TableCell>
                     {formatNumber(row.usedMessages)} / {lim(row.messageLimit)}
                   </TableCell>
-                  <TableCell>${row.aiCostUsd.toFixed(2)}</TableCell>
+                  <TableCell>{usd(row.aiCostUsd)}</TableCell>
+                  <TableCell>{gbp(row.aiCostGbp)}</TableCell>
                   <TableCell>{gbp(row.planRevenueGbp)}</TableCell>
                   <TableCell>
                     {row.risk === 'loss' ? (
-                      <Badge variant="destructive">Move to paid/custom</Badge>
+                      <Badge variant="info">Move to paid/custom</Badge>
                     ) : row.risk === 'watch' ? (
                       <Badge variant="warning">Watch margin</Badge>
                     ) : (
@@ -207,8 +216,8 @@ export default async function SuperAdminBillingPage() {
               ))}
               {riskRows.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={6} className="py-8 text-center text-muted-foreground">
-                    No usage risk yet.
+                  <TableCell colSpan={7} className="py-0">
+                    <EmptyState title="No usage risk yet." />
                   </TableCell>
                 </TableRow>
               ) : null}

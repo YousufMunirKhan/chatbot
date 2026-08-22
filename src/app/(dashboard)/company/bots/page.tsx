@@ -4,18 +4,17 @@ import { ROLES } from '@/lib/constants';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent } from '@/components/ui/card';
+import { EmptyState } from '@/components/ui/empty-state';
+import { PageHeader } from '@/components/ui/page-header';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { listBots } from '@/modules/company/data';
 import { formatDate } from '@/lib/format';
-
-function assistantTypeLabel(audience: string) {
-  return audience === 'internal' ? 'Internal Help Desk bot' : 'Customer-facing website bot';
-}
+import { companyLabel } from '@/lib/labels';
 
 function assistantTypeHint(audience: string) {
   return audience === 'internal'
-    ? 'Staff support, software guides, connectors, actions'
-    : 'Website widget, customer chat, leads, bookings, handoff';
+    ? 'Helps your team with how-to questions and looking things up'
+    : 'Answers visitors on your website and takes their details';
 }
 
 export default async function BotsPage() {
@@ -23,16 +22,16 @@ export default async function BotsPage() {
   const bots = await listBots();
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-semibold">Assistants</h1>
-          <p className="text-sm text-muted-foreground">{bots.length} configured</p>
-        </div>
-        <Button asChild>
-          <Link href="/company/bots/new">New assistant</Link>
-        </Button>
-      </div>
+    <div className="mx-auto max-w-6xl space-y-6">
+      <PageHeader
+        title="Assistants"
+        description={`${bots.length} configured`}
+        actions={
+          <Button asChild>
+            <Link href="/company/bots/new">New assistant</Link>
+          </Button>
+        }
+      />
 
       <Card>
         <CardContent className="p-0">
@@ -40,22 +39,25 @@ export default async function BotsPage() {
             <TableHeader>
               <TableRow>
                 <TableHead>Name</TableHead>
-                <TableHead>Assistant</TableHead>
-                <TableHead>Capabilities</TableHead>
-                <TableHead>AI</TableHead>
+                <TableHead>Type</TableHead>
+                <TableHead>What it can help with</TableHead>
+                <TableHead>Replying</TableHead>
                 <TableHead>Created</TableHead>
                 <TableHead></TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {bots.length === 0 ? (
-                <TableRow>
-                  <TableCell colSpan={6} className="py-8 text-center text-muted-foreground">
-                    No assistants yet.{' '}
-                    <Link href="/company/bots/new" className="text-primary hover:underline">
-                      Create one
-                    </Link>
-                    .
+                <TableRow className="hover:bg-transparent">
+                  <TableCell colSpan={6} className="p-0">
+                    <EmptyState
+                      title="No assistants yet."
+                      action={
+                        <Button asChild size="sm">
+                          <Link href="/company/bots/new">Create one</Link>
+                        </Button>
+                      }
+                    />
                   </TableCell>
                 </TableRow>
               ) : (
@@ -67,11 +69,25 @@ export default async function BotsPage() {
                     </TableCell>
                     <TableCell>
                       <Badge variant={b.assistantAudience === 'internal' ? 'warning' : 'secondary'}>
-                        {assistantTypeLabel(b.assistantAudience)}
+                        {companyLabel('assistantAudience', b.assistantAudience)}
                       </Badge>
                     </TableCell>
                     <TableCell>
-                      <Badge variant="secondary">{b.capabilityFlags.length}</Badge>
+                      {/* A bare count told the owner nothing. Name the first two
+                          things it actually does, then count the rest. */}
+                      {b.capabilityFlags.length === 0 ? (
+                        <span className="text-sm text-muted-foreground">Nothing turned on yet</span>
+                      ) : (
+                        <span className="text-sm">
+                          {b.capabilityFlags
+                            .slice(0, 2)
+                            .map((flag) => companyLabel('capability', flag))
+                            .join(', ')}
+                          {b.capabilityFlags.length > 2
+                            ? ` and ${b.capabilityFlags.length - 2} more`
+                            : ''}
+                        </span>
+                      )}
                     </TableCell>
                     <TableCell>{b.aiEnabled ? 'On' : 'Off'}</TableCell>
                     <TableCell className="text-muted-foreground">{formatDate(b.createdAt)}</TableCell>

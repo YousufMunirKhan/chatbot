@@ -240,47 +240,47 @@ export async function getCompanySetupProgress(): Promise<CompanySetupProgress> {
   const steps: SetupStep[] = [
     {
       key: 'purpose',
-      title: 'Assistant purpose',
-      description: 'Choose whether this is for website customers or the internal help desk.',
+      title: 'Choose what it does',
+      description: 'Say whether this one helps customers on your website, or helps your own staff.',
       href: hasAssistant ? '/company/bots' : '/company/bots/new',
       complete: hasAssistant,
-      detail: hasAssistant ? `${bots.length} assistant${bots.length === 1 ? '' : 's'} created` : 'Create the first assistant',
+      detail: hasAssistant ? `${bots.length} assistant${bots.length === 1 ? '' : 's'} created` : 'You have not made one yet',
     },
     {
       key: 'capabilities',
-      title: 'Capabilities',
-      description: 'Select what the assistant can actually do: sales, booking, support, leads, orders, or help desk.',
+      title: 'Pick the jobs it handles',
+      description: 'Tick the things it should do for you: answer questions, take bookings, take details, or take orders.',
       href: hasAssistant ? '/company/bots' : '/company/bots/new',
       complete: hasCapabilities,
-      detail: hasCapabilities ? 'Capabilities selected' : 'Choose what customers should be able to do',
+      detail: hasCapabilities ? 'Jobs picked' : 'Nothing picked yet',
     },
     {
       key: 'required-data',
-      title: 'Required business data',
-      description: 'Add only the facts needed for selected customer journeys: contact details, offers, appointment options, FAQs, policies, products, or files.',
+      title: 'Add your business details',
+      description: 'Give it the facts it needs to answer: how to reach you, what you sell, your opening hours, and your usual answers.',
       href: '/company/business-data',
       complete: hasRequiredData,
       detail: hasRequiredData
-        ? `${businessDataCount} structured item${businessDataCount === 1 ? '' : 's'}, ${docs.length} document${docs.length === 1 ? '' : 's'}`
-        : 'Add the missing business facts',
+        ? `${businessDataCount} thing${businessDataCount === 1 ? '' : 's'} saved, ${docs.length} file${docs.length === 1 ? '' : 's'} uploaded`
+        : 'Some facts are still missing',
     },
     {
       key: 'test',
       // Anchored at the live "Test your assistant" tool. The design preview on
       // this page is a mock, so linking at the page alone left the step untestable.
-      title: 'Test assistant',
-      description: 'Ask real questions before launch and confirm it says “I do not know” when data is missing.',
+      title: 'Try it yourself',
+      description: 'Ask it the questions your customers ask. Check it says it does not know instead of guessing.',
       href: '/company/widget#test-assistant',
       complete: canTest,
-      detail: canTest ? 'Ready — ask a test question' : 'Complete purpose, capabilities, and required data first',
+      detail: canTest ? 'Ready — ask it something' : 'Finish the three steps above first',
     },
     {
       key: 'install',
-      title: 'Install widget',
-      description: 'Add allowed website domains, copy the script, and go live.',
+      title: 'Put it on your website',
+      description: 'Tell us your web address and copy one line of code onto your site. Then it is live for customers.',
       href: '/company/widget',
       complete: widgetInstalled,
-      detail: widgetInstalled ? 'Website domain configured' : 'Add allowed domain and install snippet',
+      detail: widgetInstalled ? 'Your website is connected' : 'Not on your website yet',
     },
   ];
 

@@ -1,10 +1,13 @@
 'use client';
 
 import { useState } from 'react';
-import { useFormState, useFormStatus } from 'react-dom';
+import { useFormState } from 'react-dom';
 import { Button } from '@/components/ui/button';
+import { FormField } from '@/components/ui/form-field';
+import { FormMessage } from '@/components/ui/form-message';
 import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
+import { Select } from '@/components/ui/select';
+import { SubmitButton } from '@/components/ui/submit-button';
 import {
   CHAT_PROVIDERS,
   EMBED_PROVIDERS,
@@ -23,22 +26,13 @@ import {
 } from '../settings-actions';
 
 const initial: SettingsActionState = {};
-const selectCls =
-  'flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring';
 
-function SubmitButton({ label }: { label: string }) {
-  const { pending } = useFormStatus();
-  return (
-    <Button type="submit" disabled={pending}>
-      {pending ? 'Saving...' : label}
-    </Button>
-  );
-}
-
-function Status({ state }: { state: SettingsActionState }) {
-  if (state.error) return <p className="text-sm text-destructive">{state.error}</p>;
-  if (state.ok) return <p className="text-sm text-emerald-600">{state.message ?? 'Saved.'}</p>;
-  return null;
+/**
+ * These actions carry a per-result `message` (e.g. the provider test verdict),
+ * so the success copy is read off the state rather than fixed at the call site.
+ */
+function okText(state: SettingsActionState) {
+  return state.message ?? 'Saved.';
 }
 
 const KEY_FIELDS: Array<{
@@ -100,13 +94,7 @@ function ModelSelect({
 }) {
   const known = [...def.models.latest, ...def.models.older];
   return (
-    <select
-      id={id}
-      name={name}
-      className={selectCls}
-      value={value}
-      onChange={(e) => onChange(e.target.value)}
-    >
+    <Select id={id} name={name} value={value} onChange={(e) => onChange(e.target.value)}>
       {!known.includes(value) ? <option value={value}>{value} (current)</option> : null}
       <optgroup label="Latest">
         {def.models.latest.map((m) => (
@@ -124,7 +112,7 @@ function ModelSelect({
           ))}
         </optgroup>
       ) : null}
-    </select>
+    </Select>
   );
 }
 
@@ -161,12 +149,10 @@ export function AiSettingsForm({ settings }: { settings: PlatformSettingsView['a
     <div className="space-y-6">
       <form action={action} className="space-y-5">
         <div className="grid gap-4 sm:grid-cols-2">
-          <div className="space-y-1.5">
-            <Label htmlFor="chatProvider">Chat provider</Label>
-            <select
+          <FormField label="Chat provider" htmlFor="chatProvider">
+            <Select
               id="chatProvider"
               name="chatProvider"
-              className={selectCls}
               value={chatProvider}
               onChange={(e) => onChatProvider(e.target.value)}
             >
@@ -175,10 +161,9 @@ export function AiSettingsForm({ settings }: { settings: PlatformSettingsView['a
                   {p.label}
                 </option>
               ))}
-            </select>
-          </div>
-          <div className="space-y-1.5">
-            <Label htmlFor="chatModel">Default chat model</Label>
+            </Select>
+          </FormField>
+          <FormField label="Default chat model" htmlFor="chatModel">
             <ModelSelect
               id="chatModel"
               name="chatModel"
@@ -186,9 +171,8 @@ export function AiSettingsForm({ settings }: { settings: PlatformSettingsView['a
               onChange={setChatModel}
               def={chatDef}
             />
-          </div>
-          <div className="space-y-1.5">
-            <Label htmlFor="advancedChatModel">Advanced chat model (hard questions)</Label>
+          </FormField>
+          <FormField label="Advanced chat model (hard questions)" htmlFor="advancedChatModel">
             <ModelSelect
               id="advancedChatModel"
               name="advancedChatModel"
@@ -196,7 +180,7 @@ export function AiSettingsForm({ settings }: { settings: PlatformSettingsView['a
               onChange={setAdvancedModel}
               def={chatDef}
             />
-          </div>
+          </FormField>
         </div>
 
         <div className="rounded-lg border bg-muted/20 p-4">
@@ -206,12 +190,10 @@ export function AiSettingsForm({ settings }: { settings: PlatformSettingsView['a
             “Free built-in search” needs no key.
           </p>
           <div className="grid gap-4 sm:grid-cols-2">
-            <div className="space-y-1.5">
-              <Label htmlFor="embeddingProvider">Embedding provider</Label>
-              <select
+            <FormField label="Embedding provider" htmlFor="embeddingProvider">
+              <Select
                 id="embeddingProvider"
                 name="embeddingProvider"
-                className={selectCls}
                 value={embedProvider}
                 onChange={(e) => onEmbedProvider(e.target.value)}
               >
@@ -220,14 +202,12 @@ export function AiSettingsForm({ settings }: { settings: PlatformSettingsView['a
                     {p.label}
                   </option>
                 ))}
-              </select>
-            </div>
-            <div className="space-y-1.5">
-              <Label htmlFor="embeddingModel">Embedding model</Label>
-              <select
+              </Select>
+            </FormField>
+            <FormField label="Embedding model" htmlFor="embeddingModel">
+              <Select
                 id="embeddingModel"
                 name="embeddingModel"
-                className={selectCls}
                 value={embedModel}
                 onChange={(e) => setEmbedModel(e.target.value)}
                 disabled={embedDef.models.length <= 1}
@@ -240,8 +220,8 @@ export function AiSettingsForm({ settings }: { settings: PlatformSettingsView['a
                     {m}
                   </option>
                 ))}
-              </select>
-            </div>
+              </Select>
+            </FormField>
           </div>
         </div>
 
@@ -255,11 +235,15 @@ export function AiSettingsForm({ settings }: { settings: PlatformSettingsView['a
           </div>
           {activeKey ? (
             <div className="grid gap-4 sm:grid-cols-2">
-              <div className="space-y-1.5">
-                <Label htmlFor={activeKey.field}>
-                  {activeKey.label}
-                  <span className="ml-2 text-xs text-emerald-600">active</span>
-                </Label>
+              <FormField
+                htmlFor={activeKey.field}
+                label={
+                  <>
+                    {activeKey.label}
+                    <span className="ms-2 text-xs text-success-fg">active</span>
+                  </>
+                }
+              >
                 <Input
                   id={activeKey.field}
                   name={activeKey.field}
@@ -268,7 +252,7 @@ export function AiSettingsForm({ settings }: { settings: PlatformSettingsView['a
                     settings[activeKey.hasFlag] ? 'Saved. Leave blank to keep.' : activeKey.placeholder
                   }
                 />
-              </div>
+              </FormField>
             </div>
           ) : null}
           <details className="rounded-md border p-4">
@@ -277,15 +261,14 @@ export function AiSettingsForm({ settings }: { settings: PlatformSettingsView['a
             </summary>
             <div className="mt-4 grid gap-4 sm:grid-cols-2">
               {inactiveKeys.map((k) => (
-                <div key={k.id} className="space-y-1.5">
-                  <Label htmlFor={k.field}>{k.label}</Label>
+                <FormField key={k.id} label={k.label} htmlFor={k.field}>
                   <Input
                     id={k.field}
                     name={k.field}
                     type="password"
                     placeholder={settings[k.hasFlag] ? 'Saved. Leave blank to keep.' : k.placeholder}
                   />
-                </div>
+                </FormField>
               ))}
             </div>
           </details>
@@ -296,12 +279,12 @@ export function AiSettingsForm({ settings }: { settings: PlatformSettingsView['a
           <span className="font-medium">{embedDef.label}</span> for search. One provider at a time —
           no fallback.
         </p>
-        <Status state={state} />
-        <SubmitButton label="Save AI settings" />
+        <FormMessage state={state} okText={okText(state)} />
+        <SubmitButton pendingLabel="Saving...">Save AI settings</SubmitButton>
       </form>
 
       <form action={testAction} className="space-y-2">
-        <Status state={testState} />
+        <FormMessage state={testState} okText={okText(testState)} />
         <Button type="submit" variant="outline">
           Test current AI provider
         </Button>
@@ -319,20 +302,18 @@ export function EmailSettingsForm({ settings }: { settings: PlatformSettingsView
     <div className="space-y-6">
       <form action={action} className="space-y-4">
         <div className="grid gap-4 sm:grid-cols-2">
-          <div className="space-y-1.5">
-            <Label htmlFor="provider">Email provider</Label>
-            <select
+          <FormField label="Email provider" htmlFor="provider">
+            <Select
               id="provider"
               name="provider"
-              className={selectCls}
               value={provider}
               onChange={(event) => setProvider(event.target.value)}
             >
               <option value="disabled">Disabled</option>
               <option value="resend">Resend</option>
               <option value="smtp">SMTP</option>
-            </select>
-          </div>
+            </Select>
+          </FormField>
           {provider !== 'disabled' ? (
             <>
               <label className="flex items-center gap-2 pt-7 text-sm">
@@ -344,8 +325,7 @@ export function EmailSettingsForm({ settings }: { settings: PlatformSettingsView
                 />
                 Email sending enabled
               </label>
-              <div className="space-y-1.5">
-                <Label htmlFor="fromEmail">From email</Label>
+              <FormField label="From email" htmlFor="fromEmail">
                 <Input
                   id="fromEmail"
                   name="fromEmail"
@@ -353,38 +333,33 @@ export function EmailSettingsForm({ settings }: { settings: PlatformSettingsView
                   defaultValue={settings.fromEmail}
                   placeholder="support@example.com"
                 />
-              </div>
-              <div className="space-y-1.5">
-                <Label htmlFor="fromName">From name</Label>
+              </FormField>
+              <FormField label="From name" htmlFor="fromName">
                 <Input id="fromName" name="fromName" defaultValue={settings.fromName} />
-              </div>
-              <div className="space-y-1.5">
-                <Label htmlFor="replyTo">Reply-to email</Label>
+              </FormField>
+              <FormField label="Reply-to email" htmlFor="replyTo">
                 <Input id="replyTo" name="replyTo" type="email" defaultValue={settings.replyTo} />
-              </div>
+              </FormField>
             </>
           ) : null}
           {provider === 'resend' ? (
-            <div className="space-y-1.5">
-              <Label htmlFor="resendApiKey">Resend API key</Label>
+            <FormField label="Resend API key" htmlFor="resendApiKey">
               <Input
                 id="resendApiKey"
                 name="resendApiKey"
                 type="password"
                 placeholder={settings.hasResendKey ? 'Saved. Leave blank to keep.' : 're_...'}
               />
-            </div>
+            </FormField>
           ) : null}
         </div>
 
         {provider === 'smtp' ? (
           <div className="grid gap-4 border-t pt-4 sm:grid-cols-2">
-            <div className="space-y-1.5">
-              <Label htmlFor="smtpHost">SMTP host</Label>
+            <FormField label="SMTP host" htmlFor="smtpHost">
               <Input id="smtpHost" name="smtpHost" defaultValue={settings.smtpHost} />
-            </div>
-            <div className="space-y-1.5">
-              <Label htmlFor="smtpPort">SMTP port</Label>
+            </FormField>
+            <FormField label="SMTP port" htmlFor="smtpPort">
               <Input
                 id="smtpPort"
                 name="smtpPort"
@@ -394,20 +369,18 @@ export function EmailSettingsForm({ settings }: { settings: PlatformSettingsView
                 defaultValue={settings.smtpPort}
                 placeholder="587"
               />
-            </div>
-            <div className="space-y-1.5">
-              <Label htmlFor="smtpUsername">SMTP username</Label>
+            </FormField>
+            <FormField label="SMTP username" htmlFor="smtpUsername">
               <Input id="smtpUsername" name="smtpUsername" defaultValue={settings.smtpUsername} />
-            </div>
-            <div className="space-y-1.5">
-              <Label htmlFor="smtpPassword">SMTP password</Label>
+            </FormField>
+            <FormField label="SMTP password" htmlFor="smtpPassword">
               <Input
                 id="smtpPassword"
                 name="smtpPassword"
                 type="password"
                 placeholder={settings.hasSmtpPassword ? 'Saved. Leave blank to keep.' : ''}
               />
-            </div>
+            </FormField>
             <label className="flex items-center gap-2 text-sm">
               <input
                 type="checkbox"
@@ -419,19 +392,18 @@ export function EmailSettingsForm({ settings }: { settings: PlatformSettingsView
             </label>
           </div>
         ) : null}
-        <Status state={state} />
-        <SubmitButton label="Save email settings" />
+        <FormMessage state={state} okText={okText(state)} />
+        <SubmitButton pendingLabel="Saving...">Save email settings</SubmitButton>
       </form>
 
       <form action={testAction} className="flex flex-wrap items-end gap-3">
-        <div className="min-w-64 flex-1 space-y-1.5">
-          <Label htmlFor="testEmail">Send test email</Label>
+        <FormField label="Send test email" htmlFor="testEmail" className="min-w-64 flex-1">
           <Input id="testEmail" name="testEmail" type="email" placeholder="you@example.com" />
-        </div>
+        </FormField>
         <Button type="submit" variant="outline">
           Send test
         </Button>
-        <Status state={testState} />
+        <FormMessage state={testState} okText={okText(testState)} />
       </form>
     </div>
   );
@@ -444,29 +416,26 @@ export function RealtimeSettingsForm({ settings }: { settings: PlatformSettingsV
   return (
     <form action={action} className="space-y-4">
       <div className="grid gap-4 sm:grid-cols-2">
-        <div className="space-y-1.5">
-          <Label htmlFor="provider">Realtime provider</Label>
-          <select
+        <FormField label="Realtime provider" htmlFor="provider">
+          <Select
             id="provider"
             name="provider"
-            className={selectCls}
             value={provider}
             onChange={(e) => setProvider(e.target.value)}
           >
             <option value="supabase">Supabase Realtime</option>
             <option value="custom_websocket">Advanced: Custom WebSocket</option>
-          </select>
-        </div>
+          </Select>
+        </FormField>
         {provider === 'custom_websocket' ? (
-          <div className="space-y-1.5">
-            <Label htmlFor="customWsUrl">Custom WebSocket URL</Label>
+          <FormField label="Custom WebSocket URL" htmlFor="customWsUrl">
             <Input
               id="customWsUrl"
               name="customWsUrl"
               defaultValue={settings.customWsUrl}
               placeholder="wss://chat.example.com"
             />
-          </div>
+          </FormField>
         ) : null}
       </div>
       <p className="text-xs text-muted-foreground">
@@ -474,8 +443,8 @@ export function RealtimeSettingsForm({ settings }: { settings: PlatformSettingsV
           ? 'Use this only after deploying a separate high-scale socket service.'
           : 'Supabase Realtime is the active no-polling chat transport.'}
       </p>
-      <Status state={state} />
-      <SubmitButton label="Save realtime settings" />
+      <FormMessage state={state} okText={okText(state)} />
+      <SubmitButton pendingLabel="Saving...">Save realtime settings</SubmitButton>
     </form>
   );
 }
@@ -500,41 +469,38 @@ export function StripeSettingsForm({ settings }: { settings: PlatformSettingsVie
         </span>
       </label>
       <div className="grid gap-4 sm:grid-cols-3">
-        <div className="space-y-1.5">
-          <Label htmlFor="publishableKey">Publishable key</Label>
+        <FormField label="Publishable key" htmlFor="publishableKey">
           <Input
             id="publishableKey"
             name="publishableKey"
             defaultValue={settings.publishableKey}
             placeholder="pk_live_..."
           />
-        </div>
-        <div className="space-y-1.5">
-          <Label htmlFor="secretKey">Secret key</Label>
+        </FormField>
+        <FormField label="Secret key" htmlFor="secretKey">
           <Input
             id="secretKey"
             name="secretKey"
             type="password"
             placeholder={settings.hasSecretKey ? 'Saved. Leave blank to keep.' : 'sk_live_...'}
           />
-        </div>
-        <div className="space-y-1.5">
-          <Label htmlFor="webhookSecret">Webhook secret</Label>
+        </FormField>
+        <FormField label="Webhook secret" htmlFor="webhookSecret">
           <Input
             id="webhookSecret"
             name="webhookSecret"
             type="password"
             placeholder={settings.hasWebhookSecret ? 'Saved. Leave blank to keep.' : 'whsec_...'}
           />
-        </div>
+        </FormField>
       </div>
       <p className="text-xs text-muted-foreground">
         Add your webhook endpoint in Stripe as{' '}
         <span className="font-mono">/api/webhooks/stripe</span>. In production, webhook signature
         verification must be enabled with the webhook secret.
       </p>
-      <Status state={state} />
-      <SubmitButton label="Save Stripe settings" />
+      <FormMessage state={state} okText={okText(state)} />
+      <SubmitButton pendingLabel="Saving...">Save Stripe settings</SubmitButton>
     </form>
   );
 }

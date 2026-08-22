@@ -4,6 +4,9 @@ import { ROLES } from '@/lib/constants';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { EmptyState } from '@/components/ui/empty-state';
+import { PageHeader } from '@/components/ui/page-header';
+import { Select } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { formatDate } from '@/lib/format';
 import { listLeadsPaged } from '@/modules/company/leads-data';
@@ -15,9 +18,6 @@ import { RefreshOnFocus } from '@/components/refresh-on-focus';
 type BadgeVariant = 'default' | 'secondary' | 'success' | 'warning' | 'destructive' | 'outline';
 
 const LEAD_STATUSES = ['new', 'contacted', 'qualified', 'converted', 'closed'] as const;
-
-const selectCls =
-  'flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring';
 
 function statusVariant(status: string): BadgeVariant {
   if (status === 'new') return 'default';
@@ -44,19 +44,17 @@ export default async function LeadsPage({
   const filtered = Boolean(search) || status !== 'all';
 
   return (
-    <div className="space-y-6">
+    <div className="mx-auto max-w-6xl space-y-6">
       <RefreshOnFocus />
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <h1 className="text-2xl font-semibold">Leads</h1>
-          <p className="text-sm text-muted-foreground">
-            Leads captured by your assistant or added manually.
-          </p>
-        </div>
-        <Button asChild variant="outline">
-          <a href="/api/company/leads/export">Export CSV</a>
-        </Button>
-      </div>
+      <PageHeader
+        title="Leads"
+        description="Leads captured by your assistant or added manually."
+        actions={
+          <Button asChild variant="outline">
+            <a href="/api/company/leads/export">Export CSV</a>
+          </Button>
+        }
+      />
 
       <Card id="add-lead">
         <CardHeader>
@@ -81,28 +79,31 @@ export default async function LeadsPage({
         <CardContent className="p-0">
           {leads.length === 0 && filtered ? (
             // Module 1 — a filter is hiding everything, so offer the way back.
-            <div className="space-y-3 p-6">
-              <p className="text-sm font-medium">No leads match your filters</p>
-              <p className="text-sm text-muted-foreground">
-                Nothing matches {search ? <>&ldquo;{search}&rdquo;</> : 'this search'}
-                {status !== 'all' ? ` with status ${status}` : ''}. Try a different term or start over.
-              </p>
-              <Button asChild size="sm" variant="outline">
-                <Link href="/company/leads">Clear filters</Link>
-              </Button>
-            </div>
+            <EmptyState
+              title="No leads match your filters"
+              body={
+                <>
+                  Nothing matches {search ? <>&ldquo;{search}&rdquo;</> : 'this search'}
+                  {status !== 'all' ? ` with status ${status}` : ''}. Try a different term or start over.
+                </>
+              }
+              action={
+                <Button asChild size="sm" variant="outline">
+                  <Link href="/company/leads">Clear filters</Link>
+                </Button>
+              }
+            />
           ) : leads.length === 0 ? (
             // Module 2 — genuinely no leads yet.
-            <div className="space-y-3 p-6">
-              <p className="text-sm font-medium">No leads yet</p>
-              <p className="max-w-xl text-sm text-muted-foreground">
-                When a visitor leaves their name and contact details in chat, they show up here. You can also add
-                someone you spoke to by phone.
-              </p>
-              <Button asChild size="sm">
-                <a href="#add-lead">Add a lead</a>
-              </Button>
-            </div>
+            <EmptyState
+              title="No leads yet"
+              body="When a visitor leaves their name and contact details in chat, they show up here. You can also add someone you spoke to by phone."
+              action={
+                <Button asChild size="sm">
+                  <a href="#add-lead">Add a lead</a>
+                </Button>
+              }
+            />
           ) : (
             <Table>
               <TableHeader>
@@ -130,13 +131,13 @@ export default async function LeadsPage({
                     <TableCell>
                       <form action={updateLeadStatusAction} className="flex items-center gap-2">
                         <input type="hidden" name="leadId" value={lead.id} />
-                        <select name="status" defaultValue={lead.status} className={selectCls}>
+                        <Select name="status" size="sm" defaultValue={lead.status} aria-label="Lead status">
                           {LEAD_STATUSES.map((s) => (
                             <option key={s} value={s}>
                               {s}
                             </option>
                           ))}
-                        </select>
+                        </Select>
                         <Button type="submit" variant="outline" size="sm">
                           Update
                         </Button>

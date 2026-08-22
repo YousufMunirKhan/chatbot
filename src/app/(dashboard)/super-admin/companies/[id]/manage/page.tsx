@@ -1,23 +1,20 @@
+import { requireRole } from '@/lib/auth';
+import { ROLES } from '@/lib/constants';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { EmptyState } from '@/components/ui/empty-state';
+import { PageHeader } from '@/components/ui/page-header';
+import { StatTile } from '@/components/ui/stat-tile';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { getCompanyDetail } from '@/modules/super-admin/data';
 
-function Stat({ label, value }: { label: string; value: number }) {
-  return (
-    <Card>
-      <CardContent className="p-4">
-        <p className="text-xs uppercase tracking-wider text-muted-foreground">{label}</p>
-        <p className="mt-1 text-2xl font-semibold">{value}</p>
-      </CardContent>
-    </Card>
-  );
-}
-
 export default async function SuperAdminCompanyManagePage({ params }: { params: { id: string } }) {
+  // Defence in depth: the /super-admin layout already guards this subtree, but a
+  // platform-operator surface should not rely on a single ancestor check.
+  await requireRole([ROLES.SUPER_ADMIN]);
   const company = await getCompanyDetail(params.id);
   if (!company) notFound();
   const counts = company.counts ?? {
@@ -31,21 +28,19 @@ export default async function SuperAdminCompanyManagePage({ params }: { params: 
 
   return (
     <div className="space-y-6">
-      <div>
-        <Link href={`/super-admin/companies/${company.id}`} className="text-sm text-muted-foreground hover:underline">
-          Back to company
-        </Link>
-        <h1 className="mt-2 text-2xl font-semibold">{company.name} management</h1>
-        <p className="text-sm text-muted-foreground">Platform view of the setup a company admin normally manages.</p>
-      </div>
+      <PageHeader
+        backTo={{ href: `/super-admin/companies/${company.id}`, label: 'Back to company' }}
+        title={`${company.name} management`}
+        description="Platform view of the setup a company admin normally manages."
+      />
 
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-6">
-        <Stat label="Knowledge" value={counts.documents} />
-        <Stat label="Quick actions" value={counts.quickActions} />
-        <Stat label="Leads" value={counts.leads} />
-        <Stat label="Appointments" value={counts.appointments} />
-        <Stat label="Integrations" value={counts.integrations} />
-        <Stat label="Quality issues" value={counts.qualityIssues} />
+        <StatTile label="Knowledge" value={counts.documents} />
+        <StatTile label="Quick actions" value={counts.quickActions} />
+        <StatTile label="Leads" value={counts.leads} />
+        <StatTile label="Appointments" value={counts.appointments} />
+        <StatTile label="Integrations" value={counts.integrations} />
+        <StatTile label="Quality issues" value={counts.qualityIssues} />
       </div>
 
       <Card>
@@ -75,7 +70,9 @@ export default async function SuperAdminCompanyManagePage({ params }: { params: 
               ))}
               {company.bots.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={4} className="py-8 text-center text-muted-foreground">No assistants yet.</TableCell>
+                  <TableCell colSpan={4} className="py-0">
+                    <EmptyState title="No assistants yet." />
+                  </TableCell>
                 </TableRow>
               ) : null}
             </TableBody>

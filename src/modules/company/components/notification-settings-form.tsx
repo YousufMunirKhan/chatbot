@@ -11,10 +11,10 @@ import {
   type CompanyNotificationSettingsView,
 } from '../notification-settings';
 import { DELIVERY_CHANNELS, NOTIFICATION_EVENTS } from '../notification-options';
+import { FormField } from '@/components/ui/form-field';
+import { Select } from '@/components/ui/select';
 
 const initial: NotificationSettingsActionState = {};
-const selectCls =
-  'flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring';
 
 function SubmitButton() {
   const { pending } = useFormStatus();
@@ -48,62 +48,50 @@ export function NotificationSettingsForm({ settings }: { settings: CompanyNotifi
             <input type="checkbox" name="emailEnabled" defaultChecked={settings.emailEnabled} className="h-4 w-4" />
             Send email notifications
           </label>
-          <div className="space-y-1.5">
-            <Label htmlFor="emailSenderMode">Sender mode</Label>
-            <select id="emailSenderMode" name="emailSenderMode" className={selectCls} defaultValue={settings.emailSenderMode}>
+          <FormField label="Sender mode" htmlFor="emailSenderMode">
+            <Select name="emailSenderMode" defaultValue={settings.emailSenderMode}>
               <option value="platform">Use platform sender</option>
               <option value="company_smtp">Use company SMTP</option>
-            </select>
-          </div>
-          <div className="space-y-1.5">
-            <Label htmlFor="emailTo">To recipients</Label>
-            <Textarea id="emailTo" name="emailTo" rows={3} defaultValue={settings.emailTo.join('\n')} placeholder="owner@example.com" />
-          </div>
-          <div className="space-y-1.5">
-            <Label htmlFor="emailCc">CC recipients</Label>
-            <Textarea id="emailCc" name="emailCc" rows={3} defaultValue={settings.emailCc.join('\n')} placeholder="manager@example.com" />
-          </div>
-          <div className="space-y-1.5">
-            <Label htmlFor="emailBcc">BCC recipients</Label>
-            <Textarea id="emailBcc" name="emailBcc" rows={3} defaultValue={settings.emailBcc.join('\n')} />
-          </div>
-          <div className="space-y-1.5">
-            <Label htmlFor="emailReplyTo">Reply-to email</Label>
-            <Input id="emailReplyTo" name="emailReplyTo" type="email" defaultValue={settings.emailReplyTo} />
-          </div>
+            </Select>
+          </FormField>
+          <FormField label="To recipients" htmlFor="emailTo">
+            <Textarea name="emailTo" rows={3} defaultValue={settings.emailTo.join('\n')} placeholder="owner@example.com" />
+          </FormField>
+          <FormField label="CC recipients" htmlFor="emailCc">
+            <Textarea name="emailCc" rows={3} defaultValue={settings.emailCc.join('\n')} placeholder="manager@example.com" />
+          </FormField>
+          <FormField label="BCC recipients" htmlFor="emailBcc">
+            <Textarea name="emailBcc" rows={3} defaultValue={settings.emailBcc.join('\n')} />
+          </FormField>
+          <FormField label="Reply-to email" htmlFor="emailReplyTo">
+            <Input name="emailReplyTo" type="email" defaultValue={settings.emailReplyTo} />
+          </FormField>
         </div>
         <details className="rounded-md border p-4">
           <summary className="cursor-pointer text-sm font-medium">Company SMTP details</summary>
           <div className="mt-4 grid gap-4 sm:grid-cols-2">
-            <div className="space-y-1.5">
-              <Label htmlFor="smtpFromEmail">From email</Label>
-              <Input id="smtpFromEmail" name="smtpFromEmail" type="email" defaultValue={settings.smtpFromEmail} />
-            </div>
-            <div className="space-y-1.5">
-              <Label htmlFor="smtpFromName">From name</Label>
-              <Input id="smtpFromName" name="smtpFromName" defaultValue={settings.smtpFromName} />
-            </div>
-            <div className="space-y-1.5">
-              <Label htmlFor="smtpHost">SMTP host</Label>
-              <Input id="smtpHost" name="smtpHost" defaultValue={settings.smtpHost} />
-            </div>
-            <div className="space-y-1.5">
-              <Label htmlFor="smtpPort">SMTP port</Label>
-              <Input id="smtpPort" name="smtpPort" inputMode="numeric" defaultValue={settings.smtpPort} />
-            </div>
-            <div className="space-y-1.5">
-              <Label htmlFor="smtpUsername">SMTP username</Label>
-              <Input id="smtpUsername" name="smtpUsername" defaultValue={settings.smtpUsername} />
-            </div>
-            <div className="space-y-1.5">
-              <Label htmlFor="smtpPassword">SMTP password</Label>
+            <FormField label="From email" htmlFor="smtpFromEmail">
+              <Input name="smtpFromEmail" type="email" defaultValue={settings.smtpFromEmail} />
+            </FormField>
+            <FormField label="From name" htmlFor="smtpFromName">
+              <Input name="smtpFromName" defaultValue={settings.smtpFromName} />
+            </FormField>
+            <FormField label="SMTP host" htmlFor="smtpHost">
+              <Input name="smtpHost" defaultValue={settings.smtpHost} />
+            </FormField>
+            <FormField label="SMTP port" htmlFor="smtpPort">
+              <Input name="smtpPort" inputMode="numeric" defaultValue={settings.smtpPort} />
+            </FormField>
+            <FormField label="SMTP username" htmlFor="smtpUsername">
+              <Input name="smtpUsername" defaultValue={settings.smtpUsername} />
+            </FormField>
+            <FormField label="SMTP password" htmlFor="smtpPassword">
               <Input
-                id="smtpPassword"
                 name="smtpPassword"
                 type="password"
                 placeholder={settings.hasSmtpPassword ? 'Saved. Leave blank to keep.' : ''}
               />
-            </div>
+            </FormField>
             <label className="flex items-center gap-2 rounded-md border p-3 text-sm">
               <input type="checkbox" name="smtpSecure" defaultChecked={settings.smtpSecure} className="h-4 w-4" />
               Use secure SMTP connection
@@ -125,87 +113,70 @@ export function NotificationSettingsForm({ settings }: { settings: CompanyNotifi
             <input type="checkbox" name="whatsappEnabled" defaultChecked={settings.whatsappEnabled} className="h-4 w-4" />
             Send WhatsApp notifications
           </label>
-          <div className="space-y-1.5">
-            <Label htmlFor="whatsappSenderMode">Sender owner</Label>
-            <select
-              id="whatsappSenderMode"
+          <FormField label="Sender owner" htmlFor="whatsappSenderMode">
+            <Select
               name="whatsappSenderMode"
-              className={selectCls}
               defaultValue={settings.whatsappSenderMode}
             >
               <option value="company">Company-managed sender</option>
               <option value="platform_managed">Platform-managed sender (support add-on)</option>
-            </select>
-          </div>
-          <div className="space-y-1.5">
-            <Label htmlFor="whatsappProvider">WhatsApp provider</Label>
-            <select
-              id="whatsappProvider"
+            </Select>
+          </FormField>
+          <FormField label="WhatsApp provider" htmlFor="whatsappProvider">
+            <Select
               name="whatsappProvider"
-              className={selectCls}
               defaultValue={settings.whatsappProvider}
             >
               <option value="disabled">Disabled</option>
               <option value="meta_cloud">Meta Cloud API</option>
               <option value="twilio">Twilio WhatsApp</option>
-            </select>
-          </div>
-          <div className="space-y-1.5 sm:col-span-2">
-            <Label htmlFor="whatsappRecipients">WhatsApp recipient numbers</Label>
+            </Select>
+          </FormField>
+          <FormField label="WhatsApp recipient numbers" htmlFor="whatsappRecipients" className="sm:col-span-2">
             <Textarea
-              id="whatsappRecipients"
               name="whatsappRecipients"
               rows={3}
               defaultValue={settings.whatsappRecipients.join('\n')}
               placeholder="+447700900123"
             />
-          </div>
+          </FormField>
           <div className="rounded-md border p-4 sm:col-span-2">
             <h3 className="text-sm font-semibold">Meta Cloud API credentials</h3>
             <div className="mt-4 grid gap-4 sm:grid-cols-2">
-              <div className="space-y-1.5">
-                <Label htmlFor="metaPhoneNumberId">Phone number ID</Label>
-                <Input id="metaPhoneNumberId" name="metaPhoneNumberId" defaultValue={settings.metaPhoneNumberId} />
-              </div>
-              <div className="space-y-1.5">
-                <Label htmlFor="metaAccessToken">Access token</Label>
+              <FormField label="Phone number ID" htmlFor="metaPhoneNumberId">
+                <Input name="metaPhoneNumberId" defaultValue={settings.metaPhoneNumberId} />
+              </FormField>
+              <FormField label="Access token" htmlFor="metaAccessToken">
                 <Input
-                  id="metaAccessToken"
                   name="metaAccessToken"
                   type="password"
                   placeholder={settings.hasMetaAccessToken ? 'Saved. Leave blank to keep.' : ''}
                 />
-              </div>
-              <div className="space-y-1.5">
-                <Label htmlFor="metaTemplateName">Template name</Label>
-                <Input id="metaTemplateName" name="metaTemplateName" defaultValue={settings.metaTemplateName} placeholder="lead_alert" />
-              </div>
-              <div className="space-y-1.5">
-                <Label htmlFor="metaTemplateLanguage">Template language</Label>
-                <Input id="metaTemplateLanguage" name="metaTemplateLanguage" defaultValue={settings.metaTemplateLanguage} placeholder="en_GB" />
-              </div>
+              </FormField>
+              <FormField label="Template name" htmlFor="metaTemplateName">
+                <Input name="metaTemplateName" defaultValue={settings.metaTemplateName} placeholder="lead_alert" />
+              </FormField>
+              <FormField label="Template language" htmlFor="metaTemplateLanguage">
+                <Input name="metaTemplateLanguage" defaultValue={settings.metaTemplateLanguage} placeholder="en_GB" />
+              </FormField>
             </div>
           </div>
           <div className="rounded-md border p-4 sm:col-span-2">
             <h3 className="text-sm font-semibold">Twilio WhatsApp credentials</h3>
             <div className="mt-4 grid gap-4 sm:grid-cols-2">
-              <div className="space-y-1.5">
-                <Label htmlFor="twilioAccountSid">Account SID</Label>
-                <Input id="twilioAccountSid" name="twilioAccountSid" defaultValue={settings.twilioAccountSid} />
-              </div>
-              <div className="space-y-1.5">
-                <Label htmlFor="twilioAuthToken">Auth token</Label>
+              <FormField label="Account SID" htmlFor="twilioAccountSid">
+                <Input name="twilioAccountSid" defaultValue={settings.twilioAccountSid} />
+              </FormField>
+              <FormField label="Auth token" htmlFor="twilioAuthToken">
                 <Input
-                  id="twilioAuthToken"
                   name="twilioAuthToken"
                   type="password"
                   placeholder={settings.hasTwilioAuthToken ? 'Saved. Leave blank to keep.' : ''}
                 />
-              </div>
-              <div className="space-y-1.5">
-                <Label htmlFor="twilioWhatsappFrom">WhatsApp from number</Label>
-                <Input id="twilioWhatsappFrom" name="twilioWhatsappFrom" defaultValue={settings.twilioWhatsappFrom} placeholder="+14155238886" />
-              </div>
+              </FormField>
+              <FormField label="WhatsApp from number" htmlFor="twilioWhatsappFrom">
+                <Input name="twilioWhatsappFrom" defaultValue={settings.twilioWhatsappFrom} placeholder="+14155238886" />
+              </FormField>
             </div>
           </div>
         </div>
@@ -242,37 +213,31 @@ export function NotificationSettingsForm({ settings }: { settings: CompanyNotifi
             <input type="checkbox" name="slackEnabled" defaultChecked={settings.slackEnabled} className="h-4 w-4" />
             Send Slack notifications (legacy)
           </label>
-          <div className="space-y-1.5">
-            <Label htmlFor="slackWebhookUrl">Slack incoming webhook</Label>
+          <FormField label="Slack incoming webhook" htmlFor="slackWebhookUrl">
             <Input
-              id="slackWebhookUrl"
               name="slackWebhookUrl"
               type="url"
               placeholder={settings.hasSlackWebhook ? 'Saved. Leave blank to keep.' : 'https://hooks.slack.com/...'}
             />
-          </div>
+          </FormField>
           <label className="flex items-center gap-2 rounded-md border p-3 text-sm">
             <input type="checkbox" name="webhookEnabled" defaultChecked={settings.webhookEnabled} className="h-4 w-4" />
             Send generic webhook (legacy)
           </label>
-          <div className="space-y-1.5">
-            <Label htmlFor="genericWebhookUrl">Webhook URL</Label>
+          <FormField label="Webhook URL" htmlFor="genericWebhookUrl">
             <Input
-              id="genericWebhookUrl"
               name="genericWebhookUrl"
               type="url"
               placeholder={settings.hasGenericWebhookUrl ? 'Saved. Leave blank to keep.' : 'https://example.com/webhook'}
             />
-          </div>
-          <div className="space-y-1.5 sm:col-span-2">
-            <Label htmlFor="genericWebhookSecret">Webhook signing secret</Label>
+          </FormField>
+          <FormField label="Webhook signing secret" htmlFor="genericWebhookSecret" className="sm:col-span-2">
             <Input
-              id="genericWebhookSecret"
               name="genericWebhookSecret"
               type="password"
               placeholder={settings.hasGenericWebhookSecret ? 'Saved. Leave blank to keep.' : 'Optional'}
             />
-          </div>
+          </FormField>
         </div>
       </section>
 

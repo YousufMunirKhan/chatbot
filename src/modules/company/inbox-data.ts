@@ -8,6 +8,9 @@ import { getCompanyId } from './data';
  * `companyId` so company admins and agents can only ever read their own
  * company's conversations. Uses the service-role client (bypasses RLS) — tenant
  * scoping is enforced in code.
+ *
+ * The list is a queue, so the row carries what an agent needs to triage without
+ * opening it: who it is from, what they last said, and whose queue it is in.
  */
 
 export interface ConversationRow {
@@ -27,6 +30,16 @@ export interface ConversationRow {
   priority: string;
   tags: string[];
   state: Record<string, unknown>;
+  /** First ~120 characters of the most recent message. */
+  lastMessagePreview: string | null;
+  /** 'visitor' | 'ai' | 'agent' | 'system' — who wrote the preview. */
+  lastMessageSender: string | null;
+  /** Resolved name of the agent this is assigned to. Never a bare "Assigned". */
+  assignedAgentName: string | null;
+  /** Captured lead name for this conversation, when one exists. */
+  leadName: string | null;
+  /** Captured email or phone, used when there is no name. */
+  leadContact: string | null;
 }
 
 export interface InboxMessage {
@@ -60,14 +73,57 @@ export interface ConversationDetail {
   closedAt: string | null;
   aiEnabled: boolean;
   assignedAgentId: string | null;
+  assignedAgentName: string | null;
   priority: string;
   tags: string[];
   state: Record<string, unknown>;
   csatRating: number | null;
   csatComment: string | null;
+  leadName: string | null;
+  leadContact: string | null;
   messages: InboxMessage[];
+  /** True when older messages exist above the loaded window. */
+  hasEarlierMessages: boolean;
+  /** Total messages in the thread, so the UI can say what it is hiding. */
+  totalMessages: number;
   notes: InternalNote[];
   cannedResponses: CannedResponse[];
+}
+
+const CONVERSATION_COLUMNS =
+  'id,status,channel,language,visitor_id,unread_count,started_at,last_message_at,closed_at,ai_enabled,assigned_agent_id,first_agent_reply_at,csat_rating,priority,tags,state_json';
+
+export const INBOX_PAGE_SIZE = 25;
+export const DEFAULT_MESSAGE_WINDOW = 50;
+
+/**
+ * `everything` rather than `all` on purpose: the queue travels in the URL as the
+ * shared `status` param, and the shared Pagination control drops `status=all` as
+ * a no-op — which would silently bounce the agent back to the default queue.
+ */
+export type InboxQueue = 'waiting' | 'mine' | 'everything' | 'urgent' | 'poor' | 'closed';
+
+export const INBOX_QUEUES: ReadonlyArray<{ key: InboxQueue; label: string }> = [
+  { key: 'waiting', label: 'Waiting for you' },
+  { key: 'mine', label: 'Assigned to me' },
+  { key: 'everything', label: 'Everything' },
+  { key: 'urgent', label: 'Urgent' },
+  { key: 'poor', label: 'Rated poorly' },
+  { key: 'closed', label: 'Closed' },
+];
+
+export type InboxQueueCounts = Record<InboxQueue, number>;
+
+export interface ConversationPage {
+  rows: ConversationRow[];
+  total: number;
+  page: number;
+  pageCount: number;
+  pageSize: number;
+}
+
+export function normalizeQueue(value: string | undefined): InboxQueue {
+  return INBOX_QUEUES.some((q) => q.key === value) ? (value as InboxQueue) : 'waiting';
 }
 
 export async function listCannedResponses(): Promise<CannedResponse[]> {
@@ -85,37 +141,286 @@ export async function listCannedResponses(): Promise<CannedResponse[]> {
   });
 }
 
+function mapConversationRow(row: unknown): ConversationRow {
+  const c = row as Record<string, unknown>;
+  return {
+    id: c.id as string,
+    status: c.status as string,
+    channel: c.channel as string,
+    language: (c.language as string) ?? null,
+    visitorId: (c.visitor_id as string) ?? null,
+    unreadCount: (c.unread_count as number) ?? 0,
+    startedAt: (c.started_at as string) ?? null,
+    lastMessageAt: (c.last_message_at as string) ?? null,
+    closedAt: (c.closed_at as string) ?? null,
+    aiEnabled: Boolean(c.ai_enabled),
+    assignedAgentId: (c.assigned_agent_id as string) ?? null,
+    firstAgentReplyAt: (c.first_agent_reply_at as string) ?? null,
+    csatRating: (c.csat_rating as number) ?? null,
+    priority: (c.priority as string) ?? 'normal',
+    tags: (c.tags as string[]) ?? [],
+    state: c.state_json && typeof c.state_json === 'object' ? (c.state_json as Record<string, unknown>) : {},
+    lastMessagePreview: null,
+    lastMessageSender: null,
+    assignedAgentName: null,
+    leadName: null,
+    leadContact: null,
+  };
+}
+
+/** Trims a raw message body down to something that fits two lines in a queue row. */
+export function messagePreview(content: string, max = 120): string {
+  const flat = content
+    .replace(/^#{1,6}\s+/gm, '')
+    .replace(/[*_`>]/g, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+  return flat.length > max ? `${flat.slice(0, max - 1).trimEnd()}…` : flat;
+}
+
+/**
+ * Fills in the three things the row needs but the conversations table does not
+ * hold: the last message, the assigned agent's name, and any captured lead.
+ *
+ * The last message is fetched one conversation at a time. A single `in(...)`
+ * query cannot be trusted here — one busy thread would swallow the whole row
+ * budget and the other rows would come back blank — and with a page of 25 these
+ * are 25 parallel single-row lookups on `idx_messages_conversation_created_desc`.
+ */
+async function enrichConversations(companyId: string, rows: ConversationRow[]): Promise<ConversationRow[]> {
+  if (rows.length === 0) return rows;
+  const sb = createSupabaseServiceClient();
+  const ids = rows.map((r) => r.id);
+  const agentIds = [...new Set(rows.map((r) => r.assignedAgentId).filter((id): id is string => Boolean(id)))];
+
+  const [lastMessages, leadsRes, agentsRes] = await Promise.all([
+    Promise.all(
+      ids.map(async (id) => {
+        const { data } = await sb
+          .from('messages')
+          .select('conversation_id,sender_type,content_text')
+          .eq('company_id', companyId)
+          .eq('conversation_id', id)
+          .order('created_at', { ascending: false })
+          .limit(1)
+          .maybeSingle();
+        return data as Record<string, unknown> | null;
+      }),
+    ),
+    sb
+      .from('leads')
+      .select('conversation_id,name,email,phone,created_at')
+      .eq('company_id', companyId)
+      .in('conversation_id', ids)
+      .order('created_at', { ascending: false }),
+    agentIds.length
+      ? sb.from('users').select('id,full_name,email').in('id', agentIds)
+      : Promise.resolve({ data: [] as unknown[] }),
+  ]);
+
+  const previewById = new Map<string, { preview: string; sender: string }>();
+  for (const message of lastMessages) {
+    if (!message) continue;
+    previewById.set(message.conversation_id as string, {
+      preview: messagePreview((message.content_text as string) ?? ''),
+      sender: (message.sender_type as string) ?? 'visitor',
+    });
+  }
+
+  // Rows arrive newest-first, so the first lead seen for a conversation wins.
+  const leadById = new Map<string, { name: string | null; contact: string | null }>();
+  for (const row of (leadsRes.data ?? []) as Array<Record<string, unknown>>) {
+    const key = row.conversation_id as string;
+    if (!key || leadById.has(key)) continue;
+    leadById.set(key, {
+      name: ((row.name as string) ?? '').trim() || null,
+      contact: ((row.email as string) ?? (row.phone as string) ?? '').trim() || null,
+    });
+  }
+
+  const agentById = new Map<string, string>();
+  for (const row of (agentsRes.data ?? []) as Array<Record<string, unknown>>) {
+    agentById.set(row.id as string, ((row.full_name as string) || (row.email as string) || 'Agent') as string);
+  }
+
+  return rows.map((row) => {
+    const message = previewById.get(row.id);
+    const lead = leadById.get(row.id);
+    return {
+      ...row,
+      lastMessagePreview: message?.preview ?? null,
+      lastMessageSender: message?.sender ?? null,
+      assignedAgentName: row.assignedAgentId ? agentById.get(row.assignedAgentId) ?? 'Agent' : null,
+      leadName: lead?.name ?? null,
+      leadContact: lead?.contact ?? null,
+    };
+  });
+}
+
+/**
+ * Who the conversation is with, in order of usefulness: the captured lead name,
+ * then their email or phone, then an anonymous visitor with a short, muted
+ * suffix. A raw UUID slice is never the primary identifier.
+ */
+export function conversationDisplayName(
+  c: Pick<ConversationRow, 'leadName' | 'leadContact' | 'visitorId'>,
+): { label: string; suffix: string | null } {
+  if (c.leadName) return { label: c.leadName, suffix: null };
+  if (c.leadContact) return { label: c.leadContact, suffix: null };
+  const raw = (c.visitorId ?? '').replace(/^staff:/, '');
+  const suffix = raw ? raw.replace(/[^a-zA-Z0-9]/g, '').slice(0, 4).toLowerCase() : '';
+  return { label: 'Visitor', suffix: suffix || null };
+}
+
+/**
+ * Unpaged read used by the SLA summary. Capped, and deliberately not enriched —
+ * callers that render rows should use {@link listConversationsPaged}.
+ */
 export async function listConversations(): Promise<ConversationRow[]> {
   const companyId = await getCompanyId();
   const sb = createSupabaseServiceClient();
   const { data, error } = await sb
     .from('conversations')
-    .select('id,status,channel,language,visitor_id,unread_count,started_at,last_message_at,closed_at,ai_enabled,assigned_agent_id,first_agent_reply_at,csat_rating,priority,tags,state_json')
+    .select(CONVERSATION_COLUMNS)
     .eq('company_id', companyId)
     .order('last_message_at', { ascending: false })
-    .limit(100);
+    .limit(500);
   if (error) throw error;
-  return (data ?? []).map((row) => {
-    const c = row as Record<string, unknown>;
-    return {
-      id: c.id as string,
-      status: c.status as string,
-      channel: c.channel as string,
-      language: (c.language as string) ?? null,
-      visitorId: (c.visitor_id as string) ?? null,
-      unreadCount: (c.unread_count as number) ?? 0,
-      startedAt: (c.started_at as string) ?? null,
-      lastMessageAt: (c.last_message_at as string) ?? null,
-      closedAt: (c.closed_at as string) ?? null,
-      aiEnabled: Boolean(c.ai_enabled),
-      assignedAgentId: (c.assigned_agent_id as string) ?? null,
-      firstAgentReplyAt: (c.first_agent_reply_at as string) ?? null,
-      csatRating: (c.csat_rating as number) ?? null,
-      priority: (c.priority as string) ?? 'normal',
-      tags: (c.tags as string[]) ?? [],
-      state: c.state_json && typeof c.state_json === 'object' ? (c.state_json as Record<string, unknown>) : {},
-    };
-  });
+  return (data ?? []).map(mapConversationRow);
+}
+
+/** Conversation ids whose visitor, captured lead, or message text match `search`. */
+async function searchConversationIds(companyId: string, search: string): Promise<string[]> {
+  const sb = createSupabaseServiceClient();
+  // `,` `(` `)` are PostgREST's logical-tree separators and would break the
+  // `or(...)` filter below; `%` `*` `\` are wildcards a searcher never means
+  // literally. Strip them rather than trying to escape inside a raw filter
+  // string, so a search for "smith, jane" degrades to a plain substring match.
+  const term = search.replace(/[,()%*\\]/g, ' ').replace(/\s+/g, ' ').trim();
+  if (!term) return [];
+  const pattern = `%${term}%`;
+
+  const [visitorRes, leadsRes, messagesRes] = await Promise.all([
+    sb.from('conversations').select('id').eq('company_id', companyId).ilike('visitor_id', pattern).limit(200),
+    sb
+      .from('leads')
+      .select('conversation_id')
+      .eq('company_id', companyId)
+      .not('conversation_id', 'is', null)
+      .or(`name.ilike.${pattern},email.ilike.${pattern},phone.ilike.${pattern}`)
+      .limit(200),
+    sb
+      .from('messages')
+      .select('conversation_id')
+      .eq('company_id', companyId)
+      .ilike('content_text', pattern)
+      .order('created_at', { ascending: false })
+      .limit(400),
+  ]);
+
+  const ids = new Set<string>();
+  for (const row of (visitorRes.data ?? []) as Array<Record<string, unknown>>) ids.add(row.id as string);
+  for (const row of (leadsRes.data ?? []) as Array<Record<string, unknown>>) ids.add(row.conversation_id as string);
+  for (const row of (messagesRes.data ?? []) as Array<Record<string, unknown>>) ids.add(row.conversation_id as string);
+  return [...ids].slice(0, 500);
+}
+
+interface QueueScope {
+  companyId: string;
+  queue: InboxQueue;
+  userId: string | null;
+  ids?: string[];
+}
+
+/**
+ * One place where a queue turns into filters, shared by the list query and the
+ * count query so the rail can never disagree with the list beneath it.
+ */
+function queueQuery(scope: QueueScope, options: { head: boolean }) {
+  const sb = createSupabaseServiceClient();
+  let query = sb
+    .from('conversations')
+    .select(CONVERSATION_COLUMNS, { count: 'exact', head: options.head })
+    .eq('company_id', scope.companyId);
+
+  if (scope.ids) query = query.in('id', scope.ids);
+
+  switch (scope.queue) {
+    case 'waiting':
+      query = query.eq('status', 'needs_human');
+      break;
+    case 'mine':
+      // No signed-in user id means no personal queue; match nothing rather than
+      // quietly falling back to everyone's work.
+      query = query
+        .eq('assigned_agent_id', scope.userId ?? '00000000-0000-0000-0000-000000000000')
+        .not('status', 'in', '(closed,expired)');
+      break;
+    case 'urgent':
+      query = query.eq('priority', 'urgent').not('status', 'in', '(closed,expired)');
+      break;
+    case 'poor':
+      query = query.lte('csat_rating', 2).not('csat_rating', 'is', null);
+      break;
+    case 'closed':
+      query = query.eq('status', 'closed');
+      break;
+    case 'everything':
+    default:
+      break;
+  }
+  return query;
+}
+
+export async function getInboxQueueCounts(): Promise<InboxQueueCounts> {
+  const [companyId, user] = await Promise.all([getCompanyId(), getSessionUser()]);
+  const scope = { companyId, userId: user?.userId ?? null };
+
+  const entries = await Promise.all(
+    INBOX_QUEUES.map(async ({ key }) => {
+      const { count, error } = await queueQuery({ ...scope, queue: key }, { head: true });
+      if (error) throw error;
+      return [key, count ?? 0] as const;
+    }),
+  );
+  return Object.fromEntries(entries) as InboxQueueCounts;
+}
+
+export async function listConversationsPaged(options?: {
+  page?: number;
+  queue?: InboxQueue;
+  search?: string;
+  pageSize?: number;
+}): Promise<ConversationPage> {
+  const pageSize = options?.pageSize ?? INBOX_PAGE_SIZE;
+  const queue = options?.queue ?? 'waiting';
+  const search = options?.search?.trim();
+  const [companyId, user] = await Promise.all([getCompanyId(), getSessionUser()]);
+
+  let ids: string[] | undefined;
+  if (search) {
+    ids = await searchConversationIds(companyId, search);
+    if (ids.length === 0) {
+      return { rows: [], total: 0, page: 1, pageCount: 1, pageSize };
+    }
+  }
+
+  const scope: QueueScope = { companyId, queue, userId: user?.userId ?? null, ids };
+  const { count: totalCount, error: countError } = await queueQuery(scope, { head: true });
+  if (countError) throw countError;
+
+  const total = totalCount ?? 0;
+  const pageCount = Math.max(1, Math.ceil(total / pageSize));
+  const page = Math.min(Math.max(1, options?.page ?? 1), pageCount);
+  const from = (page - 1) * pageSize;
+
+  const { data, error } = await queueQuery(scope, { head: false })
+    .order('last_message_at', { ascending: false })
+    .range(from, from + pageSize - 1);
+  if (error) throw error;
+
+  const rows = await enrichConversations(companyId, (data ?? []).map(mapConversationRow));
+  return { rows, total, page, pageCount, pageSize };
 }
 
 /** Average CSAT (1–5) and response count across the loaded conversations. */
@@ -171,11 +476,18 @@ export function summarizeInboxSla(conversations: ConversationRow[], slaMinutes =
   };
 }
 
-export async function getConversationDetail(id: string): Promise<ConversationDetail | null> {
+export async function getConversationDetail(
+  id: string,
+  options?: { messageLimit?: number },
+): Promise<ConversationDetail | null> {
   const user = await getSessionUser();
   if (!user?.companyId) return null;
   const companyId = user.companyId;
   const sb = createSupabaseServiceClient();
+  // Unbounded before: a 400-message thread rendered 400 DOM nodes into a scroll
+  // box on every navigation. The newest `messageLimit` are loaded and the page
+  // offers a "Load earlier" control for the rest.
+  const messageLimit = Math.max(10, Math.min(options?.messageLimit ?? DEFAULT_MESSAGE_WINDOW, 1000));
 
   const { data: convo, error } = await sb
     .from('conversations')
@@ -188,20 +500,44 @@ export async function getConversationDetail(id: string): Promise<ConversationDet
 
   const c = convo as Record<string, unknown>;
   if ((c.company_id as string) !== companyId) return null;
+  const assignedAgentId = (c.assigned_agent_id as string) ?? null;
 
-  const [{ data: messages, error: mErr }, { data: noteRows }, cannedResponses] = await Promise.all([
+  const [
+    { data: messageRows, error: mErr },
+    { count: messageCount },
+    { data: noteRows },
+    { data: leadRows },
+    { data: agentRow },
+    cannedResponses,
+  ] = await Promise.all([
     sb
       .from('messages')
       .select('id,sender_type,content_text,created_at')
       .eq('company_id', companyId)
       .eq('conversation_id', id)
-      .order('created_at', { ascending: true }),
+      .order('created_at', { ascending: false })
+      .limit(messageLimit),
+    sb
+      .from('messages')
+      .select('id', { count: 'exact', head: true })
+      .eq('company_id', companyId)
+      .eq('conversation_id', id),
     sb
       .from('conversation_internal_notes')
       .select('id,note,created_at,users(full_name,email)')
       .eq('company_id', companyId)
       .eq('conversation_id', id)
       .order('created_at', { ascending: true }),
+    sb
+      .from('leads')
+      .select('name,email,phone')
+      .eq('company_id', companyId)
+      .eq('conversation_id', id)
+      .order('created_at', { ascending: false })
+      .limit(1),
+    assignedAgentId
+      ? sb.from('users').select('full_name,email').eq('id', assignedAgentId).maybeSingle()
+      : Promise.resolve({ data: null }),
     listCannedResponses(),
   ]);
   if (mErr) throw mErr;
@@ -217,6 +553,10 @@ export async function getConversationDetail(id: string): Promise<ConversationDet
     };
   });
 
+  const lead = (leadRows ?? [])[0] as Record<string, unknown> | undefined;
+  const agent = agentRow as Record<string, unknown> | null;
+  const totalMessages = messageCount ?? (messageRows ?? []).length;
+
   return {
     id: c.id as string,
     status: c.status as string,
@@ -227,21 +567,30 @@ export async function getConversationDetail(id: string): Promise<ConversationDet
     lastMessageAt: (c.last_message_at as string) ?? null,
     closedAt: (c.closed_at as string) ?? null,
     aiEnabled: Boolean(c.ai_enabled),
-    assignedAgentId: (c.assigned_agent_id as string) ?? null,
+    assignedAgentId,
+    assignedAgentName: agent ? ((agent.full_name as string) || (agent.email as string) || 'Agent') : null,
     priority: (c.priority as string) ?? 'normal',
     tags: (c.tags as string[]) ?? [],
     state: c.state_json && typeof c.state_json === 'object' ? (c.state_json as Record<string, unknown>) : {},
     csatRating: (c.csat_rating as number) ?? null,
     csatComment: (c.csat_comment as string) ?? null,
-    messages: (messages ?? []).map((m) => {
-      const x = m as Record<string, unknown>;
-      return {
-        id: x.id as string,
-        senderType: x.sender_type as string,
-        content: (x.content_text as string) ?? '',
-        createdAt: x.created_at as string,
-      };
-    }),
+    leadName: ((lead?.name as string) ?? '').trim() || null,
+    leadContact: (((lead?.email as string) ?? (lead?.phone as string)) ?? '').trim() || null,
+    // Fetched newest-first so the limit keeps the RECENT end of the thread;
+    // reversed here so the transcript still reads oldest → newest.
+    messages: (messageRows ?? [])
+      .map((m) => {
+        const x = m as Record<string, unknown>;
+        return {
+          id: x.id as string,
+          senderType: x.sender_type as string,
+          content: (x.content_text as string) ?? '',
+          createdAt: x.created_at as string,
+        };
+      })
+      .reverse(),
+    hasEarlierMessages: totalMessages > (messageRows ?? []).length,
+    totalMessages,
     notes,
     cannedResponses,
   };

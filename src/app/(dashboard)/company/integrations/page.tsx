@@ -4,7 +4,10 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { EmptyState } from '@/components/ui/empty-state';
 import { InfoBanner } from '@/components/info-banner';
+import { PageHeader } from '@/components/ui/page-header';
+import { StatTile } from '@/components/ui/stat-tile';
 import { formatDate, formatNumber } from '@/lib/format';
 import {
   catalogCounts,
@@ -45,13 +48,11 @@ export default async function CompanyIntegrationsPage() {
   ];
 
   return (
-    <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-semibold">Integrations &amp; Sync</h1>
-        <p className="text-sm text-muted-foreground">
-          Connect WordPress/WooCommerce, Shopify, Custom API, Google Calendar, or CSV so the assistant can answer from current business data.
-        </p>
-      </div>
+    <div className="mx-auto max-w-6xl space-y-6">
+      <PageHeader
+        title={<>Integrations &amp; Sync</>}
+        description="Connect WordPress/WooCommerce, Shopify, Custom API, Google Calendar, or CSV so the assistant can answer from current business data."
+      />
 
       <InfoBanner>
         Connected integrations are synced automatically every hour via the cron endpoint. Use
@@ -84,12 +85,7 @@ export default async function CompanyIntegrationsPage() {
 
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         {stats.map((s) => (
-          <Card key={s.label}>
-            <CardContent className="p-4">
-              <p className="text-xs uppercase tracking-wider text-muted-foreground">{s.label}</p>
-              <p className="mt-1 text-2xl font-semibold">{formatNumber(s.value)}</p>
-            </CardContent>
-          </Card>
+          <StatTile key={s.label} label={s.label} value={formatNumber(s.value)} />
         ))}
       </div>
 
@@ -124,15 +120,15 @@ export default async function CompanyIntegrationsPage() {
         <CardContent className="p-0">
           {integrations.length === 0 ? (
             // Module 1 — the connect form is on this page, so link straight to it.
-            <div className="space-y-3 px-6 pb-6">
-              <p className="max-w-2xl text-sm text-muted-foreground">
-                Nothing connected yet. Link your store, calendar, or custom API and the assistant answers from
-                live prices, stock, and orders instead of a copy you have to keep updating.
-              </p>
-              <Button asChild size="sm">
-                <a href="#connect-integration">Connect an integration</a>
-              </Button>
-            </div>
+            <EmptyState
+              title="Nothing connected yet."
+              body="Link your store, calendar, or custom API and the assistant answers from live prices, stock, and orders instead of a copy you have to keep updating."
+              action={
+                <Button asChild size="sm">
+                  <a href="#connect-integration">Connect an integration</a>
+                </Button>
+              }
+            />
           ) : (
             <Table>
               <TableHeader>
@@ -184,10 +180,10 @@ export default async function CompanyIntegrationsPage() {
         <CardContent className="p-0">
           {jobs.length === 0 ? (
             // Module 2 — a log, not a task: explain what fills it, no button.
-            <p className="max-w-2xl px-6 pb-6 text-sm text-muted-foreground">
-              No sync jobs yet. Each hourly sync, on-demand resync, and CSV import is logged here so you can see
-              what was pulled in and what failed.
-            </p>
+            <EmptyState
+              title="No sync jobs yet."
+              body="Each hourly sync, on-demand resync, and CSV import is logged here so you can see what was pulled in and what failed."
+            />
           ) : (
             <Table>
               <TableHeader>

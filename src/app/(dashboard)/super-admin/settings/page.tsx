@@ -1,4 +1,6 @@
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { EmptyState } from '@/components/ui/empty-state';
+import { PageHeader } from '@/components/ui/page-header';
 import { requireRole } from '@/lib/auth';
 import { ROLES } from '@/lib/constants';
 import {
@@ -15,12 +17,10 @@ export default async function SuperAdminSettingsPage() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-semibold">Platform Settings</h1>
-        <p className="text-sm text-muted-foreground">
-          Runtime AI keys, model defaults, and email delivery settings for the whole project.
-        </p>
-      </div>
+      <PageHeader
+        title="Platform Settings"
+        description="Runtime AI keys, model defaults, and email delivery settings for the whole project."
+      />
 
       <Card>
         <CardHeader>
@@ -97,7 +97,7 @@ export default async function SuperAdminSettingsPage() {
               ))}
             </div>
           ) : (
-            <p className="text-sm text-muted-foreground">No setting events yet.</p>
+            <EmptyState title="No setting events yet." />
           )}
         </CardContent>
       </Card>

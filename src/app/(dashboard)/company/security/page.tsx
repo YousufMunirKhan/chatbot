@@ -1,6 +1,8 @@
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { EmptyState } from '@/components/ui/empty-state';
+import { PageHeader } from '@/components/ui/page-header';
 import { requireRole } from '@/lib/auth';
 import { ROLES } from '@/lib/constants';
 import { formatDate } from '@/lib/format';
@@ -12,11 +14,11 @@ export default async function CompanySecurityPage() {
   const settings = await getMySecuritySettings();
 
   return (
-    <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-semibold">Security</h1>
-        <p className="text-sm text-muted-foreground">Optional 2FA and your recent security activity.</p>
-      </div>
+    <div className="mx-auto max-w-6xl space-y-6">
+      <PageHeader
+        title="Security"
+        description="Optional 2FA and your recent security activity."
+      />
 
       <Card>
         <CardHeader>
@@ -51,7 +53,7 @@ export default async function CompanySecurityPage() {
               </div>
             ))
           ) : (
-            <p className="text-sm text-muted-foreground">No security activity yet.</p>
+            <EmptyState title="No security activity yet." />
           )}
         </CardContent>
       </Card>

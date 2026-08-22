@@ -1,5 +1,6 @@
 import Link from 'next/link';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { PageHeader } from '@/components/ui/page-header';
 import { requireRole } from '@/lib/auth';
 import { ROLES } from '@/lib/constants';
 import { PlatformNotificationsForm } from '@/modules/super-admin/components/platform-notifications-form';
@@ -11,13 +12,10 @@ export default async function SuperAdminNotificationsPage() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-semibold">Notification Delivery</h1>
-        <p className="text-sm text-muted-foreground">
-          Platform-level WhatsApp provider and defaults. Company recipients and event rules are
-          managed inside each company notification center.
-        </p>
-      </div>
+      <PageHeader
+        title="Notification Delivery"
+        description="Platform-level WhatsApp provider and defaults. Company recipients and event rules are managed inside each company notification center."
+      />
 
       <Card>
         <CardHeader>

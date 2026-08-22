@@ -1,72 +1,56 @@
 'use client';
 
-import { useFormState, useFormStatus } from 'react-dom';
-import { Button } from '@/components/ui/button';
+import { useFormState } from 'react-dom';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Select } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
+import { FormField } from '@/components/ui/form-field';
+import { FormMessage } from '@/components/ui/form-message';
+import { SubmitButton } from '@/components/ui/submit-button';
 import { addEvalQuestionAction, type ActionState } from '../eval-actions';
 
 const initial: ActionState = {};
-const selectCls =
-  'flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring';
-
-function Save() {
-  const { pending } = useFormStatus();
-  return (
-    <Button type="submit" disabled={pending}>
-      {pending ? 'Adding…' : 'Add question'}
-    </Button>
-  );
-}
 
 export function EvalForm({ bots }: { bots: { id: string; name: string }[] }) {
   const [state, action] = useFormState(addEvalQuestionAction, initial);
 
   return (
     <form action={action} className="space-y-4">
-      <div className="space-y-1.5">
-        <Label htmlFor="question">Question *</Label>
-        <Textarea id="question" name="question" required minLength={3} placeholder="What are your business hours?" />
-      </div>
+      <FormField label="Question" htmlFor="question" required>
+        <Textarea name="question" required minLength={3} placeholder="What are your business hours?" />
+      </FormField>
       <div className="grid gap-4 sm:grid-cols-2">
-        <div className="space-y-1.5">
-          <Label htmlFor="botId">Assistant</Label>
-          <select id="botId" name="botId" className={selectCls} defaultValue="">
+        <FormField label="Assistant" htmlFor="botId">
+          <Select name="botId" defaultValue="">
             <option value="">All assistants</option>
             {bots.map((b) => (
               <option key={b.id} value={b.id}>
                 {b.name}
               </option>
             ))}
-          </select>
-        </div>
-        <div className="space-y-1.5">
-          <Label htmlFor="language">Language</Label>
-          <select id="language" name="language" className={selectCls} defaultValue="en">
+          </Select>
+        </FormField>
+        <FormField label="Language" htmlFor="language">
+          <Select name="language" defaultValue="en">
             <option value="en">English</option>
             <option value="ar">Arabic</option>
-          </select>
-        </div>
-        <div className="space-y-1.5">
-          <Label htmlFor="expectedSource">Expected source</Label>
-          <Input id="expectedSource" name="expectedSource" placeholder="e.g. FAQ document" />
-        </div>
+          </Select>
+        </FormField>
+        <FormField label="Expected source" htmlFor="expectedSource">
+          <Input name="expectedSource" placeholder="e.g. FAQ document" />
+        </FormField>
       </div>
       <div className="flex items-center gap-2">
-        <input
-          id="mustNotAnswer"
-          name="mustNotAnswer"
-          type="checkbox"
-          className="h-4 w-4 rounded border-input"
-        />
+        {/* Checkbox-then-label rows are not `FormField` (which puts the label
+            above the control); they keep the repo's one checkbox class. */}
+        <input id="mustNotAnswer" name="mustNotAnswer" type="checkbox" className="h-4 w-4" />
         <Label htmlFor="mustNotAnswer" className="font-normal">
           Must not answer if no context is found
         </Label>
       </div>
-      {state.error ? <p className="text-sm text-destructive">{state.error}</p> : null}
-      {state.ok ? <p className="text-sm text-emerald-600">Question added.</p> : null}
-      <Save />
+      <FormMessage state={state} okText="Question added." />
+      <SubmitButton pendingLabel="Adding…">Add question</SubmitButton>
     </form>
   );
 }

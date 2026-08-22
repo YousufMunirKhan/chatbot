@@ -4,6 +4,9 @@ import { ROLES } from '@/lib/constants';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent } from '@/components/ui/card';
+import { EmptyState } from '@/components/ui/empty-state';
+import { PageHeader } from '@/components/ui/page-header';
+import { Select } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { formatDate } from '@/lib/format';
 import { listAppointmentsPaged } from '@/modules/company/appointments-data';
@@ -14,9 +17,6 @@ import { RefreshOnFocus } from '@/components/refresh-on-focus';
 type BadgeVariant = 'default' | 'secondary' | 'success' | 'warning' | 'destructive' | 'outline';
 
 const APPOINTMENT_STATUSES = ['requested', 'confirmed', 'cancelled', 'completed', 'no_show'] as const;
-
-const selectCls =
-  'flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring';
 
 function statusVariant(status: string): BadgeVariant {
   if (status === 'requested') return 'default';
@@ -49,14 +49,12 @@ export default async function AppointmentsPage({
   const filtered = Boolean(search) || status !== 'all';
 
   return (
-    <div className="space-y-6">
+    <div className="mx-auto max-w-6xl space-y-6">
       <RefreshOnFocus />
-      <div>
-        <h1 className="text-2xl font-semibold">Appointments</h1>
-        <p className="text-sm text-muted-foreground">
-          Booking and appointment requests from your assistant.
-        </p>
-      </div>
+      <PageHeader
+        title="Appointments"
+        description="Booking and appointment requests from your assistant."
+      />
 
       <div className="px-1">
         <ListFilters
@@ -72,29 +70,37 @@ export default async function AppointmentsPage({
         <CardContent className="p-0">
           {appointments.length === 0 && filtered ? (
             // Module 1 — a filter is hiding everything, so offer the way back.
-            <div className="space-y-3 p-6">
-              <p className="text-sm font-medium">No appointments match your filters</p>
-              <p className="text-sm text-muted-foreground">
-                Nothing matches {search ? <>&ldquo;{search}&rdquo;</> : 'this search'}
-                {status !== 'all' ? ` with status ${status.replace(/_/g, ' ')}` : ''}. Try a different term or start
-                over.
-              </p>
-              <Button asChild size="sm" variant="outline">
-                <Link href="/company/appointments">Clear filters</Link>
-              </Button>
-            </div>
+            <EmptyState
+              title="No appointments match your filters"
+              body={
+                <>
+                  Nothing matches {search ? <>&ldquo;{search}&rdquo;</> : 'this search'}
+                  {status !== 'all' ? ` with status ${status.replace(/_/g, ' ')}` : ''}. Try a different term or start
+                  over.
+                </>
+              }
+              action={
+                <Button asChild size="sm" variant="outline">
+                  <Link href="/company/appointments">Clear filters</Link>
+                </Button>
+              }
+            />
           ) : appointments.length === 0 ? (
             // Module 2 — no requests yet; bookings start with a bookable service.
-            <div className="space-y-3 p-6">
-              <p className="text-sm font-medium">No appointment requests yet</p>
-              <p className="max-w-xl text-sm text-muted-foreground">
-                Mark a service as bookable and the assistant can take requests in chat, with the customer&rsquo;s
-                preferred day and time.
-              </p>
-              <Button asChild size="sm">
-                <Link href="/company/business-data?tab=services">Set up a bookable service</Link>
-              </Button>
-            </div>
+            <EmptyState
+              title="No appointment requests yet"
+              body={
+                <>
+                  Mark a service as bookable and the assistant can take requests in chat, with the customer&rsquo;s
+                  preferred day and time.
+                </>
+              }
+              action={
+                <Button asChild size="sm">
+                  <Link href="/company/business-data?tab=services">Set up a bookable service</Link>
+                </Button>
+              }
+            />
           ) : (
             <Table>
               <TableHeader>
@@ -125,13 +131,13 @@ export default async function AppointmentsPage({
                     <TableCell>
                       <form action={setAppointmentStatusAction} className="flex items-center gap-2">
                         <input type="hidden" name="appointmentId" value={appt.id} />
-                        <select name="status" defaultValue={appt.status} className={selectCls}>
+                        <Select name="status" size="sm" defaultValue={appt.status} aria-label="Appointment status">
                           {APPOINTMENT_STATUSES.map((s) => (
                             <option key={s} value={s}>
                               {s.replace(/_/g, ' ')}
                             </option>
                           ))}
-                        </select>
+                        </Select>
                         <Button type="submit" variant="outline" size="sm">
                           Update
                         </Button>

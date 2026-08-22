@@ -8,104 +8,106 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { BOT_TYPES } from '@/lib/constants';
+import { companyLabel } from '@/lib/labels';
 import type { ActionState } from '../actions';
 import type { BotRow } from '../data';
+import { FormField } from '@/components/ui/form-field';
+import { Select } from '@/components/ui/select';
 
 const initial: ActionState = {};
-const selectCls =
-  'flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring';
 
-const BOT_TYPE_LABELS: Record<string, string> = {
-  help_desk: 'Support-focused',
-  sales_agent: 'Sales-focused',
-  hybrid_business_assistant: 'Website assistant',
-  informational: 'Information-only',
-  custom: 'Custom',
-};
-
+/**
+ * What each option gives the customer.
+ *
+ * These descriptions used to list *implementation prerequisites* — "Connected
+ * catalogue or uploaded product CSV/API", "Write permission, confirmation,
+ * audit trail". A shop owner deciding whether to tick a box needs to know what
+ * they get, not what the engineer needs. Missing prerequisites are already
+ * reported, in context, by the readiness checks on the Setup page.
+ */
 const CUSTOMER_CAPABILITIES = [
   {
     key: 'sales_agent',
-    label: 'Recommend products/services',
-    data: 'Services, products, prices, best sellers, benefits',
+    label: 'Recommend products and services',
+    data: 'Suggests the right thing for what the customer describes, and explains why it suits them.',
   },
   {
     key: 'appointment_booking',
-    label: 'Book appointments',
-    data: 'Business hours, service area, booking rules, contact fields',
+    label: 'Take bookings',
+    data: 'Offers the times you are open and books the customer in without you being there.',
   },
   {
     key: 'lead_capture',
-    label: 'Capture leads',
-    data: 'Lead questions, contact fields, handoff rules',
+    label: 'Collect enquiries',
+    data: 'Gets the name and contact details of interested visitors so you can follow up.',
   },
   {
     key: 'help_desk',
     label: 'Answer support questions',
-    data: 'Policies, FAQs, delivery/returns/support information',
+    data: 'Handles the questions you answer every day: delivery, returns, opening hours, policies.',
   },
   {
     key: 'product_stock_assistant',
-    label: 'Answer product, price, and stock',
-    data: 'Connected catalogue or uploaded product CSV/API',
+    label: 'Answer price and stock questions',
+    data: 'Gives current prices and tells customers when something is out of stock.',
   },
   {
     key: 'order_tracking',
-    label: 'Track customer orders',
-    data: 'Order integration and identity check rules',
+    label: 'Track orders',
+    data: 'Tells a customer where their order is, once they have confirmed who they are.',
   },
   {
     key: 'order_placement',
-    label: 'Create customer orders',
-    data: 'Catalogue, stock, order confirmation and fulfilment rules',
+    label: 'Place orders',
+    data: 'Takes an order from start to finish and confirms it back to the customer.',
   },
   {
     key: 'human_agent_takeover',
-    label: 'Hand off to human',
-    data: 'When to pause AI and notify the team',
+    label: 'Pass the chat to a person',
+    data: 'Stops answering and alerts your team when a customer needs a real person.',
   },
   {
     key: 'live_chat',
-    label: 'Allow live chat takeover',
-    data: 'Team members and inbox coverage',
+    label: 'Let your team reply live',
+    data: 'Your team can step into any conversation and type back themselves.',
   },
 ] as const;
 
 const INTERNAL_CAPABILITIES = [
   {
     key: 'internal_process_guide',
-    label: 'Answer company/project how-to',
-    data: 'Internal SOPs, project docs, admin guide, process notes, screenshots',
+    label: 'Explain how your business does things',
+    data: 'Answers "how do I do this" for your staff, so they stop asking you the same things.',
   },
   {
     key: 'internal_products_read',
-    label: 'Search products/prices',
-    data: 'Product catalogue integration or CSV',
+    label: 'Look up products and prices',
+    data: 'Your team can ask what something costs instead of digging through the system.',
   },
   {
     key: 'internal_stock_read',
-    label: 'Check stock',
-    data: 'Inventory sync with quantity/location',
+    label: 'Check stock levels',
+    data: 'Tells your team how many are left and where they are.',
   },
   {
     key: 'internal_stock_update',
-    label: 'Update stock safely',
-    data: 'Write permission, confirmation, audit trail',
+    label: 'Update stock, with confirmation',
+    data: 'Changes stock numbers for your team, but always asks them to confirm first.',
   },
   {
     key: 'internal_orders_read',
     label: 'Find orders',
-    data: 'Order integration and fulfilment status',
+    data: 'Pulls up an order and its progress while your team is on the phone.',
   },
   {
     key: 'internal_customers_read',
-    label: 'Find customers',
-    data: 'Customer records with privacy rules',
+    label: 'Find customer records',
+    data: 'Brings up a customer’s history, following the privacy rules you set.',
   },
   {
     key: 'internal_leads_read',
-    label: 'Review leads/bookings',
-    data: 'Lead and appointment capture enabled',
+    label: 'Review enquiries and bookings',
+    data: 'Shows your team what came in today and what still needs following up.',
   },
 ] as const;
 
@@ -173,7 +175,7 @@ export function BotForm({
       <section className="space-y-4">
         <div className="space-y-3">
           <h2 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground">
-            Assistant audience
+            Who is it for
           </h2>
           <div className="grid gap-3 sm:grid-cols-2">
             <label className="flex cursor-pointer gap-3 rounded-md border p-4 text-sm">
@@ -186,9 +188,10 @@ export function BotForm({
                 className="mt-1 h-4 w-4"
               />
               <span>
-                <span className="block font-medium">Customer-facing website assistant</span>
+                <span className="block font-medium">Your customers</span>
                 <span className="mt-1 block text-muted-foreground">
-                  For website visitors: sales, support, booking, leads, orders, and human handoff.
+                  Goes on your website. Answers questions, takes enquiries and bookings, and passes
+                  the chat to a person when it needs to.
                 </span>
               </span>
             </label>
@@ -202,10 +205,10 @@ export function BotForm({
                 className="mt-1 h-4 w-4"
               />
               <span>
-                <span className="block font-medium">Internal help desk assistant</span>
+                <span className="block font-medium">Your team</span>
                 <span className="mt-1 block text-muted-foreground">
-                  For staff: answer company how-to questions, search products, check stock, review
-                  records, and prepare safe updates.
+                  Stays inside your business. Answers your staff’s how-to questions and looks things
+                  up in your shop system for them.
                 </span>
               </span>
             </label>
@@ -213,73 +216,65 @@ export function BotForm({
         </div>
 
         <div className="grid gap-4 sm:grid-cols-2">
-          <div className="space-y-1.5">
-            <Label htmlFor="name">Assistant name *</Label>
+          <FormField label="Assistant name *" htmlFor="name">
             <Input
-              id="name"
               name="name"
               required
               defaultValue={bot?.name ?? assistantNameFallback}
               placeholder={assistantNameFallback}
             />
-          </div>
+          </FormField>
           {assistantAudience === 'internal' ? (
             <div className="space-y-1.5">
               <input type="hidden" name="botType" value="help_desk" />
               <Label>Type</Label>
               <div className="rounded-md border bg-muted/30 px-3 py-2 text-sm font-medium">
-                Internal help desk
+                Staff assistant
               </div>
               <p className="text-xs text-muted-foreground">
-                Uses connector docs, approved internal knowledge, and staff-only safety rules.
+                Answers from what you have approved, and never from anything your customers can see.
               </p>
             </div>
           ) : (
-            <div className="space-y-1.5">
-              <Label htmlFor="botType">Type</Label>
-              <select
+            <FormField label="Type" htmlFor="botType">
+              <Select
                 key="customer-bot-type"
-                id="botType"
                 name="botType"
-                className={selectCls}
                 defaultValue={customerBotType}
               >
                 {BOT_TYPES.filter((t) => t !== 'help_desk').map((t) => (
                   <option key={t} value={t}>
-                    {BOT_TYPE_LABELS[t] ?? t}
+                    {companyLabel('botType', t)}
                   </option>
                 ))}
-              </select>
+              </Select>
               <p className="text-xs text-muted-foreground">
-                This controls the base style; capabilities below decide what it can actually do.
+                This sets its general style. What it can help with is up to you, below.
               </p>
-            </div>
+            </FormField>
           )}
-          <div className="space-y-1.5">
-            <Label htmlFor="languageDefault">Default language</Label>
-            <select
-              id="languageDefault"
+          <FormField label="Default language" htmlFor="languageDefault">
+            <Select
               name="languageDefault"
-              className={selectCls}
               defaultValue={bot?.languageDefault ?? 'auto'}
             >
               <option value="auto">Auto-detect</option>
               <option value="en">English</option>
               <option value="ar">Arabic</option>
-            </select>
-          </div>
+            </Select>
+          </FormField>
         </div>
       </section>
 
       <section className="space-y-3">
         <h2 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground">
-          Capabilities
+          What it can help with
         </h2>
         {isNewCustomerBot ? (
           <p className="text-sm text-muted-foreground">
-            Your first assistant starts with support answers, because that only needs the FAQs and
-            policies you already have. Turn the others on when you are ready — each one asks for its
-            own business data before it can go live.
+            Your first assistant starts with support answers, because that only needs the questions
+            and policies you already have. Turn the others on when you are ready — each one asks you
+            for a few business details first.
           </p>
         ) : null}
         <div className="grid gap-2 sm:grid-cols-2">
@@ -304,20 +299,23 @@ export function BotForm({
           ))}
         </div>
         <div className="rounded-md border bg-muted/30 p-3 text-sm text-muted-foreground">
-          <p className="font-medium text-foreground">Data needed for selected journey</p>
+          <p className="font-medium text-foreground">What you need to add</p>
           <p className="mt-1">
-            Add the matching data in Business Data, Knowledge, and Integrations. For internal help
-            desk, upload SOPs, admin guides, project notes, and process docs so staff can ask where
-            to go and how to update things. The assistant will answer from those facts and will say
-            when something is missing.
+            Each thing you tick needs some business details behind it. Add them under Your business
+            details. For a staff assistant, upload your own guides and notes so your team can ask
+            where to find something and how to do it. It answers from what you give it, and says so
+            when it does not know.
           </p>
         </div>
       </section>
 
       <section className="space-y-3">
         <h2 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground">
-          Quick pills
+          Suggested questions
         </h2>
+        <p className="text-sm text-muted-foreground">
+          The one-tap buttons people see in the chat, so they do not have to think of what to ask.
+        </p>
         <div className="grid gap-2 sm:grid-cols-3">
           <label className="flex items-start gap-2 rounded-md border p-3 text-sm">
             <input type="hidden" name="enableDefaultPills" value="off" />
@@ -328,9 +326,9 @@ export function BotForm({
               className="mt-0.5 h-4 w-4"
             />
             <span>
-              <span className="block font-medium">Default pills</span>
+              <span className="block font-medium">Starter questions</span>
               <span className="block text-xs text-muted-foreground">
-                Seed safe starter buttons for this assistant.
+                A few sensible questions to show before anyone has typed anything.
               </span>
             </span>
           </label>
@@ -343,9 +341,9 @@ export function BotForm({
               className="mt-0.5 h-4 w-4"
             />
             <span>
-              <span className="block font-medium">Contextual pills</span>
+              <span className="block font-medium">Follow-up questions</span>
               <span className="block text-xs text-muted-foreground">
-                Show relevant follow-ups from keywords/context.
+                Suggests what to ask next, based on what has been said so far.
               </span>
             </span>
           </label>
@@ -359,9 +357,9 @@ export function BotForm({
               className="mt-0.5 h-4 w-4"
             />
             <span>
-              <span className="block font-medium">Connector pills</span>
+              <span className="block font-medium">Questions from your shop system</span>
               <span className="block text-xs text-muted-foreground">
-                Generate helpdesk buttons from synced screens/actions.
+                Suggests questions about the screens and tasks it found in your own software.
               </span>
             </span>
           </label>
@@ -372,18 +370,17 @@ export function BotForm({
         <section className="space-y-4">
           <input type="hidden" name="domainAllowlist" value="" />
           <h2 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground">
-            Connector setup
+            The link to your shop system
           </h2>
           <div className="rounded-md border bg-muted/30 p-3 text-sm text-muted-foreground">
-            <p className="font-medium text-foreground">Help Desk does not use a public website widget</p>
+            <p className="font-medium text-foreground">A staff assistant does not go on your website</p>
             <p className="mt-1">
-              Install a connector in the customer software instead. Connectors sync screens,
-              approved actions, and route metadata so staff can ask questions and run safe actions
-              from the internal Help Desk.
+              You link it to your own shop system instead. Once linked, it can read your screens and
+              run the tasks you have approved, so your team can just ask for what they need.
             </p>
             {bot ? (
               <Link href="/company/help-desk" className="mt-2 inline-block text-primary hover:underline">
-                Open connector setup
+                Set up the link
               </Link>
             ) : null}
           </div>
@@ -391,24 +388,22 @@ export function BotForm({
       ) : (
         <section className="space-y-4">
           <h2 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground">
-            Website domains
+            Your website
           </h2>
-          <div className="space-y-1.5">
-            <Label htmlFor="domainAllowlist">Allowed website domains</Label>
+          <FormField label="Website addresses it can appear on" htmlFor="domainAllowlist">
             <Textarea
-              id="domainAllowlist"
               name="domainAllowlist"
               defaultValue={domainAllowlistDefault}
               placeholder={'acme.com\nwww.acme.com'}
               rows={3}
             />
             <p className="text-xs text-muted-foreground">
-              One website domain per line. The widget only loads on these domains.
+              One address per line. The chat only shows up on these.
               {isNewCustomerBot && domainAllowlistDefault
                 ? ' Filled in from your company website — edit it if the widget goes somewhere else.'
                 : ''}
             </p>
-          </div>
+          </FormField>
           <div className="rounded-md border bg-muted/30 p-3 text-sm text-muted-foreground">
             <p className="font-medium text-foreground">Widget look &amp; feel lives in the Design Studio</p>
             <p className="mt-1">
@@ -436,7 +431,7 @@ export function BotForm({
             defaultChecked={bot.aiEnabled}
             className="h-4 w-4"
           />
-          AI replies enabled
+          Let this assistant reply on its own
         </label>
       ) : null}
 

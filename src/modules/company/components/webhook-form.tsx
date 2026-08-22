@@ -1,10 +1,13 @@
 'use client';
 
 import { useState } from 'react';
-import { useFormState, useFormStatus } from 'react-dom';
-import { Button } from '@/components/ui/button';
+import { useFormState } from 'react-dom';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Select } from '@/components/ui/select';
+import { FormField } from '@/components/ui/form-field';
+import { FormMessage } from '@/components/ui/form-message';
+import { SubmitButton } from '@/components/ui/submit-button';
 import { createWebhookAction, type ActionState } from '../webhooks-actions';
 
 const initial: ActionState = {};
@@ -16,15 +19,6 @@ const EVENTS = [
   { value: 'ticket.resolved', label: 'Ticket resolved' },
 ] as const;
 
-function Submit({ disabled }: { disabled?: boolean }) {
-  const { pending } = useFormStatus();
-  return (
-    <Button type="submit" disabled={pending || disabled}>
-      {pending ? 'Saving…' : 'Add webhook'}
-    </Button>
-  );
-}
-
 export function WebhookForm({ atLimit }: { atLimit?: boolean }) {
   const [state, action] = useFormState(createWebhookAction, initial);
   const [kind, setKind] = useState<'generic' | 'slack'>('generic');
@@ -32,35 +26,32 @@ export function WebhookForm({ atLimit }: { atLimit?: boolean }) {
   return (
     <form action={action} className="space-y-4">
       <div className="grid gap-4 sm:grid-cols-2">
-        <div className="space-y-1.5">
-          <Label htmlFor="kind">Type</Label>
-          <select
-            id="kind"
+        <FormField label="Type" htmlFor="kind">
+          {/* One of the three 36px selects — `size="sm"` keeps the height
+              rather than silently promoting it to 40px. */}
+          <Select
+            size="sm"
             name="kind"
             value={kind}
             onChange={(e) => setKind(e.target.value as 'generic' | 'slack')}
-            className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm"
           >
             <option value="generic">Generic webhook (JSON / Zapier / Make)</option>
             <option value="slack">Slack</option>
-          </select>
-        </div>
-        <div className="space-y-1.5">
-          <Label htmlFor="label">Label (optional)</Label>
-          <Input id="label" name="label" placeholder="e.g. My CRM" />
-        </div>
+          </Select>
+        </FormField>
+        <FormField label="Label (optional)" htmlFor="label">
+          <Input name="label" placeholder="e.g. My CRM" />
+        </FormField>
       </div>
 
-      <div className="space-y-1.5">
-        <Label htmlFor="url">{kind === 'slack' ? 'Slack Incoming Webhook URL' : 'Endpoint URL'}</Label>
+      <FormField label={kind === 'slack' ? 'Slack Incoming Webhook URL' : 'Endpoint URL'} htmlFor="url">
         <Input
-          id="url"
           name="url"
           type="url"
           required
           placeholder={kind === 'slack' ? 'https://hooks.slack.com/services/…' : 'https://your-system.com/webhook'}
         />
-      </div>
+      </FormField>
 
       <div className="space-y-2">
         <Label>Send these events</Label>
@@ -74,9 +65,8 @@ export function WebhookForm({ atLimit }: { atLimit?: boolean }) {
         </div>
       </div>
 
-      {state.error ? <p className="text-sm text-destructive">{state.error}</p> : null}
-      {state.ok ? <p className="text-sm text-emerald-600">Webhook added.</p> : null}
-      <Submit disabled={atLimit} />
+      <FormMessage state={state} okText="Webhook added." />
+      <SubmitButton disabled={atLimit}>Add webhook</SubmitButton>
       {atLimit ? (
         <p className="text-xs text-muted-foreground">
           You&apos;ve reached your plan&apos;s endpoint limit. Upgrade to add more.

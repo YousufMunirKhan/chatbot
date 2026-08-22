@@ -8,10 +8,10 @@ import { Label } from '@/components/ui/label';
 import { connectIntegrationAction } from '../integrations-actions';
 import type { ActionState } from '../actions';
 import { TIMEZONE_OPTIONS } from '../form-options';
+import { FormField } from '@/components/ui/form-field';
+import { Select } from '@/components/ui/select';
 
 const initial: ActionState = {};
-const selectCls =
-  'flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring';
 
 type Provider = 'woocommerce' | 'shopify' | 'custom_api' | 'google_calendar';
 
@@ -38,111 +38,92 @@ export function ConnectIntegrationForm() {
   return (
     <form action={action} className="space-y-4">
       <div className="grid gap-4 sm:grid-cols-2">
-        <div className="space-y-1.5">
-          <Label htmlFor="provider">Provider</Label>
-          <select id="provider" name="provider" className={selectCls} value={provider} onChange={(event) => setProvider(event.target.value as Provider)}>
+        <FormField label="Provider" htmlFor="provider">
+          <Select name="provider" value={provider} onChange={(event) => setProvider(event.target.value as Provider)}>
             <option value="woocommerce">WordPress / WooCommerce</option>
             <option value="shopify">Shopify store</option>
             <option value="custom_api">Custom API</option>
             <option value="google_calendar">Google Calendar</option>
-          </select>
+          </Select>
           <p className="text-xs text-muted-foreground">{PROVIDER_HELP[provider]}</p>
-        </div>
-        <div className="space-y-1.5">
-          <Label htmlFor="name">Connection name *</Label>
-          <Input id="name" name="name" required placeholder="My store" />
-        </div>
+        </FormField>
+        <FormField label="Connection name *" htmlFor="name">
+          <Input name="name" required placeholder="My store" />
+        </FormField>
       </div>
 
       <div className="grid gap-4 sm:grid-cols-2">
         {provider === 'woocommerce' ? (
           <>
-            <div className="space-y-1.5">
-              <Label htmlFor="base_url">WordPress store URL</Label>
-              <Input id="base_url" name="base_url" type="url" placeholder="https://yourwordpressstore.com" />
-            </div>
-            <div className="space-y-1.5">
-              <Label htmlFor="consumer_key">Consumer key</Label>
-              <Input id="consumer_key" name="consumer_key" placeholder="ck_..." />
-            </div>
-            <div className="space-y-1.5">
-              <Label htmlFor="consumer_secret">Consumer secret</Label>
-              <Input id="consumer_secret" name="consumer_secret" type="password" placeholder="cs_..." />
-            </div>
-            <div className="space-y-1.5">
-              <Label htmlFor="currency">Default currency</Label>
-              <Input id="currency" name="currency" placeholder="USD" maxLength={3} />
-            </div>
+            <FormField label="WordPress store URL" htmlFor="base_url">
+              <Input name="base_url" type="url" placeholder="https://yourwordpressstore.com" />
+            </FormField>
+            <FormField label="Consumer key" htmlFor="consumer_key">
+              <Input name="consumer_key" placeholder="ck_..." />
+            </FormField>
+            <FormField label="Consumer secret" htmlFor="consumer_secret">
+              <Input name="consumer_secret" type="password" placeholder="cs_..." />
+            </FormField>
+            <FormField label="Default currency" htmlFor="currency">
+              <Input name="currency" placeholder="USD" maxLength={3} />
+            </FormField>
           </>
         ) : null}
         {provider === 'shopify' ? (
           <>
-            <div className="space-y-1.5">
-              <Label htmlFor="shop">Shop domain</Label>
-              <Input id="shop" name="shop" placeholder="your-store.myshopify.com" />
-            </div>
-            <div className="space-y-1.5">
-              <Label htmlFor="access_token">Admin API access token</Label>
-              <Input id="access_token" name="access_token" type="password" placeholder="shpat_..." />
-            </div>
-            <div className="space-y-1.5">
-              <Label htmlFor="api_version">API version</Label>
-              <Input id="api_version" name="api_version" placeholder="2024-01" />
-            </div>
-            <div className="space-y-1.5">
-              <Label htmlFor="currency">Default currency</Label>
-              <Input id="currency" name="currency" placeholder="USD" maxLength={3} />
-            </div>
+            <FormField label="Shop domain" htmlFor="shop">
+              <Input name="shop" placeholder="your-store.myshopify.com" />
+            </FormField>
+            <FormField label="Admin API access token" htmlFor="access_token">
+              <Input name="access_token" type="password" placeholder="shpat_..." />
+            </FormField>
+            <FormField label="API version" htmlFor="api_version">
+              <Input name="api_version" placeholder="2024-01" />
+            </FormField>
+            <FormField label="Default currency" htmlFor="currency">
+              <Input name="currency" placeholder="USD" maxLength={3} />
+            </FormField>
           </>
         ) : null}
         {provider === 'google_calendar' ? (
           <>
-            <div className="space-y-1.5">
-              <Label htmlFor="calendar_id">Calendar</Label>
-              <Input id="calendar_id" name="calendar_id" placeholder="primary or calendar ID" />
-            </div>
-            <div className="space-y-1.5">
-              <Label htmlFor="timezone">Calendar timezone</Label>
-              <select id="timezone" name="timezone" className={selectCls} defaultValue="Europe/London">
+            <FormField label="Calendar" htmlFor="calendar_id">
+              <Input name="calendar_id" placeholder="primary or calendar ID" />
+            </FormField>
+            <FormField label="Calendar timezone" htmlFor="timezone">
+              <Select name="timezone" defaultValue="Europe/London">
                 {TIMEZONE_OPTIONS.map((timezone) => (
                   <option key={timezone} value={timezone}>
                     {timezone}
                   </option>
                 ))}
-              </select>
-            </div>
-            <div className="space-y-1.5">
-              <Label htmlFor="access_token">Access token</Label>
-              <Input id="access_token" name="access_token" type="password" />
-            </div>
+              </Select>
+            </FormField>
+            <FormField label="Access token" htmlFor="access_token">
+              <Input name="access_token" type="password" />
+            </FormField>
           </>
         ) : null}
         {provider === 'custom_api' ? (
           <>
-            <div className="space-y-1.5">
-              <Label htmlFor="base_url">API base URL</Label>
-              <Input id="base_url" name="base_url" type="url" placeholder="https://api.example.com" />
-            </div>
-            <div className="space-y-1.5">
-              <Label htmlFor="token">API token</Label>
-              <Input id="token" name="token" type="password" />
-            </div>
-            <div className="space-y-1.5">
-              <Label htmlFor="products_path">Products path</Label>
-              <Input id="products_path" name="products_path" placeholder="/products" />
-            </div>
-            <div className="space-y-1.5">
-              <Label htmlFor="inventory_path">Inventory path</Label>
-              <Input id="inventory_path" name="inventory_path" placeholder="/inventory" />
-            </div>
-            <div className="space-y-1.5">
-              <Label htmlFor="orders_path">Orders path</Label>
-              <Input id="orders_path" name="orders_path" placeholder="/orders" />
-            </div>
-            <div className="space-y-1.5">
-              <Label htmlFor="customers_path">Customers path</Label>
-              <Input id="customers_path" name="customers_path" placeholder="/customers" />
-            </div>
+            <FormField label="API base URL" htmlFor="base_url">
+              <Input name="base_url" type="url" placeholder="https://api.example.com" />
+            </FormField>
+            <FormField label="API token" htmlFor="token">
+              <Input name="token" type="password" />
+            </FormField>
+            <FormField label="Products path" htmlFor="products_path">
+              <Input name="products_path" placeholder="/products" />
+            </FormField>
+            <FormField label="Inventory path" htmlFor="inventory_path">
+              <Input name="inventory_path" placeholder="/inventory" />
+            </FormField>
+            <FormField label="Orders path" htmlFor="orders_path">
+              <Input name="orders_path" placeholder="/orders" />
+            </FormField>
+            <FormField label="Customers path" htmlFor="customers_path">
+              <Input name="customers_path" placeholder="/customers" />
+            </FormField>
           </>
         ) : null}
       </div>
@@ -157,14 +138,12 @@ export function ConnectIntegrationForm() {
       <details className="rounded-md border p-3">
         <summary className="cursor-pointer text-sm font-medium">Advanced credentials</summary>
         <div className="mt-4 grid gap-4 sm:grid-cols-2">
-          <div className="space-y-1.5">
-            <Label htmlFor="extra_key">Extra key</Label>
-            <Input id="extra_key" name="extra_key" />
-          </div>
-          <div className="space-y-1.5">
-            <Label htmlFor="extra_secret">Extra secret</Label>
-            <Input id="extra_secret" name="extra_secret" type="password" />
-          </div>
+          <FormField label="Extra key" htmlFor="extra_key">
+            <Input name="extra_key" />
+          </FormField>
+          <FormField label="Extra secret" htmlFor="extra_secret">
+            <Input name="extra_secret" type="password" />
+          </FormField>
         </div>
       </details>
 

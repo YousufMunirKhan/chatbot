@@ -7,6 +7,8 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { updateSupportSettingsAction, type ActionState } from '../settings-actions';
 import type { SupportSettings } from '../support-settings-data';
+import { FormField } from '@/components/ui/form-field';
+import { Select } from '@/components/ui/select';
 
 const initial: ActionState = {};
 const DAYS = [
@@ -43,10 +45,8 @@ export function SupportSettingsForm({ settings }: { settings: SupportSettings })
 
   return (
     <form action={action} className="space-y-6">
-      <div className="space-y-1.5">
-        <Label htmlFor="slaResponseMinutes">First-response SLA (minutes)</Label>
+      <FormField label="First-response SLA (minutes)" htmlFor="slaResponseMinutes">
         <Input
-          id="slaResponseMinutes"
           name="slaResponseMinutes"
           type="number"
           min={1}
@@ -56,23 +56,21 @@ export function SupportSettingsForm({ settings }: { settings: SupportSettings })
         <p className="text-xs text-muted-foreground">
           Conversations waiting on a human longer than this count as “Missed SLA” in the inbox.
         </p>
-      </div>
+      </FormField>
 
-      <div className="space-y-1.5">
-        <Label htmlFor="routingStrategy">Agent routing</Label>
-        <select
-          id="routingStrategy"
+      <FormField label="Agent routing" htmlFor="routingStrategy">
+        <Select
           name="routingStrategy"
           defaultValue={settings.routingStrategy}
           className="h-10 w-full rounded-md border bg-background px-3 text-sm"
         >
           <option value="most_recent">Most recently active agent</option>
           <option value="round_robin">Round-robin (balance load)</option>
-        </select>
+        </Select>
         <p className="text-xs text-muted-foreground">
           Round-robin assigns new handoffs to the online agent with the fewest open chats.
         </p>
-      </div>
+      </FormField>
 
       <div className="space-y-3 rounded-md border p-4">
         <label className="flex items-start gap-2 text-sm font-medium">
@@ -142,14 +140,12 @@ export function SupportSettingsForm({ settings }: { settings: SupportSettings })
               ))}
             </div>
             <div className="grid gap-3 sm:grid-cols-2">
-              <div className="space-y-1.5">
-                <Label htmlFor="start">Opens</Label>
-                <Input id="start" name="start" type="time" defaultValue={bh.start} />
-              </div>
-              <div className="space-y-1.5">
-                <Label htmlFor="end">Closes</Label>
-                <Input id="end" name="end" type="time" defaultValue={bh.end} />
-              </div>
+              <FormField label="Opens" htmlFor="start">
+                <Input name="start" type="time" defaultValue={bh.start} />
+              </FormField>
+              <FormField label="Closes" htmlFor="end">
+                <Input name="end" type="time" defaultValue={bh.end} />
+              </FormField>
             </div>
             <p className="text-xs text-muted-foreground">
               Add your day-by-day opening hours in{' '}

@@ -1,34 +1,29 @@
 'use client';
 
-import { useFormState, useFormStatus } from 'react-dom';
-import { Button } from '@/components/ui/button';
+import { useFormState } from 'react-dom';
+import { FormField } from '@/components/ui/form-field';
+import { FormMessage } from '@/components/ui/form-message';
 import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
+import { SubmitButton } from '@/components/ui/submit-button';
 import { saveBillingPlanAction, type BillingMapState } from '../billing-actions';
 import type { BillingPlan } from '../billing-data';
 
 const initial: BillingMapState = {};
 
-function Submit() {
-  const { pending } = useFormStatus();
-  return (
-    <Button type="submit" disabled={pending}>
-      {pending ? 'Saving...' : 'Save package'}
-    </Button>
-  );
-}
-
 export function BillingPlanForm({ plan }: { plan?: BillingPlan }) {
   const [state, action] = useFormState(saveBillingPlanAction, initial);
+  // The Packages card renders one of these per plan plus a blank "create" copy,
+  // so every generated id is namespaced — `FormField` wires label→control by id
+  // and duplicates would point several labels at the first form's inputs.
+  const uid = (field: string) => `plan-${plan?.key ?? 'new'}-${field}`;
+
   return (
     <form action={action} className="grid gap-4 rounded-lg border bg-card p-4 sm:grid-cols-6">
       <input type="hidden" name="key" value={plan?.key ?? ''} />
-      <div className="space-y-1.5 sm:col-span-2">
-        <Label>Package name</Label>
+      <FormField label="Package name" htmlFor={uid('label')} className="sm:col-span-2">
         <Input name="label" defaultValue={plan?.label ?? ''} placeholder="Business Plus" required />
-      </div>
-      <div className="space-y-1.5">
-        <Label>Monthly £</Label>
+      </FormField>
+      <FormField label="Monthly £" htmlFor={uid('priceMonthlyGbp')}>
         <Input
           name="priceMonthlyGbp"
           type="number"
@@ -37,9 +32,8 @@ export function BillingPlanForm({ plan }: { plan?: BillingPlan }) {
           defaultValue={plan?.priceMonthlyGbp ?? ''}
           required
         />
-      </div>
-      <div className="space-y-1.5">
-        <Label>Messages</Label>
+      </FormField>
+      <FormField label="Messages" htmlFor={uid('messageLimit')}>
         <Input
           name="messageLimit"
           type="number"
@@ -47,9 +41,8 @@ export function BillingPlanForm({ plan }: { plan?: BillingPlan }) {
           defaultValue={plan?.messageLimit ?? ''}
           placeholder="500"
         />
-      </div>
-      <div className="space-y-1.5">
-        <Label>Assistants</Label>
+      </FormField>
+      <FormField label="Assistants" htmlFor={uid('botLimit')}>
         <Input
           name="botLimit"
           type="number"
@@ -57,9 +50,8 @@ export function BillingPlanForm({ plan }: { plan?: BillingPlan }) {
           defaultValue={plan?.botLimit ?? ''}
           placeholder="1"
         />
-      </div>
-      <div className="space-y-1.5">
-        <Label>Team seats</Label>
+      </FormField>
+      <FormField label="Team seats" htmlFor={uid('agentLimit')}>
         <Input
           name="agentLimit"
           type="number"
@@ -67,9 +59,8 @@ export function BillingPlanForm({ plan }: { plan?: BillingPlan }) {
           defaultValue={plan?.agentLimit ?? ''}
           placeholder="1"
         />
-      </div>
-      <div className="space-y-1.5">
-        <Label>Integrations</Label>
+      </FormField>
+      <FormField label="Integrations" htmlFor={uid('integrationLimit')}>
         <Input
           name="integrationLimit"
           type="number"
@@ -77,9 +68,8 @@ export function BillingPlanForm({ plan }: { plan?: BillingPlan }) {
           defaultValue={plan?.integrationLimit ?? ''}
           placeholder="0"
         />
-      </div>
-      <div className="space-y-1.5">
-        <Label>Included AI credit £</Label>
+      </FormField>
+      <FormField label="Included AI credit £" htmlFor={uid('includedCreditGbp')}>
         <Input
           name="includedCreditGbp"
           type="number"
@@ -87,23 +77,20 @@ export function BillingPlanForm({ plan }: { plan?: BillingPlan }) {
           step="0.01"
           defaultValue={plan?.includedCreditGbp ?? ''}
         />
-      </div>
-      <div className="space-y-1.5">
-        <Label>Trial days</Label>
+      </FormField>
+      <FormField label="Trial days" htmlFor={uid('trialDays')}>
         <Input name="trialDays" type="number" min={0} defaultValue={plan?.trialDays ?? ''} />
-      </div>
-      <div className="space-y-1.5">
-        <Label>Sort</Label>
+      </FormField>
+      <FormField label="Sort" htmlFor={uid('sortOrder')}>
         <Input name="sortOrder" type="number" defaultValue={plan?.sortOrder ?? 100} />
-      </div>
-      <div className="space-y-1.5 sm:col-span-2">
-        <Label>Description</Label>
+      </FormField>
+      <FormField label="Description" htmlFor={uid('description')} className="sm:col-span-2">
         <Input
           name="description"
           defaultValue={plan?.description ?? ''}
           placeholder="Who this package is for"
         />
-      </div>
+      </FormField>
       <label className="flex items-center gap-2 pt-7 text-sm">
         <input
           type="checkbox"
@@ -123,9 +110,8 @@ export function BillingPlanForm({ plan }: { plan?: BillingPlan }) {
         Active
       </label>
       <div className="sm:col-span-6">
-        {state.error ? <p className="mb-2 text-sm text-destructive">{state.error}</p> : null}
-        {state.ok ? <p className="mb-2 text-sm text-emerald-600">Saved.</p> : null}
-        <Submit />
+        <FormMessage state={state} className="mb-2" />
+        <SubmitButton pendingLabel="Saving...">Save package</SubmitButton>
       </div>
     </form>
   );

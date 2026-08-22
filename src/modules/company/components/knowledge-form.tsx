@@ -1,10 +1,13 @@
 'use client';
 
-import { useFormState, useFormStatus } from 'react-dom';
-import { Button } from '@/components/ui/button';
+import { useFormState } from 'react-dom';
+import { Alert } from '@/components/ui/alert';
 import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
+import { Select, type SelectProps } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
+import { FormField } from '@/components/ui/form-field';
+import { FormMessage } from '@/components/ui/form-message';
+import { SubmitButton } from '@/components/ui/submit-button';
 import {
   addFileSourceAction,
   addTextSourceAction,
@@ -13,28 +16,23 @@ import {
 } from '../knowledge-actions';
 
 const initial: ActionState = {};
-const selectCls =
-  'flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring';
 
-function Submit({ label, pendingLabel }: { label: string; pendingLabel: string }) {
-  const { pending } = useFormStatus();
+// `...rest` matters: `FormField` wires the control by cloning it with
+// `aria-describedby` / `aria-invalid`, and a wrapper that swallowed its extra
+// props would quietly drop that.
+function BotSelect({
+  bots,
+  ...rest
+}: SelectProps & { bots: { id: string; name: string }[] }) {
   return (
-    <Button type="submit" disabled={pending}>
-      {pending ? pendingLabel : label}
-    </Button>
-  );
-}
-
-function BotSelect({ bots, id }: { bots: { id: string; name: string }[]; id: string }) {
-  return (
-    <select id={id} name="botId" className={selectCls} defaultValue="">
+    <Select name="botId" defaultValue="" {...rest}>
       <option value="">All assistants</option>
       {bots.map((b) => (
         <option key={b.id} value={b.id}>
           {b.name}
         </option>
       ))}
-    </select>
+    </Select>
   );
 }
 
@@ -51,9 +49,11 @@ export function KnowledgeForm({
 
   return (
     <div className="space-y-8">
-      <div className="rounded-md border border-amber-200 bg-amber-50 p-4 text-sm text-amber-950">
-        <p className="font-medium">Before adding business data</p>
-        <p className="mt-1 text-xs leading-5">
+      {/* `border-amber-200 bg-amber-50 text-amber-950` → `warning`, not "note":
+          this is a compliance caution about what must not be uploaded, and the
+          consequence of ignoring it is a data-protection breach. */}
+      <Alert tone="warning" title="Before adding business data" className="p-4">
+        <p className="text-xs leading-5">
           Add only information your business is allowed to use for customer replies. Do not upload
           payment card data, passwords, special category data, or unnecessary personal details.
           Review the{' '}
@@ -66,7 +66,7 @@ export function KnowledgeForm({
           </a>
           .
         </p>
-      </div>
+      </Alert>
 
       <form action={fileAction} className="space-y-4 rounded-md border bg-muted/20 p-4">
         <div>
@@ -80,73 +80,56 @@ export function KnowledgeForm({
           </p>
         </div>
         <div className="grid gap-4 sm:grid-cols-2">
-          <div className="space-y-1.5">
-            <Label htmlFor="file">File</Label>
+          <FormField label="File" htmlFor="file">
             <Input
-              id="file"
               name="file"
               type="file"
               accept=".pdf,.docx,.txt,.md,.csv,text/*,application/pdf"
             />
-          </div>
-          <div className="space-y-1.5">
-            <Label htmlFor="fileBotId">Assistant</Label>
+          </FormField>
+          <FormField label="Assistant" htmlFor="fileBotId">
             <BotSelect id="fileBotId" bots={bots} />
-          </div>
+          </FormField>
         </div>
-        {fileState.error ? <p className="text-sm text-destructive">{fileState.error}</p> : null}
-        {fileState.ok ? (
-          <p className="text-sm text-emerald-600">File extracted and indexed.</p>
-        ) : null}
-        <Submit label="Upload and index file" pendingLabel="Extracting..." />
+        <FormMessage state={fileState} okText="File extracted and indexed." />
+        <SubmitButton pendingLabel="Extracting...">Upload and index file</SubmitButton>
       </form>
 
       <form action={urlAction} className="space-y-4">
         <div className="grid gap-4 sm:grid-cols-2">
-          <div className="space-y-1.5">
-            <Label htmlFor="url">Website page URL</Label>
-            <Input id="url" name="url" type="url" placeholder="https://example.com/faq" />
-          </div>
-          <div className="space-y-1.5">
-            <Label htmlFor="urlTitle">Title</Label>
-            <Input id="urlTitle" name="title" placeholder="FAQ page" />
-          </div>
-          <div className="space-y-1.5">
-            <Label htmlFor="urlBotId">Assistant</Label>
+          <FormField label="Website page URL" htmlFor="url">
+            <Input name="url" type="url" placeholder="https://example.com/faq" />
+          </FormField>
+          <FormField label="Title" htmlFor="urlTitle">
+            <Input name="title" placeholder="FAQ page" />
+          </FormField>
+          <FormField label="Assistant" htmlFor="urlBotId">
             <BotSelect id="urlBotId" bots={bots} />
-          </div>
+          </FormField>
         </div>
-        {urlState.error ? <p className="text-sm text-destructive">{urlState.error}</p> : null}
-        {urlState.ok ? <p className="text-sm text-emerald-600">Imported and indexed.</p> : null}
-        <Submit label="Import page" pendingLabel="Importing..." />
+        <FormMessage state={urlState} okText="Imported and indexed." />
+        <SubmitButton pendingLabel="Importing...">Import page</SubmitButton>
       </form>
 
       <form action={action} className="space-y-4 border-t pt-6">
         <div className="grid gap-4 sm:grid-cols-2">
-          <div className="space-y-1.5">
-            <Label htmlFor="title">Title *</Label>
-            <Input id="title" name="title" required placeholder="e.g. Refund policy" />
-          </div>
-          <div className="space-y-1.5">
-            <Label htmlFor="botId">Assistant</Label>
+          <FormField label="Title" htmlFor="title" required>
+            <Input name="title" required placeholder="e.g. Refund policy" />
+          </FormField>
+          <FormField label="Assistant" htmlFor="botId">
             <BotSelect id="botId" bots={bots} />
-          </div>
+          </FormField>
         </div>
-        <div className="space-y-1.5">
-          <Label htmlFor="text">Content *</Label>
+        <FormField label="Content" htmlFor="text" required>
           <Textarea
-            id="text"
             name="text"
             rows={8}
             required
             placeholder="Paste the text you want your assistant to learn from..."
           />
-        </div>
-        {state.error ? <p className="text-sm text-destructive">{state.error}</p> : null}
-        {state.ok ? (
-          <p className="text-sm text-emerald-600">Added. Your assistant can now use this.</p>
-        ) : null}
-        <Submit label="Add to knowledge base" pendingLabel="Adding..." />
+        </FormField>
+        <FormMessage state={state} okText="Added. Your assistant can now use this." />
+        <SubmitButton pendingLabel="Adding...">Add to knowledge base</SubmitButton>
       </form>
     </div>
   );

@@ -1,6 +1,7 @@
 import { createSupabaseServiceClient } from '@/lib/db/server';
 import { getMonthlyMessageCount } from '@/lib/billing';
 import { getAiCostByCompany, listCompanies } from './data';
+import { usdToGbp } from './money';
 
 export interface StripePriceMapping {
   plan: string;
@@ -106,18 +107,26 @@ export async function listStripePriceMappings(): Promise<StripePriceMapping[]> {
   }));
 }
 
-export async function getCompanyPlanUsageSummary(): Promise<
-  Array<{
-    companyId: string;
-    companyName: string;
-    plan: string | null;
-    messageLimit: number | null;
-    usedMessages: number;
-    aiCostUsd: number;
-    planRevenueGbp: number;
-    risk: 'ok' | 'watch' | 'loss';
-  }>
-> {
+export interface PlanUsageRow {
+  companyId: string;
+  companyName: string;
+  plan: string | null;
+  messageLimit: number | null;
+  usedMessages: number;
+  /** Provider cost as invoiced, in USD. */
+  aiCostUsd: number;
+  /** The same cost converted at `USD_TO_GBP`, comparable with plan revenue. */
+  aiCostGbp: number;
+  planRevenueGbp: number;
+  risk: 'ok' | 'watch' | 'loss';
+}
+
+/**
+ * Every company, sorted by AI cost descending. This used to `.slice(0, 8)` here
+ * with nothing to say so — the caller now caps and labels its own table, so the
+ * number on screen always comes with the cap that produced it.
+ */
+export async function getCompanyPlanUsageSummary(): Promise<PlanUsageRow[]> {
   const [companies, costByCompany, plansList] = await Promise.all([
     listCompanies(),
     getAiCostByCompany(),
@@ -129,11 +138,13 @@ export async function getCompanyPlanUsageSummary(): Promise<
       const planKey = company.plan;
       const plan = planKey ? plans.get(planKey) : null;
       const aiCostUsd = costByCompany[company.id] ?? 0;
+      // Was `aiCostUsd * 0.8` — a second, undocumented copy of the FX rate.
+      const aiCostGbp = usdToGbp(aiCostUsd);
       const revenue = company.subStatus === 'trialing' ? 0 : (plan?.priceMonthlyGbp ?? 0);
       const risk: 'ok' | 'watch' | 'loss' =
-        revenue <= 0 && aiCostUsd > 0.5
+        revenue <= 0 && aiCostGbp > 0.4
           ? 'loss'
-          : aiCostUsd * 0.8 > revenue * 0.35
+          : aiCostGbp > revenue * 0.35
             ? 'watch'
             : 'ok';
       return {
@@ -143,10 +154,11 @@ export async function getCompanyPlanUsageSummary(): Promise<
         messageLimit: company.messageLimit,
         usedMessages: await getMonthlyMessageCount(company.id),
         aiCostUsd,
+        aiCostGbp,
         planRevenueGbp: revenue,
         risk,
       };
     }),
   );
-  return rows.sort((a, b) => b.aiCostUsd - a.aiCostUsd).slice(0, 8);
+  return rows.sort((a, b) => b.aiCostUsd - a.aiCostUsd);
 }

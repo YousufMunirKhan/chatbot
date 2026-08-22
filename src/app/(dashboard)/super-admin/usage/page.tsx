@@ -1,20 +1,37 @@
 import Link from 'next/link';
+import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
+import { PageHeader } from '@/components/ui/page-header';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { requireRole } from '@/lib/auth';
+import { ROLES } from '@/lib/constants';
 import { listCompanies } from '@/modules/super-admin/data';
 import { formatNumber } from '@/lib/format';
+import { usd } from '@/modules/super-admin/money';
 
 export default async function UsagePage() {
+  await requireRole([ROLES.SUPER_ADMIN]);
   const companies = await listCompanies();
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-semibold">Usage</h1>
-        <p className="text-sm text-muted-foreground">
-          Billable AI replies, extra grants, remaining allowance, and internal cost this month.
-        </p>
-      </div>
+      <PageHeader
+        title="Usage"
+        description="Billable AI replies, extra grants, remaining allowance, and internal cost this month."
+        actions={
+          <>
+            <Button asChild variant="outline" size="sm">
+              <Link href="/super-admin/costs">AI cost</Link>
+            </Button>
+            <Button asChild variant="outline" size="sm">
+              <Link href="/super-admin/profit">Profit / loss</Link>
+            </Button>
+            <Button asChild variant="outline" size="sm">
+              <Link href="/super-admin/subscriptions">Subscriptions</Link>
+            </Button>
+          </>
+        }
+      />
 
       <Card>
         <CardContent className="p-0">
@@ -27,7 +44,7 @@ export default async function UsagePage() {
                 <TableHead>Base allowance</TableHead>
                 <TableHead>Extra replies</TableHead>
                 <TableHead>Remaining</TableHead>
-                <TableHead>Internal AI cost</TableHead>
+                <TableHead>Internal AI cost (USD)</TableHead>
                 <TableHead>WhatsApp</TableHead>
                 <TableHead>Bots</TableHead>
               </TableRow>
@@ -61,12 +78,4 @@ export default async function UsagePage() {
       </Card>
     </div>
   );
-}
-
-function usd(value: number) {
-  return new Intl.NumberFormat('en-US', {
-    style: 'currency',
-    currency: 'USD',
-    maximumFractionDigits: 4,
-  }).format(value);
 }

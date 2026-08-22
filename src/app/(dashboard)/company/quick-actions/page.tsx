@@ -2,6 +2,7 @@ import { BarChart3, CalendarDays, MessageSquare } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { PageHeader } from '@/components/ui/page-header';
 import { requireRole } from '@/lib/auth';
 import { ROLES } from '@/lib/constants';
 import { QuickActionForm } from '@/modules/company/components/quick-action-form';
@@ -61,32 +62,30 @@ export default async function QuickActionsPage() {
   const botName = new Map(bots.map((bot) => [bot.id, bot.name]));
 
   return (
-    <div className="space-y-6">
-      <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
-        <div className="max-w-3xl">
-          <h1 className="text-2xl font-semibold">Quick Actions</h1>
-          <p className="mt-1 text-sm text-muted-foreground">
-            Create helpful chat buttons like Book demo, Ask pricing, Request support, or Talk to human.
-          </p>
-        </div>
-        <Button asChild variant="outline">
-          <a href="/company/quick-actions/analytics">
-            <BarChart3 className="me-2 h-4 w-4" />
-            Analytics
-          </a>
-        </Button>
-      </div>
+    <div className="mx-auto max-w-6xl space-y-6">
+      <PageHeader
+        title="Quick Actions"
+        description="Create helpful chat buttons like Book demo, Ask pricing, Request support, or Talk to human."
+        actions={
+          <Button asChild variant="outline">
+            <a href="/company/quick-actions/analytics">
+              <BarChart3 className="me-2 h-4 w-4" />
+              Analytics
+            </a>
+          </Button>
+        }
+      />
 
       <div className="grid gap-4 md:grid-cols-3">
-        <div className="rounded-lg border bg-white p-4">
+        <div className="rounded-lg border bg-card p-4">
           <div className="text-sm font-semibold">1. Choose action</div>
           <p className="mt-1 text-sm text-muted-foreground">Pick message, answer, form, link, call, or handoff.</p>
         </div>
-        <div className="rounded-lg border bg-white p-4">
+        <div className="rounded-lg border bg-card p-4">
           <div className="text-sm font-semibold">2. Fill only what matters</div>
           <p className="mt-1 text-sm text-muted-foreground">The builder changes based on the selected action type.</p>
         </div>
-        <div className="rounded-lg border bg-white p-4">
+        <div className="rounded-lg border bg-card p-4">
           <div className="text-sm font-semibold">3. Preview before saving</div>
           <p className="mt-1 text-sm text-muted-foreground">See how the pill will look in the website chat.</p>
         </div>

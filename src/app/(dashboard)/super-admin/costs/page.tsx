@@ -1,23 +1,47 @@
 import Link from 'next/link';
+import { Alert } from '@/components/ui/alert';
+import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
+import { PageHeader } from '@/components/ui/page-header';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { InfoBanner } from '@/components/info-banner';
+import { requireRole } from '@/lib/auth';
+import { ROLES } from '@/lib/constants';
 import { listFinancials } from '@/modules/super-admin/data';
+import { gbp, usd, USD_TO_GBP } from '@/modules/super-admin/money';
 
 export default async function CostsPage() {
+  await requireRole([ROLES.SUPER_ADMIN]);
   const rows = await listFinancials();
-  const total = rows.reduce((s, r) => s + r.aiCost, 0);
+  const totalUsd = rows.reduce((s, r) => s + r.aiCostUsd, 0);
+  const totalGbp = rows.reduce((s, r) => s + r.aiCostGbp, 0);
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-semibold">AI Cost</h1>
-        <p className="text-sm text-muted-foreground">Estimated AI provider spend per company.</p>
-      </div>
+      <PageHeader
+        title="AI Cost"
+        description="Estimated AI provider spend per company."
+        actions={
+          <>
+            <Button asChild variant="outline" size="sm">
+              <Link href="/super-admin/profit">Profit / loss</Link>
+            </Button>
+            <Button asChild variant="outline" size="sm">
+              <Link href="/super-admin/usage">Usage</Link>
+            </Button>
+          </>
+        }
+      />
 
-      <InfoBanner>
-        AI cost is calculated from token usage logged on every AI call (current calendar month).
-      </InfoBanner>
+      {/*
+        Was `InfoBanner`, which is amber-only. Nothing here needs attention —
+        it explains what the two currency columns mean — so it takes `info`,
+        leaving amber to mean "act on this" across the panel.
+      */}
+      <Alert tone="info">
+        AI cost is calculated from token usage logged on every AI call (current calendar month) and
+        is invoiced by the provider in <strong>USD</strong>. The GBP column converts at{' '}
+        {USD_TO_GBP.toFixed(2)} GBP/USD so it can be compared with plan revenue.
+      </Alert>
 
       <Card>
         <CardContent className="p-0">
@@ -25,7 +49,8 @@ export default async function CostsPage() {
             <TableHeader>
               <TableRow>
                 <TableHead>Company</TableHead>
-                <TableHead className="text-right">AI cost (mo)</TableHead>
+                <TableHead className="text-end">AI cost (USD/mo)</TableHead>
+                <TableHead className="text-end">AI cost (GBP/mo)</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -36,12 +61,14 @@ export default async function CostsPage() {
                       {r.name}
                     </Link>
                   </TableCell>
-                  <TableCell className="text-right">{usd(r.aiCost)}</TableCell>
+                  <TableCell className="text-end">{usd(r.aiCostUsd)}</TableCell>
+                  <TableCell className="text-end">{gbp(r.aiCostGbp)}</TableCell>
                 </TableRow>
               ))}
               <TableRow>
                 <TableCell className="font-semibold">Total</TableCell>
-                <TableCell className="text-right font-semibold">{usd(total)}</TableCell>
+                <TableCell className="text-end font-semibold">{usd(totalUsd)}</TableCell>
+                <TableCell className="text-end font-semibold">{gbp(totalGbp)}</TableCell>
               </TableRow>
             </TableBody>
           </Table>
@@ -49,12 +76,4 @@ export default async function CostsPage() {
       </Card>
     </div>
   );
-}
-
-function usd(value: number) {
-  return new Intl.NumberFormat('en-US', {
-    style: 'currency',
-    currency: 'USD',
-    maximumFractionDigits: 4,
-  }).format(value);
 }

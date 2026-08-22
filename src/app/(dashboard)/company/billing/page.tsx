@@ -2,6 +2,8 @@ import { requireRole } from '@/lib/auth';
 import { ROLES } from '@/lib/constants';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { PageHeader } from '@/components/ui/page-header';
+import { Progress } from '@/components/ui/progress';
 import { getCompanyId, getCurrentCompany } from '@/modules/company/data';
 import { getReplyAllowanceUsage, getSubscription } from '@/lib/billing';
 import { formatDate, formatNumber } from '@/lib/format';
@@ -49,13 +51,11 @@ export default async function BillingPage() {
       : null;
 
   return (
-    <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-semibold">Billing</h1>
-        <p className="text-sm text-muted-foreground">
-          Your package, monthly message allowance, and subscription status.
-        </p>
-      </div>
+    <div className="mx-auto max-w-6xl space-y-6">
+      <PageHeader
+        title="Billing"
+        description="Your package, monthly message allowance, and subscription status."
+      />
 
       <Card>
         <CardHeader className="flex-row items-center justify-between">
@@ -90,12 +90,7 @@ export default async function BillingPage() {
               {totalAvailable == null ? 'Unlimited' : formatNumber(totalAvailable)}
             </span>
           </div>
-          <div className="h-2 w-full overflow-hidden rounded-full bg-muted">
-            <div
-              className="h-full rounded-full bg-primary transition-all"
-              style={{ width: `${usagePct ?? 0}%` }}
-            />
-          </div>
+          <Progress value={usagePct ?? 0} label="AI replies used this month" />
           <p className="text-xs text-muted-foreground">
             {totalAvailable == null
               ? 'Unlimited AI replies on your current package.'

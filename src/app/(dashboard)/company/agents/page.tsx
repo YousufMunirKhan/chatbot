@@ -4,6 +4,8 @@ import { ROLES } from '@/lib/constants';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { EmptyState } from '@/components/ui/empty-state';
+import { PageHeader } from '@/components/ui/page-header';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { CopyButton } from '@/components/copy-button';
 import { listAgentInvites, listMembers, getCompanyId } from '@/modules/company/data';
@@ -25,13 +27,11 @@ export default async function AgentsPage() {
   const agentUrl = `${env.NEXT_PUBLIC_APP_URL}/c/${(company?.slug as string) ?? ''}/agent`;
 
   return (
-    <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-semibold">Team</h1>
-        <p className="text-sm text-muted-foreground">
-          Company admins and agents. Agents handle the inbox and can take over from AI.
-        </p>
-      </div>
+    <div className="mx-auto max-w-6xl space-y-6">
+      <PageHeader
+        title="Team"
+        description="Company admins and agents. Agents handle the inbox and can take over from AI."
+      />
 
       <Card>
         <CardHeader>
@@ -93,10 +93,13 @@ export default async function AgentsPage() {
             </TableHeader>
             <TableBody>
               {invites.length === 0 ? (
-                <TableRow>
-                  <TableCell colSpan={4} className="py-6 text-center text-muted-foreground">
+                <TableRow className="hover:bg-transparent">
+                  <TableCell colSpan={4} className="p-0">
                     {/* Module 1 — the invite form sits directly above, so no button here. */}
-                    No pending invites. Invite a teammate above and they stay on this list until they accept.
+                    <EmptyState
+                      title="No pending invites."
+                      body="Invite a teammate above and they stay on this list until they accept."
+                    />
                   </TableCell>
                 </TableRow>
               ) : (

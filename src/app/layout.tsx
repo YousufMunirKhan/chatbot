@@ -16,7 +16,10 @@ export const viewport: Viewport = {
   width: 'device-width',
   initialScale: 1,
   viewportFit: 'cover',
-  themeColor: '#045fff',
+  // Module 22: reconciled to the one brand blue. This is the hex form of
+  // `--primary` (214 94% 47%) in globals.css — the browser chrome cannot read
+  // a CSS variable here, so it is restated, but it is no longer a fourth blue.
+  themeColor: '#0769e9',
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

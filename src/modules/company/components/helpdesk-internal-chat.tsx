@@ -4,6 +4,7 @@ import { useMemo, useState } from 'react';
 import { AlertTriangle, ArrowRight, ExternalLink, LifeBuoy, Loader2, Play, Route, Sparkles } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { companyLabel, humanizeEnum } from '@/lib/labels';
 import type { HelpdeskChatSettings } from '@/lib/helpdesk/chat-settings';
 import type { ReplyAllowanceUsage } from '@/lib/billing';
 
@@ -56,9 +57,11 @@ type ConnectorHealthAlert = {
   lastError: string | null;
 };
 
-function title(value: string): string {
-  return value.replace(/_/g, ' ').replace(/\b\w/g, (char) => char.toUpperCase());
-}
+// Action and field names come from the connected system, so they are never in a
+// fixed enum map. `humanizeEnum` is the shared fallback formatter — it replaces
+// this file's private `.replace(/_/g, ' ')`, and sentence-cases rather than
+// title-casing so "update_stock" reads as "Update stock" mid-sentence.
+const title = humanizeEnum;
 
 function formatNumber(value: number | null): string {
   return value == null ? 'Unlimited' : value.toLocaleString();
@@ -202,7 +205,7 @@ export function HelpdeskInternalChat({
       try {
         const res = await fetch(`/api/helpdesk/events/${event.eventId}`, { cache: 'no-store' });
         const data = await res.json();
-        if (!res.ok) throw new Error(data.message ?? data.error ?? 'Could not check connector result.');
+        if (!res.ok) throw new Error(data.message ?? data.error ?? 'Could not check the result.');
         if (['completed', 'failed', 'cancelled'].includes(String(data.status))) {
           const text = String(data.displayText ?? `${title(event.actionName)} ${data.status}.`);
           setMessages((current) => [...current, { role: 'assistant', text }]);
@@ -234,7 +237,7 @@ export function HelpdeskInternalChat({
     }
     setMessages((current) => [
       ...current,
-      { role: 'assistant', text: `${title(event.actionName)} is still running. Check Help Desk logs for the final connector result.` },
+      { role: 'assistant', text: `${title(event.actionName)} is still running. Check the Help Desk logs for the result.` },
     ]);
     setTicketPrompt({
       subject: `${title(event.actionName)} still running`,
@@ -243,7 +246,7 @@ export function HelpdeskInternalChat({
         `Connector action: ${event.actionName}`,
         `Event id: ${event.eventId}`,
         '',
-        'The connector action did not return within two minutes.',
+        'This did not finish within two minutes.',
       ].join('\n'),
     });
   }
@@ -306,15 +309,15 @@ export function HelpdeskInternalChat({
     <div className="rounded-lg border bg-white shadow-sm">
       <div className="flex flex-col gap-3 border-b p-4 md:flex-row md:items-center md:justify-between">
         <div>
-          <h2 className="font-semibold">Staff Help Desk Chat</h2>
+          <h2 className="font-semibold">Ask the Help Desk</h2>
           <p className="text-sm text-muted-foreground">
-            Internal-only chat. It shows everywhere by default unless visibility rules hide it.
+            Only your team can see this. It appears on every staff screen unless you hide it.
           </p>
         </div>
         <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
           <div className="rounded-md border bg-muted/40 px-3 py-2 text-xs">
             <span className="font-semibold">{formatNumber(replyUsage.remaining)}</span>{' '}
-            <span className="text-muted-foreground">replies remaining</span>
+            <span className="text-muted-foreground">replies left</span>
             <span className="ms-2 text-muted-foreground">
               {formatNumber(replyUsage.used)} / {formatNumber(replyUsage.totalAvailable)}
             </span>
@@ -333,14 +336,15 @@ export function HelpdeskInternalChat({
             <div className="rounded-md border border-amber-200 bg-amber-50 p-3 text-sm text-amber-950">
               <div className="flex items-center gap-2 font-semibold">
                 <AlertTriangle className="h-4 w-4" />
-                Connector health warning
+                Trouble reaching your shop system
               </div>
               <div className="mt-2 space-y-2">
                 {connectorHealthAlerts.slice(0, 3).map((alert) => (
                   <div key={alert.id} className="rounded-md border border-amber-200 bg-white/60 p-2">
                     <p className="font-medium">{alert.name}: {alert.message}</p>
                     <p className="text-xs text-amber-900">
-                      State: {alert.state}. Reports/actions may stay queued until this connector is online.
+                      {companyLabel('connectionState', alert.state)}. Anything your team asks for may sit
+                      waiting until this is back online.
                     </p>
                     {alert.lastError ? <p className="mt-1 text-xs text-destructive">{alert.lastError}</p> : null}
                   </div>
@@ -359,15 +363,19 @@ export function HelpdeskInternalChat({
               {messages.map((message, index) => (
                 <div
                   key={`${message.role}-${index}`}
-                  className={message.role === 'staff' ? 'ml-auto max-w-[82%] rounded-md bg-primary p-3 text-sm text-primary-foreground' : 'mr-auto max-w-[88%] rounded-md bg-white p-3 text-sm leading-6 shadow-sm'}
+                  /* Module 21 (RTL): `ms-auto`/`me-auto`, not `ml-`/`mr-`. Chat
+                     bubbles carry meaning by which side they sit on — "mine" vs
+                     "theirs" — so under Arabic the physical properties would pin
+                     both roles to the wrong edges and swap who is speaking. */
+                  className={message.role === 'staff' ? 'ms-auto max-w-[82%] rounded-md bg-primary p-3 text-sm text-primary-foreground' : 'me-auto max-w-[88%] rounded-md bg-white p-3 text-sm leading-6 shadow-sm'}
                 >
                   {message.text}
                 </div>
               ))}
               {loading ? (
-                <div className="mr-auto inline-flex items-center gap-2 rounded-md bg-white p-3 text-sm text-muted-foreground shadow-sm">
+                <div className="me-auto inline-flex items-center gap-2 rounded-md bg-white p-3 text-sm text-muted-foreground shadow-sm">
                   <Loader2 className="h-4 w-4 animate-spin" />
-                  Checking helpdesk knowledge
+                  Looking it up
                 </div>
               ) : null}
             </div>
@@ -428,10 +436,10 @@ export function HelpdeskInternalChat({
 
         <aside className="space-y-4">
           <div className="rounded-md border p-3">
-            <div className="mb-2 text-sm font-semibold">Open Sections</div>
+            <div className="mb-2 text-sm font-semibold">Go to a screen</div>
             <div className="space-y-2">
               {(last?.navigationTargets ?? []).length === 0 ? (
-                <p className="text-xs text-muted-foreground">Navigation buttons appear when connector docs include route IDs.</p>
+                <p className="text-xs text-muted-foreground">Buttons appear here once your shop system tells us which screens it has.</p>
               ) : (
                 last!.navigationTargets.map((target) => (
                   <button
@@ -453,7 +461,7 @@ export function HelpdeskInternalChat({
           </div>
 
           <div className="rounded-md border p-3">
-            <div className="mb-2 text-sm font-semibold">Guided Actions</div>
+            <div className="mb-2 text-sm font-semibold">Things it can do for you</div>
             <div className="space-y-2">
               {(last?.guidedActions ?? []).slice(0, 6).map((action) => (
                 <button
@@ -467,13 +475,13 @@ export function HelpdeskInternalChat({
                 >
                   <span>
                     <span className="block font-medium">{action.label}</span>
-                    <span className="text-muted-foreground">{action.type} / {action.risk}</span>
+                    <span className="text-muted-foreground">{companyLabel('actionRisk', action.risk)}</span>
                   </span>
                   <Play className="h-3.5 w-3.5" />
                 </button>
               ))}
               {(last?.guidedActions ?? []).length === 0 ? (
-                <p className="text-xs text-muted-foreground">Run a question first to load enabled connector actions.</p>
+                <p className="text-xs text-muted-foreground">Ask a question first, and the tasks you have approved appear here.</p>
               ) : null}
             </div>
           </div>
@@ -500,7 +508,7 @@ export function HelpdeskInternalChat({
                     onChange={(event) => setActionConfirmed(event.target.checked)}
                     className="mt-0.5 h-4 w-4"
                   />
-                  Confirm this action can change data in the connected system. The connector should still honor dry-run and local safety checks.
+                  I understand this changes real data in your shop system.
                 </label>
               ) : null}
               <div className="mt-3 flex gap-2">

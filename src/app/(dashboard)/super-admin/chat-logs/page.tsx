@@ -1,16 +1,18 @@
+import { requireRole } from '@/lib/auth';
+import { ROLES } from '@/lib/constants';
 import Link from 'next/link';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { EmptyState } from '@/components/ui/empty-state';
+import { FormField } from '@/components/ui/form-field';
 import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
+import { PageHeader } from '@/components/ui/page-header';
+import { Select } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { formatDate } from '@/lib/format';
 import { listChatLogs } from '@/modules/super-admin/chat-logs-data';
 import { listErrorLogCompanies } from '@/modules/super-admin/data';
-
-const selectCls =
-  'flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring';
 
 type SearchParams = {
   companyId?: string;
@@ -33,6 +35,9 @@ function label(value: string | null | undefined): string {
 }
 
 export default async function SuperAdminChatLogsPage({ searchParams }: { searchParams?: SearchParams }) {
+  // Defence in depth: the /super-admin layout already guards this subtree, but a
+  // platform-operator surface should not rely on a single ancestor check.
+  await requireRole([ROLES.SUPER_ADMIN]);
   const [rows, companies] = await Promise.all([
     listChatLogs({
       companyId: searchParams?.companyId || undefined,
@@ -46,12 +51,10 @@ export default async function SuperAdminChatLogsPage({ searchParams }: { searchP
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-semibold">Chat Logs</h1>
-        <p className="text-sm text-muted-foreground">
-          Cross-company conversation review with automatic quality audit signals.
-        </p>
-      </div>
+      <PageHeader
+        title="Chat Logs"
+        description="Cross-company conversation review with automatic quality audit signals."
+      />
 
       <Card>
         <CardHeader>
@@ -59,42 +62,38 @@ export default async function SuperAdminChatLogsPage({ searchParams }: { searchP
         </CardHeader>
         <CardContent>
           <form className="grid gap-3 lg:grid-cols-[minmax(180px,1fr)_160px_180px_minmax(180px,1fr)_auto]">
-            <div className="space-y-1.5">
-              <Label htmlFor="companyId">Company</Label>
-              <select id="companyId" name="companyId" className={selectCls} defaultValue={searchParams?.companyId ?? ''}>
+            <FormField label="Company" htmlFor="companyId">
+              <Select id="companyId" name="companyId" defaultValue={searchParams?.companyId ?? ''}>
                 <option value="">All companies</option>
                 {companies.map((company) => (
                   <option key={company.id} value={company.id}>
                     {company.name}
                   </option>
                 ))}
-              </select>
-            </div>
-            <div className="space-y-1.5">
-              <Label htmlFor="status">Chat status</Label>
-              <select id="status" name="status" className={selectCls} defaultValue={searchParams?.status ?? 'all'}>
+              </Select>
+            </FormField>
+            <FormField label="Chat status" htmlFor="status">
+              <Select id="status" name="status" defaultValue={searchParams?.status ?? 'all'}>
                 <option value="all">All</option>
                 <option value="ai_active">AI active</option>
                 <option value="needs_human">Needs human</option>
                 <option value="human_active">Human active</option>
                 <option value="closed">Closed</option>
                 <option value="expired">Expired</option>
-              </select>
-            </div>
-            <div className="space-y-1.5">
-              <Label htmlFor="auditStatus">Audit</Label>
-              <select id="auditStatus" name="auditStatus" className={selectCls} defaultValue={searchParams?.auditStatus ?? 'all'}>
+              </Select>
+            </FormField>
+            <FormField label="Audit" htmlFor="auditStatus">
+              <Select id="auditStatus" name="auditStatus" defaultValue={searchParams?.auditStatus ?? 'all'}>
                 <option value="all">All</option>
                 <option value="needs_review">Needs review</option>
                 <option value="failed">Failed</option>
                 <option value="acceptable">Acceptable</option>
                 <option value="perfect">Perfect</option>
-              </select>
-            </div>
-            <div className="space-y-1.5">
-              <Label htmlFor="q">Visitor id</Label>
+              </Select>
+            </FormField>
+            <FormField label="Visitor id" htmlFor="q">
               <Input id="q" name="q" defaultValue={searchParams?.q ?? ''} placeholder="Search visitor id" />
-            </div>
+            </FormField>
             <div className="flex items-end gap-2">
               <Button type="submit">Apply</Button>
               <Button asChild variant="outline">
@@ -121,8 +120,8 @@ export default async function SuperAdminChatLogsPage({ searchParams }: { searchP
             <TableBody>
               {rows.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={6} className="py-8 text-center text-muted-foreground">
-                    No chat logs match these filters.
+                  <TableCell colSpan={6} className="py-0">
+                    <EmptyState title="No chat logs match these filters." />
                   </TableCell>
                 </TableRow>
               ) : (

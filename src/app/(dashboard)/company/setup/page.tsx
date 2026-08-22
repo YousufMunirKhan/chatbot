@@ -3,7 +3,10 @@ import { requireRole } from '@/lib/auth';
 import { ROLES } from '@/lib/constants';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { Alert } from '@/components/ui/alert';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { PageHeader } from '@/components/ui/page-header';
+import { Progress } from '@/components/ui/progress';
 import { getCompanySetupProgress } from '@/modules/company/setup-data';
 import { OnboardingWizard } from '@/modules/company/components/onboarding-wizard';
 import { TestAssistant } from '@/modules/company/components/test-assistant';
@@ -15,28 +18,30 @@ export default async function CompanySetupPage() {
 
   return (
     <div className="mx-auto max-w-6xl space-y-6">
-      <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
-        <div>
-          <p className="text-sm font-medium text-muted-foreground">{setup.companyName}</p>
-          <h1 className="text-2xl font-semibold">Setup journey</h1>
-          <p className="mt-1 max-w-2xl text-sm text-muted-foreground">
-            Finish the essentials in order, or jump to the part you need. Your progress is saved from real business data.
-          </p>
-        </div>
-        <div className="flex flex-wrap items-center gap-2">
-          <Badge variant={setup.percent >= 80 ? 'success' : setup.percent >= 50 ? 'warning' : 'secondary'}>
-            {setup.percent}% ready
-          </Badge>
-          {setup.nextStep ? (
-            <Button asChild>
-              <Link href={setup.nextStep.href}>Continue: {setup.nextStep.title}</Link>
-            </Button>
-          ) : (
-            <Button asChild>
-              <Link href="/company/widget">Test widget</Link>
-            </Button>
-          )}
-        </div>
+      {/* The company name is an eyebrow above the page title; `PageHeader` has no
+          slot for one, so it stays a sibling rather than being folded into the h1. */}
+      <div className="space-y-1">
+        <p className="text-sm font-medium text-muted-foreground">{setup.companyName}</p>
+        <PageHeader
+          title="Setup journey"
+          description="Finish the essentials in order, or jump to the part you need. Your progress is saved from real business data."
+          actions={
+            <>
+              <Badge variant={setup.percent >= 80 ? 'success' : setup.percent >= 50 ? 'warning' : 'secondary'}>
+                {setup.percent}% ready
+              </Badge>
+              {setup.nextStep ? (
+                <Button asChild>
+                  <Link href={setup.nextStep.href}>Continue: {setup.nextStep.title}</Link>
+                </Button>
+              ) : (
+                <Button asChild>
+                  <Link href="/company/widget">Test widget</Link>
+                </Button>
+              )}
+            </>
+          }
+        />
       </div>
 
       <Card className="overflow-hidden">
@@ -44,14 +49,12 @@ export default async function CompanySetupPage() {
           <div className="grid gap-0 lg:grid-cols-[1.1fr_0.9fr]">
             <div className="space-y-4 p-6">
               <div className="flex items-center justify-between text-sm">
-                <span className="font-medium">Launch readiness</span>
+                <span className="font-medium">Ready to answer</span>
                 <span className="text-muted-foreground">
                   {setup.complete} of {setup.total} complete
                 </span>
               </div>
-              <div className="h-2 overflow-hidden rounded-full bg-muted">
-                <div className="h-full rounded-full bg-primary" style={{ width: `${setup.percent}%` }} />
-              </div>
+              <Progress value={setup.percent} label="Ready to answer" />
               <p className="text-sm text-muted-foreground">
                 {setup.nextStep
                   ? `Next best action: ${setup.nextStep.description}`
@@ -74,7 +77,7 @@ export default async function CompanySetupPage() {
                 <p className="mt-1 text-2xl font-semibold">{setup.stats.teamMembers}</p>
               </div>
               <div className="p-4">
-                <p className="text-xs uppercase tracking-wider text-muted-foreground">Business data</p>
+                <p className="text-xs uppercase tracking-wider text-muted-foreground">Your business details</p>
                 <p className="mt-1 text-2xl font-semibold">{setup.stats.businessReadiness}%</p>
               </div>
             </div>
@@ -84,9 +87,9 @@ export default async function CompanySetupPage() {
 
       <Card>
         <CardHeader>
-          <CardTitle>Website-first onboarding</CardTitle>
+          <CardTitle>Start from your website</CardTitle>
           <p className="mt-1 text-sm text-muted-foreground">
-            Start a website client by importing their public pages, then ask only for the missing launch details.
+            Import the pages you already have, then fill in whatever is still missing.
           </p>
         </CardHeader>
         <CardContent className="space-y-5">
@@ -105,9 +108,9 @@ export default async function CompanySetupPage() {
               </p>
             </div>
             <div className="rounded-md border p-3 text-sm">
-              <p className="font-medium">Bot should not guess stock</p>
+              <p className="font-medium">It will never guess at stock</p>
               <p className="mt-1 text-xs text-muted-foreground">
-                If no live catalogue is connected, the assistant should say stock or price needs confirmation.
+                Until your product list is linked up, it tells customers to check the price or availability with you.
               </p>
             </div>
           </div>
@@ -117,9 +120,9 @@ export default async function CompanySetupPage() {
       <Card>
         <CardHeader className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
           <div>
-            <CardTitle>Customer bot launch checklist</CardTitle>
+            <CardTitle>Before you go live</CardTitle>
             <p className="mt-1 text-sm text-muted-foreground">
-              Capability checks run from saved data only, so this does not spend AI tokens.
+              Here is what your website assistant can help with, and what it still needs from you.
             </p>
           </div>
           <Badge
@@ -136,18 +139,17 @@ export default async function CompanySetupPage() {
         </CardHeader>
         <CardContent className="space-y-5">
           {setup.customerReadiness.missingCritical.length ? (
-            <div className="rounded-md border border-amber-200 bg-amber-50 p-4 text-sm text-amber-950">
-              <p className="font-medium">Fix before customer launch</p>
-              <ul className="mt-2 list-inside list-disc space-y-1">
+            <Alert tone="warning" title="Fix these before you go live">
+              <ul className="list-inside list-disc space-y-1">
                 {setup.customerReadiness.missingCritical.map((item) => (
                   <li key={item}>{item}</li>
                 ))}
               </ul>
-            </div>
+            </Alert>
           ) : (
-            <div className="rounded-md border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-950">
-              Customer bot capabilities have the required launch data. Run the tests below before installing.
-            </div>
+            <Alert tone="success">
+              Everything you have turned on has the details it needs. Try the questions below before you install it.
+            </Alert>
           )}
 
           <div className="grid gap-3 md:grid-cols-2">
@@ -157,7 +159,7 @@ export default async function CompanySetupPage() {
                   <div>
                     <p className="font-medium">{capability.label}</p>
                     <p className="mt-1 text-xs text-muted-foreground">
-                      {capability.enabled ? 'Enabled for a customer assistant' : 'Not selected yet'}
+                      {capability.enabled ? 'Turned on for your website assistant' : 'Not turned on yet'}
                     </p>
                   </div>
                   <Badge
@@ -200,7 +202,7 @@ export default async function CompanySetupPage() {
             </div>
           ) : (
             <div className="rounded-md border bg-muted/30 p-4 text-sm text-muted-foreground">
-              Create a customer-facing assistant and choose capabilities to generate launch tests.
+              Create a website assistant and choose what it can help with, and test questions appear here.
             </div>
           )}
 

@@ -6,27 +6,29 @@ import { ROLES } from '@/lib/constants';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { PageHeader } from '@/components/ui/page-header';
 import { BotForm } from '@/modules/company/components/bot-form';
 import { PromptConfigForm } from '@/modules/company/components/prompt-config-form';
 import { WidgetEmbedInstructions } from '@/modules/company/components/widget-embed-instructions';
 import { updateBotAction } from '@/modules/company/actions';
 import { getBot, getCurrentCompany } from '@/modules/company/data';
 import { loadPromptConfig } from '@/modules/company/prompt';
-import { assembleSystemPrompt } from '@/lib/ai/prompts/assemble';
 import { env } from '@/lib/env';
 import { RefreshDashboardShellOnce } from '@/components/refresh-dashboard-shell';
 
 function assistantAudienceCopy(isInternalAssistant: boolean) {
   return isInternalAssistant
     ? {
-        label: 'Internal Help Desk',
-        badge: 'Staff only',
-        description: 'Used inside the company account for staff questions, software guides, connector actions, and escalation.',
+        label: 'Staff assistant',
+        badge: 'Your team only',
+        description:
+          'Answers your team’s questions about how your business works, looks things up in your shop system, and passes anything it cannot handle to a person.',
       }
     : {
-        label: 'Customer Website Assistant',
-        badge: 'Public widget',
-        description: 'Used on the customer website for visitor chat, leads, bookings, support handoff, and website widget setup.',
+        label: 'Website assistant',
+        badge: 'On your website',
+        description:
+          'Talks to visitors on your website: answers questions, takes enquiries and bookings, and passes the chat to a person when it needs to.',
       };
 }
 
@@ -42,45 +44,34 @@ export default async function BotSettingsPage({
   if (!bot) notFound();
 
   const [company, config] = await Promise.all([getCurrentCompany(), loadPromptConfig(bot.id)]);
-  const assembledPrompt = assembleSystemPrompt({
-    botType: bot.botType,
-    assistantAudience: bot.assistantAudience,
-    language: bot.languageDefault,
-    businessName: company.name,
-    capabilities: bot.capabilityFlags,
-    config,
-  });
 
   const embed = `<script src="${env.NEXT_PUBLIC_WIDGET_URL}" data-bot-id="${bot.publicBotId}"></script>`;
   const isInternalAssistant = bot.assistantAudience === 'internal';
   const audienceCopy = assistantAudienceCopy(isInternalAssistant);
   const shortcuts = isInternalAssistant
     ? [
-        { title: 'Ask Help Desk', body: 'Open the single internal chat used by staff.', href: '/company/help-desk?tab=ask', icon: MessageSquare },
-        { title: 'Connect Software', body: 'Create keys, download SDKs, sync routes, and verify setup.', href: '/company/help-desk?tab=connect', icon: Cable },
-        { title: 'Review Knowledge', body: 'Approve synced screen docs before staff rely on them.', href: '/company/help-desk?tab=knowledge', icon: BookOpen },
-        { title: 'Support Flow', body: 'Handle tickets, notifications, WhatsApp, and escalation.', href: '/company/help-desk?tab=support', icon: LifeBuoy },
+        { title: 'Ask the Help Desk', body: 'Open the chat your team uses.', href: '/company/help-desk?tab=ask', icon: MessageSquare },
+        { title: 'Link your shop system', body: 'Set up the link so it can read your screens and prices.', href: '/company/help-desk?tab=connect', icon: Cable },
+        { title: 'Check what it learned', body: 'Approve what it picked up before your team relies on it.', href: '/company/help-desk?tab=knowledge', icon: BookOpen },
+        { title: 'Getting help to a person', body: 'Set up requests, alerts, and WhatsApp.', href: '/company/help-desk?tab=support', icon: LifeBuoy },
       ]
     : [
-        { title: 'Website Widget', body: 'Design launcher, labels, colours, and public chat behaviour.', href: '/company/widget', icon: Globe2 },
-        { title: 'Business Data', body: 'Manage the public knowledge used for customer answers.', href: '/company/business-data', icon: Database },
-        { title: 'Channels', body: 'Connect WhatsApp and other customer messaging channels.', href: '/company/channels', icon: MessageSquare },
-        { title: 'Bot Settings', body: 'Control website domains, snippets, AI replies, and handoff.', href: `/company/bots/${bot.id}/settings`, icon: Settings },
+        { title: 'Website widget', body: 'Choose the colours, wording, and how it appears on your site.', href: '/company/widget', icon: Globe2 },
+        { title: 'Your business details', body: 'Keep the answers it gives customers up to date.', href: '/company/business-data', icon: Database },
+        { title: 'Channels', body: 'Add WhatsApp and the other places customers message you.', href: '/company/channels', icon: MessageSquare },
+        { title: 'Assistant settings', body: 'Your website addresses, replies, and passing chats to a person.', href: `/company/bots/${bot.id}/settings`, icon: Settings },
       ];
 
   return (
     <div className="mx-auto max-w-6xl space-y-6">
       {searchParams?.created === '1' ? <RefreshDashboardShellOnce /> : null}
-      <div>
-        <Link href="/company/bots" className="text-sm text-muted-foreground hover:underline">
-          <span className="dir-arrow" aria-hidden="true">←</span> Assistants
-        </Link>
-        <h1 className="mt-2 text-2xl font-semibold">{bot.name}</h1>
-        <div className="mt-2 flex flex-wrap items-center gap-2">
+      <div className="space-y-2">
+        <PageHeader backTo={{ href: '/company/bots', label: 'Assistants' }} title={bot.name} />
+        <div className="flex flex-wrap items-center gap-2">
           <Badge variant={isInternalAssistant ? 'warning' : 'secondary'}>{audienceCopy.label}</Badge>
           <Badge variant="secondary">{audienceCopy.badge}</Badge>
         </div>
-        <p className="mt-2 max-w-3xl text-sm text-muted-foreground">{audienceCopy.description}</p>
+        <p className="max-w-3xl text-sm text-muted-foreground">{audienceCopy.description}</p>
       </div>
 
       <div className="grid gap-3 md:grid-cols-4">
@@ -114,24 +105,21 @@ export default async function BotSettingsPage({
       </Card>
 
       <details className="rounded-md border bg-card">
-        <summary className="cursor-pointer px-6 py-4 font-semibold">Advanced prompt settings</summary>
+        <summary className="cursor-pointer px-6 py-4 font-semibold">How it speaks to people</summary>
         <div className="space-y-6 border-t p-6">
           <div>
-            <h2 className="text-base font-semibold">Prompt &amp; behavior</h2>
+            <h2 className="text-base font-semibold">Tone and wording</h2>
             <p className="mt-1 text-sm text-muted-foreground">
-              Optional tone and instruction controls. Most customers can leave this as-is.
+              Optional. Most people leave this alone.
             </p>
           </div>
           <PromptConfigForm key={`${bot.id}:${bot.botType}`} botId={bot.id} botType={bot.botType} config={config} />
-          <div>
-            <h2 className="text-base font-semibold">Generated system prompt</h2>
-            <p className="mt-1 text-sm text-muted-foreground">
-              Technical preview generated from audience, capabilities, tone, and safety rules.
-            </p>
-            <pre className="mt-3 max-h-80 overflow-auto whitespace-pre-wrap rounded-md bg-muted p-3 text-xs">
-              {assembledPrompt}
-            </pre>
-          </div>
+          {/*
+            The raw assembled system prompt used to be dumped into a <pre> here —
+            several hundred lines of model instructions in a shop owner's
+            dashboard. It is a platform-operator diagnostic, not a customer
+            surface, so it is gone from this panel entirely.
+          */}
         </div>
       </details>
 
@@ -142,26 +130,25 @@ export default async function BotSettingsPage({
           </CardHeader>
           <CardContent className="space-y-3 text-sm text-muted-foreground">
             <p>
-              Internal Help Desk assistants do not use public website domains or embed snippets.
-              They work through the Help Desk workspace: create a connector, copy the hdk_ key
-              into the customer system, sync screen docs, approve knowledge, and enable safe actions.
+              A staff assistant does not go on your website, so it has no website addresses or
+              snippet. It works through the Help Desk instead, once your shop system is linked to it.
             </p>
             <div className="grid gap-3 md:grid-cols-3">
               <div className="rounded-md border p-3">
-                <p className="font-medium text-foreground">1. Connect</p>
-                <p className="mt-1 text-xs">Download Android, .NET, Node, or Laravel connector packages.</p>
+                <p className="font-medium text-foreground">1. Link it up</p>
+                <p className="mt-1 text-xs">Set up the link between the Help Desk and your shop system.</p>
               </div>
               <div className="rounded-md border p-3">
-                <p className="font-medium text-foreground">2. Review</p>
-                <p className="mt-1 text-xs">Approve generated screen docs and route explanations.</p>
+                <p className="font-medium text-foreground">2. Check what it learned</p>
+                <p className="mt-1 text-xs">Approve the screens and steps it picked up from your system.</p>
               </div>
               <div className="rounded-md border p-3">
-                <p className="font-medium text-foreground">3. Use</p>
-                <p className="mt-1 text-xs">Staff ask the Help Desk and run approved local events.</p>
+                <p className="font-medium text-foreground">3. Put it to work</p>
+                <p className="mt-1 text-xs">Your team asks questions and runs the tasks you have approved.</p>
               </div>
             </div>
             <Button asChild size="sm">
-              <Link href="/company/help-desk">Open Help Desk workspace</Link>
+              <Link href="/company/help-desk">Open the Help Desk</Link>
             </Button>
           </CardContent>
         </Card>

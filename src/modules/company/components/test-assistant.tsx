@@ -1,21 +1,13 @@
 'use client';
 
-import { useFormState, useFormStatus } from 'react-dom';
-import { Button } from '@/components/ui/button';
+import { useFormState } from 'react-dom';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { FormMessage } from '@/components/ui/form-message';
+import { SubmitButton } from '@/components/ui/submit-button';
 import { testAssistantAction, type TestAssistantState } from '../test-assistant-actions';
 
 const initial: TestAssistantState = {};
-
-function AskButton() {
-  const { pending } = useFormStatus();
-  return (
-    <Button type="submit" disabled={pending} className="shrink-0">
-      {pending ? 'Asking…' : 'Ask'}
-    </Button>
-  );
-}
 
 /** Company-facing live test — verify changes by asking the assistant directly. */
 export function TestAssistant() {
@@ -32,9 +24,13 @@ export function TestAssistant() {
       <CardContent className="space-y-3">
         <form action={action} className="flex flex-col gap-2 sm:flex-row">
           <Input name="question" placeholder="e.g. How much is your starter package?" className="flex-1" />
-          <AskButton />
+          <SubmitButton className="shrink-0" pendingLabel="Asking…">
+            Ask
+          </SubmitButton>
         </form>
-        {state.error ? <p className="text-sm text-destructive">{state.error}</p> : null}
+        {/* Success here is the answer block below, not a confirmation line, so
+            this region carries the failure branch only. */}
+        <FormMessage state={{ error: state.error }} />
         {state.answer ? (
           <div className="rounded-lg border bg-muted/30 p-4">
             <div className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">

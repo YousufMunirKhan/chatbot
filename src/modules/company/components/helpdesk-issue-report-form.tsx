@@ -1,10 +1,15 @@
 'use client';
 
 import { useState } from 'react';
-import { useFormState, useFormStatus } from 'react-dom';
+import { useFormState } from 'react-dom';
+import { Alert } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
+import { Select } from '@/components/ui/select';
+import { Textarea } from '@/components/ui/textarea';
+import { FormField } from '@/components/ui/form-field';
+import { FormMessage } from '@/components/ui/form-message';
+import { SubmitButton } from '@/components/ui/submit-button';
 import { reportHelpdeskIssueAction } from '../helpdesk-actions';
 import type { ActionState } from '../actions';
 
@@ -40,15 +45,6 @@ const TEMPLATES = [
   },
 ] as const;
 
-function SubmitButton() {
-  const { pending } = useFormStatus();
-  return (
-    <Button type="submit" disabled={pending}>
-      {pending ? 'Sending...' : 'Send issue report'}
-    </Button>
-  );
-}
-
 export function HelpdeskIssueReportForm() {
   const [state, action] = useFormState(reportHelpdeskIssueAction, initial);
   const [subject, setSubject] = useState('');
@@ -79,23 +75,18 @@ export function HelpdeskIssueReportForm() {
         ))}
       </div>
       <div className="grid gap-4 md:grid-cols-[1fr_180px]">
-        <div className="space-y-1.5">
-          <Label htmlFor="helpdesk-issue-subject">Issue summary</Label>
+        <FormField label="Issue summary" htmlFor="helpdesk-issue-subject">
           <Input
-            id="helpdesk-issue-subject"
             name="subject"
             value={subject}
             onChange={(event) => setSubject(event.target.value)}
             placeholder="Example: Daily sales report stays queued"
             required
           />
-        </div>
-        <div className="space-y-1.5">
-          <Label htmlFor="helpdesk-issue-severity">Severity</Label>
-          <select
-            id="helpdesk-issue-severity"
+        </FormField>
+        <FormField label="Severity" htmlFor="helpdesk-issue-severity">
+          <Select
             name="severity"
-            className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
             value={severity}
             onChange={(event) => setSeverity(event.target.value)}
           >
@@ -103,39 +94,40 @@ export function HelpdeskIssueReportForm() {
             <option value="normal">Normal</option>
             <option value="high">High</option>
             <option value="urgent">Urgent</option>
-          </select>
-        </div>
+          </Select>
+        </FormField>
       </div>
-      <div className="space-y-1.5">
-        <Label htmlFor="helpdesk-issue-route">Screen or route</Label>
+      <FormField label="Screen or route" htmlFor="helpdesk-issue-route">
         <Input
-          id="helpdesk-issue-route"
           name="currentRoute"
           value={route}
           onChange={(event) => setRoute(event.target.value)}
           placeholder="Example: reports.daily_sales or /company/help-desk?tab=ask"
         />
-      </div>
-      <div className="space-y-1.5">
-        <Label htmlFor="helpdesk-issue-details">What happened?</Label>
-        <textarea
-          id="helpdesk-issue-details"
+      </FormField>
+      <FormField label="What happened?" htmlFor="helpdesk-issue-details">
+        {/* `min-h-0 p-3` keeps this 5-row box exactly as it was while still
+            taking `Textarea`'s shared border, background and focus ring. */}
+        <Textarea
           name="details"
           rows={5}
-          className="w-full rounded-md border bg-background p-3 text-sm"
+          className="min-h-0 p-3"
           value={details}
           onChange={(event) => setDetails(event.target.value)}
           placeholder="Write what the staff member tried, what they expected, and what error or result they saw."
           required
         />
-      </div>
-      {state.error ? <p className="text-sm text-destructive">{state.error}</p> : null}
+      </FormField>
+      <FormMessage state={{ error: state.error }} />
       {state.ok ? (
-        <p className="rounded-md border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-950">
+        // The confirmation is a tinted panel rather than a bare line, so it
+        // stays an `Alert` — with the live region added by hand, which the
+        // `bg-emerald-50` paragraph it replaces never had.
+        <Alert tone="success" role="status" aria-live="polite" className="p-3">
           Issue report sent. It is now visible in company notifications and delivery rules will fan it out if enabled.
-        </p>
+        </Alert>
       ) : null}
-      <SubmitButton />
+      <SubmitButton pendingLabel="Sending...">Send issue report</SubmitButton>
     </form>
   );
 }

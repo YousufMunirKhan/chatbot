@@ -1,9 +1,9 @@
-import Link from 'next/link';
 import { requireRole } from '@/lib/auth';
 import { ROLES } from '@/lib/constants';
 import { Badge } from '@/components/ui/badge';
-import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { EmptyState } from '@/components/ui/empty-state';
+import { PageHeader } from '@/components/ui/page-header';
 import { formatDate } from '@/lib/format';
 import { MANAGED_CREDENTIAL_FIELDS } from '@/lib/helpdesk/managed';
 import { listManagedConnectors } from '@/modules/company/managed-connectors-data';
@@ -22,17 +22,12 @@ export default async function ManagedConnectorsPage() {
   const fields = MANAGED_CREDENTIAL_FIELDS as Record<string, Array<{ key: string; label: string; required: boolean }>>;
 
   return (
-    <div className="space-y-6">
-      <div>
-        <Link href="/company/help-desk" className="text-sm text-muted-foreground hover:underline">
-          <span className="dir-arrow" aria-hidden="true">←</span> Help Desk
-        </Link>
-        <h1 className="mt-2 text-2xl font-semibold">Managed connectors</h1>
-        <p className="text-sm text-muted-foreground">
-          Connect Shopify, Square, or Foodics by pasting a token — no SDK to deploy. The assistant queries them
-          server-side for live product, stock, and sales answers.
-        </p>
-      </div>
+    <div className="mx-auto max-w-6xl space-y-6">
+      <PageHeader
+        backTo={{ href: '/company/help-desk', label: 'Help Desk' }}
+        title="Managed connectors"
+        description="Connect Shopify, Square, or Foodics by pasting a token — no SDK to deploy. The assistant queries them server-side for live product, stock, and sales answers."
+      />
 
       <Card>
         <CardHeader>
@@ -47,7 +42,7 @@ export default async function ManagedConnectorsPage() {
       <Card>
         <CardContent className="p-0">
           {connectors.length === 0 ? (
-            <p className="p-6 text-sm text-muted-foreground">No managed connectors yet.</p>
+            <EmptyState title="No managed connectors yet." />
           ) : (
             <ul className="divide-y">
               {connectors.map((c) => (

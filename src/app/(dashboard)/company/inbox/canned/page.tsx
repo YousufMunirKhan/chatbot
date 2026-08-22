@@ -1,8 +1,8 @@
-import Link from 'next/link';
 import { requireRole } from '@/lib/auth';
 import { ROLES } from '@/lib/constants';
-import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
+import { EmptyState } from '@/components/ui/empty-state';
+import { PageHeader } from '@/components/ui/page-header';
 import { listCannedResponses } from '@/modules/company/inbox-data';
 import { deleteCannedResponseAction } from '@/modules/company/inbox-actions';
 import { CannedResponseForm } from '@/modules/company/components/canned-response-form';
@@ -18,16 +18,12 @@ export default async function CannedResponsesPage() {
   const canned = await listCannedResponses();
 
   return (
-    <div className="mx-auto max-w-3xl space-y-6">
-      <div>
-        <Link href="/company/inbox" className="text-sm text-muted-foreground hover:underline">
-          <span className="dir-arrow" aria-hidden="true">←</span> Inbox
-        </Link>
-        <h1 className="mt-2 text-2xl font-semibold">Saved replies</h1>
-        <p className="text-sm text-muted-foreground">
-          Reusable replies agents can insert into any conversation with one click.
-        </p>
-      </div>
+    <div className="mx-auto max-w-6xl space-y-6">
+      <PageHeader
+        backTo={{ href: '/company/inbox', label: 'Inbox' }}
+        title="Saved replies"
+        description="Reusable replies agents can insert into any conversation with one click."
+      />
 
       <Card>
         <CardContent className="p-4">
@@ -38,7 +34,7 @@ export default async function CannedResponsesPage() {
       <Card>
         <CardContent className="p-0">
           {canned.length === 0 ? (
-            <p className="p-6 text-sm text-muted-foreground">No saved replies yet.</p>
+            <EmptyState title="No saved replies yet." />
           ) : (
             <ul className="divide-y">
               {canned.map((c) => (

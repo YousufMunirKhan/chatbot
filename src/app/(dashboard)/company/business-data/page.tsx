@@ -4,6 +4,9 @@ import { ROLES } from '@/lib/constants';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { EmptyState } from '@/components/ui/empty-state';
+import { PageHeader } from '@/components/ui/page-header';
+import { StatTile } from '@/components/ui/stat-tile';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { formatCurrency, formatDate, formatNumber } from '@/lib/format';
 import {
@@ -212,10 +215,15 @@ export default async function BusinessDataWorkspacePage() {
                 </Table>
               ) : (
                 // Module 1 — the add form sits directly above, so no button is needed here.
-                <p className="text-sm text-muted-foreground">
-                  No locations yet. Add each branch or service area you cover so the assistant can answer
-                  &ldquo;where are you&rdquo; and &ldquo;do you deliver to me&rdquo; without guessing.
-                </p>
+                <EmptyState
+                  title="No locations yet."
+                  body={
+                    <>
+                      Add each branch or service area you cover so the assistant can answer &ldquo;where are
+                      you&rdquo; and &ldquo;do you deliver to me&rdquo; without guessing.
+                    </>
+                  }
+                />
               )}
             </CardContent>
           </Card>
@@ -245,15 +253,15 @@ export default async function BusinessDataWorkspacePage() {
             <CardContent>
               {memory.services.length === 0 ? (
                 // Module 2 — empty state points back to the add form on this same tab.
-                <div className="space-y-3">
-                  <p className="max-w-2xl text-sm text-muted-foreground">
-                    No services yet. List what you sell, with prices, and the assistant can answer cost and
-                    availability questions instead of asking customers to call you.
-                  </p>
-                  <Button asChild size="sm">
-                    <a href="#add-service">Add a service</a>
-                  </Button>
-                </div>
+                <EmptyState
+                  title="No services yet."
+                  body="List what you sell, with prices, and the assistant can answer cost and availability questions instead of asking customers to call you."
+                  action={
+                    <Button asChild size="sm">
+                      <a href="#add-service">Add a service</a>
+                    </Button>
+                  }
+                />
               ) : (
                 <Table>
                   <TableHeader>
@@ -318,15 +326,15 @@ export default async function BusinessDataWorkspacePage() {
             <CardContent>
               {memory.policies.length === 0 ? (
                 // Module 3 — highest-value empty state on this tab, so it carries a button.
-                <div className="space-y-3">
-                  <p className="max-w-2xl text-sm text-muted-foreground">
-                    No policies yet. Add your refund, delivery, or privacy policy so the assistant quotes it
-                    exactly instead of guessing.
-                  </p>
-                  <Button asChild size="sm">
-                    <a href="#add-policy">Add a policy</a>
-                  </Button>
-                </div>
+                <EmptyState
+                  title="No policies yet."
+                  body="Add your refund, delivery, or privacy policy so the assistant quotes it exactly instead of guessing."
+                  action={
+                    <Button asChild size="sm">
+                      <a href="#add-policy">Add a policy</a>
+                    </Button>
+                  }
+                />
               ) : (
                 <Table>
                   <TableHeader>
@@ -389,14 +397,15 @@ export default async function BusinessDataWorkspacePage() {
             <CardContent>
               {memory.faqs.length === 0 ? (
                 // Module 4 — cheapest quality win, so the copy names the exact first step.
-                <div className="space-y-3">
-                  <p className="max-w-2xl text-sm text-muted-foreground">
-                    No FAQs yet. The fastest way to improve answers: add the five questions customers ask most.
-                  </p>
-                  <Button asChild size="sm">
-                    <a href="#add-faq">Add an FAQ</a>
-                  </Button>
-                </div>
+                <EmptyState
+                  title="No FAQs yet."
+                  body="The fastest way to improve answers: add the five questions customers ask most."
+                  action={
+                    <Button asChild size="sm">
+                      <a href="#add-faq">Add an FAQ</a>
+                    </Button>
+                  }
+                />
               ) : (
                 <Table>
                   <TableHeader>
@@ -459,14 +468,15 @@ export default async function BusinessDataWorkspacePage() {
             <CardContent>
               {docs.length === 0 ? (
                 // Module 5 — website import is the least work for the owner, so lead with it.
-                <div className="space-y-3">
-                  <p className="max-w-2xl text-sm text-muted-foreground">
-                    Nothing imported yet. Paste your website address and we&rsquo;ll read your public pages for you.
-                  </p>
-                  <Button asChild size="sm">
-                    <a href="#add-knowledge">Import my website</a>
-                  </Button>
-                </div>
+                <EmptyState
+                  title="Nothing imported yet."
+                  body={<>Paste your website address and we&rsquo;ll read your public pages for you.</>}
+                  action={
+                    <Button asChild size="sm">
+                      <a href="#add-knowledge">Import my website</a>
+                    </Button>
+                  }
+                />
               ) : (
                 <Table>
                   <TableHeader>
@@ -504,24 +514,22 @@ export default async function BusinessDataWorkspacePage() {
 
   return (
     <div className="mx-auto max-w-6xl space-y-6">
-      <div className="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
-        <div>
-          <h1 className="text-2xl font-semibold">Business Data</h1>
-          <p className="text-sm text-muted-foreground">
-            Edit the facts your assistant uses. Pick a tab, make the change, save, and stay on this workspace.
-          </p>
-        </div>
-        <Badge variant={memory.readiness.percent >= 80 ? 'success' : memory.readiness.percent >= 50 ? 'warning' : 'secondary'}>
-          {memory.readiness.percent}% ready
-        </Badge>
-      </div>
+      <PageHeader
+        title="Business Data"
+        description="Edit the facts your assistant uses. Pick a tab, make the change, save, and stay on this workspace."
+        actions={
+          <Badge variant={memory.readiness.percent >= 80 ? 'success' : memory.readiness.percent >= 50 ? 'warning' : 'secondary'}>
+            {memory.readiness.percent}% ready
+          </Badge>
+        }
+      />
 
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
-        <Card><CardContent className="p-4"><p className="text-xs uppercase tracking-wider text-muted-foreground">Services</p><p className="mt-1 text-2xl font-semibold">{memory.services.length}</p></CardContent></Card>
-        <Card><CardContent className="p-4"><p className="text-xs uppercase tracking-wider text-muted-foreground">Policies</p><p className="mt-1 text-2xl font-semibold">{memory.policies.length}</p></CardContent></Card>
-        <Card><CardContent className="p-4"><p className="text-xs uppercase tracking-wider text-muted-foreground">FAQs</p><p className="mt-1 text-2xl font-semibold">{memory.faqs.length}</p></CardContent></Card>
-        <Card><CardContent className="p-4"><p className="text-xs uppercase tracking-wider text-muted-foreground">Documents</p><p className="mt-1 text-2xl font-semibold">{docs.length}</p></CardContent></Card>
-        <Card><CardContent className="p-4"><p className="text-xs uppercase tracking-wider text-muted-foreground">Assistants</p><p className="mt-1 text-2xl font-semibold">{bots.length}</p></CardContent></Card>
+        <StatTile label="Services" value={memory.services.length} />
+        <StatTile label="Policies" value={memory.policies.length} />
+        <StatTile label="FAQs" value={memory.faqs.length} />
+        <StatTile label="Documents" value={docs.length} />
+        <StatTile label="Assistants" value={bots.length} />
       </div>
 
       <BusinessDataTabs tabs={tabs} />

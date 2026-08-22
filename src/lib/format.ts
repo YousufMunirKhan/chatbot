@@ -1,6 +1,11 @@
 /** Shared display formatters. */
 
-export function formatCurrency(amount: number, currency = 'USD'): string {
+/**
+ * `currency` is intentionally REQUIRED: the super-admin money screens used to
+ * mix GBP plan revenue with USD provider cost, and a defaulted argument let
+ * GBP amounts render behind a `$` sign with nothing to catch it.
+ */
+export function formatCurrency(amount: number, currency: string): string {
   return new Intl.NumberFormat('en-US', {
     style: 'currency',
     currency,

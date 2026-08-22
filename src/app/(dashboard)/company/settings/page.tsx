@@ -1,7 +1,9 @@
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { EmptyState } from '@/components/ui/empty-state';
 import { InfoBanner } from '@/components/info-banner';
+import { PageHeader } from '@/components/ui/page-header';
 import { requireRole } from '@/lib/auth';
 import { ROLES, DEFAULT_CHAT_RETENTION_DAYS } from '@/lib/constants';
 import { createSupabaseServiceClient } from '@/lib/db/server';
@@ -13,6 +15,22 @@ import { formatDate } from '@/lib/format';
 import { listDataRequests } from '@/modules/company/gdpr-data';
 import { processDataRequestAction } from '@/modules/company/gdpr-actions';
 import { ConfirmSubmit } from '@/components/confirm-submit';
+
+const SECTIONS: Array<{ href: string; label: string; hint: string }> = [
+  { href: '/company/agents', label: 'Team', hint: 'Agents, invites, and availability.' },
+  { href: '/company/billing', label: 'Billing', hint: 'Plan, usage limits, and subscription.' },
+  { href: '/company/integrations', label: 'Integrations', hint: 'Calendars, commerce, and data sync.' },
+  { href: '/company/quick-actions', label: 'Quick actions', hint: 'Chat buttons and handoff shortcuts.' },
+  { href: '/company/ai-controls', label: 'AI budget', hint: 'Monthly spend cap, hard stop, and caching.' },
+  { href: '/company/quality', label: 'Quality', hint: 'Feedback and answer evaluation.' },
+  { href: '/company/usage', label: 'Usage', hint: 'Messages, cost, and limits.' },
+  { href: '/company/security', label: 'Security', hint: 'Access, privacy, and protections.' },
+  { href: '/company/channels', label: 'Channels', hint: 'WhatsApp, Instagram, email, and SMS.' },
+  { href: '/company/broadcasts', label: 'Broadcasts', hint: 'Send a message to a group of customers.' },
+  { href: '/company/campaigns', label: 'Campaigns', hint: 'Proactive messages triggered by visitor behaviour.' },
+  { href: '/company/managed-connectors', label: 'Managed connectors', hint: 'Shopify, Square, and Foodics, connected for you.' },
+  { href: '/company/catalog', label: 'Catalog', hint: 'Products and menu items the assistant can quote.' },
+];
 
 async function getRetentionDays(): Promise<number> {
   const companyId = await getCompanyId();
@@ -40,65 +58,23 @@ export default async function CompanySettingsPage() {
   const openRequests = dataRequests.filter((r) => r.status === 'open' || r.status === 'processing');
 
   return (
-    <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-semibold">Team &amp; Settings</h1>
-        <p className="text-sm text-muted-foreground">People, billing, privacy, integrations, and advanced controls.</p>
-      </div>
+    <div className="mx-auto max-w-6xl space-y-6">
+      <PageHeader
+        title={<>Team &amp; Settings</>}
+        description="People, billing, privacy, integrations, and advanced controls."
+      />
 
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <Link href="/company/agents" className="rounded-lg border bg-card p-4 hover:bg-muted/50">
-          <p className="text-sm font-medium">Team</p>
-          <p className="mt-1 text-xs text-muted-foreground">Agents, invites, and availability.</p>
-        </Link>
-        <Link href="/company/billing" className="rounded-lg border bg-card p-4 hover:bg-muted/50">
-          <p className="text-sm font-medium">Billing</p>
-          <p className="mt-1 text-xs text-muted-foreground">Plan, usage limits, and subscription.</p>
-        </Link>
-        <Link href="/company/integrations" className="rounded-lg border bg-card p-4 hover:bg-muted/50">
-          <p className="text-sm font-medium">Integrations</p>
-          <p className="mt-1 text-xs text-muted-foreground">Calendars, commerce, and data sync.</p>
-        </Link>
-        <Link href="/company/quick-actions" className="rounded-lg border bg-card p-4 hover:bg-muted/50">
-          <p className="text-sm font-medium">Quick actions</p>
-          <p className="mt-1 text-xs text-muted-foreground">Chat buttons and handoff shortcuts.</p>
-        </Link>
-        <Link href="/company/ai-controls" className="rounded-lg border bg-card p-4 hover:bg-muted/50">
-          <p className="text-sm font-medium">AI budget</p>
-          <p className="mt-1 text-xs text-muted-foreground">Monthly spend cap, hard stop, and caching.</p>
-        </Link>
-        <Link href="/company/quality" className="rounded-lg border bg-card p-4 hover:bg-muted/50">
-          <p className="text-sm font-medium">Quality</p>
-          <p className="mt-1 text-xs text-muted-foreground">Feedback and answer evaluation.</p>
-        </Link>
-        <Link href="/company/usage" className="rounded-lg border bg-card p-4 hover:bg-muted/50">
-          <p className="text-sm font-medium">Usage</p>
-          <p className="mt-1 text-xs text-muted-foreground">Messages, cost, and limits.</p>
-        </Link>
-        <Link href="/company/security" className="rounded-lg border bg-card p-4 hover:bg-muted/50">
-          <p className="text-sm font-medium">Security</p>
-          <p className="mt-1 text-xs text-muted-foreground">Access, privacy, and protections.</p>
-        </Link>
-        <Link href="/company/channels" className="rounded-lg border bg-card p-4 hover:bg-muted/50">
-          <p className="text-sm font-medium">Channels</p>
-          <p className="mt-1 text-xs text-muted-foreground">WhatsApp, Instagram, email, and SMS.</p>
-        </Link>
-        <Link href="/company/broadcasts" className="rounded-lg border bg-card p-4 hover:bg-muted/50">
-          <p className="text-sm font-medium">Broadcasts</p>
-          <p className="mt-1 text-xs text-muted-foreground">Send a message to a group of customers.</p>
-        </Link>
-        <Link href="/company/campaigns" className="rounded-lg border bg-card p-4 hover:bg-muted/50">
-          <p className="text-sm font-medium">Campaigns</p>
-          <p className="mt-1 text-xs text-muted-foreground">Proactive messages triggered by visitor behaviour.</p>
-        </Link>
-        <Link href="/company/managed-connectors" className="rounded-lg border bg-card p-4 hover:bg-muted/50">
-          <p className="text-sm font-medium">Managed connectors</p>
-          <p className="mt-1 text-xs text-muted-foreground">Shopify, Square, and Foodics, connected for you.</p>
-        </Link>
-        <Link href="/company/catalog" className="rounded-lg border bg-card p-4 hover:bg-muted/50">
-          <p className="text-sm font-medium">Catalog</p>
-          <p className="mt-1 text-xs text-muted-foreground">Products and menu items the assistant can quote.</p>
-        </Link>
+        {SECTIONS.map((section) => (
+          <Link
+            key={section.href}
+            href={section.href}
+            className="rounded-lg border bg-card p-4 hover:bg-muted/50"
+          >
+            <p className="text-sm font-medium">{section.label}</p>
+            <p className="mt-1 text-xs text-muted-foreground">{section.hint}</p>
+          </Link>
+        ))}
       </div>
 
       <Card>
@@ -131,7 +107,7 @@ export default async function CompanySettingsPage() {
         </CardHeader>
         <CardContent>
           {openRequests.length === 0 ? (
-            <p className="text-sm text-muted-foreground">No pending requests.</p>
+            <EmptyState title="No pending requests." />
           ) : (
             <ul className="divide-y">
               {openRequests.map((r) => (

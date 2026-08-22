@@ -1,22 +1,14 @@
 'use client';
 
-import { useFormState, useFormStatus } from 'react-dom';
-import { Button } from '@/components/ui/button';
+import { useFormState } from 'react-dom';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { FormMessage } from '@/components/ui/form-message';
+import { SubmitButton } from '@/components/ui/submit-button';
 import { updateLocalStockAction } from '../helpdesk-actions';
 import type { ActionState } from '../actions';
 
 const initial: ActionState = {};
-
-function Submit() {
-  const { pending } = useFormStatus();
-  return (
-    <Button type="submit" size="sm" disabled={pending}>
-      {pending ? 'Updating...' : 'Update stock'}
-    </Button>
-  );
-}
 
 export function StockUpdateForm({ productId, currentQuantity }: { productId: string; currentQuantity: number }) {
   const [state, action] = useFormState(updateLocalStockAction, initial);
@@ -24,6 +16,9 @@ export function StockUpdateForm({ productId, currentQuantity }: { productId: str
     <form action={action} className="space-y-2">
       <input type="hidden" name="productId" value={productId} />
       <div className="flex flex-wrap items-end gap-2">
+        {/* Not `FormField`: this row runs a compact `text-xs` label against a
+            `space-y-1` rhythm, and `FormField` styles its label at `text-sm`
+            with no override. */}
         <div className="w-28 space-y-1">
           <Label htmlFor={`quantity-${productId}`} className="text-xs">
             Quantity
@@ -34,10 +29,11 @@ export function StockUpdateForm({ productId, currentQuantity }: { productId: str
           <input name="confirm" type="checkbox" className="h-4 w-4" />
           Confirm
         </label>
-        <Submit />
+        <SubmitButton size="sm" pendingLabel="Updating...">
+          Update stock
+        </SubmitButton>
       </div>
-      {state.error ? <p className="text-xs text-destructive">{state.error}</p> : null}
-      {state.ok ? <p className="text-xs text-emerald-600">Stock updated and audit logged.</p> : null}
+      <FormMessage state={state} okText="Stock updated and audit logged." className="text-xs" />
     </form>
   );
 }

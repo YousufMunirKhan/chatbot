@@ -4,20 +4,25 @@ import { ROLES } from '@/lib/constants';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { EmptyState } from '@/components/ui/empty-state';
+import { PageHeader } from '@/components/ui/page-header';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { formatCurrency } from '@/lib/format';
 import { listMenuItems, listSyncedProducts } from '@/modules/company/integrations-data';
 
-function EmptyState({ kind, detail }: { kind: string; detail: string }) {
+/** Both catalog tabs are read-only mirrors of an integration, so they share one
+ *  empty state that names the integration as the only way to fill it. */
+function NothingSynced({ kind, detail }: { kind: string; detail: string }) {
   return (
-    <div className="space-y-3 px-6 pb-6">
-      <p className="max-w-2xl text-sm text-muted-foreground">
-        No {kind} yet. This page is read-only — {detail} Connect your store or upload a CSV and they appear here.
-      </p>
-      <Button asChild size="sm">
-        <Link href="/company/integrations">Import your {kind}</Link>
-      </Button>
-    </div>
+    <EmptyState
+      title={`No ${kind} yet.`}
+      body={`This page is read-only — ${detail} Connect your store or upload a CSV and they appear here.`}
+      action={
+        <Button asChild size="sm">
+          <Link href="/company/integrations">Import your {kind}</Link>
+        </Button>
+      }
+    />
   );
 }
 
@@ -26,13 +31,11 @@ export default async function CompanyCatalogPage() {
   const [products, menuItems] = await Promise.all([listSyncedProducts(), listMenuItems()]);
 
   return (
-    <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-semibold">Catalog</h1>
-        <p className="text-sm text-muted-foreground">
-          Products and menu items synced from your integrations.
-        </p>
-      </div>
+    <div className="mx-auto max-w-6xl space-y-6">
+      <PageHeader
+        title="Catalog"
+        description="Products and menu items synced from your integrations."
+      />
 
       <Card>
         <CardHeader>
@@ -40,7 +43,7 @@ export default async function CompanyCatalogPage() {
         </CardHeader>
         <CardContent className="p-0">
           {products.length === 0 ? (
-            <EmptyState kind="products" detail="products come from your integrations, not from typing them in." />
+            <NothingSynced kind="products" detail="products come from your integrations, not from typing them in." />
           ) : (
             <Table>
               <TableHeader>
@@ -76,7 +79,7 @@ export default async function CompanyCatalogPage() {
         </CardHeader>
         <CardContent className="p-0">
           {menuItems.length === 0 ? (
-            <EmptyState kind="menu items" detail="menu items come from your integrations, not from typing them in." />
+            <NothingSynced kind="menu items" detail="menu items come from your integrations, not from typing them in." />
           ) : (
             <Table>
               <TableHeader>
@@ -92,7 +95,7 @@ export default async function CompanyCatalogPage() {
                   <TableRow key={m.id}>
                     <TableCell className="font-medium">{m.name}</TableCell>
                     <TableCell className="text-muted-foreground">{m.category ?? '—'}</TableCell>
-                    <TableCell>{m.basePrice == null ? '—' : formatCurrency(m.basePrice)}</TableCell>
+                    <TableCell>{m.basePrice == null ? '—' : formatCurrency(m.basePrice, 'USD')}</TableCell>
                     <TableCell>
                       <Badge variant={m.isAvailable ? 'success' : 'secondary'}>
                         {m.isAvailable ? 'Available' : 'Unavailable'}

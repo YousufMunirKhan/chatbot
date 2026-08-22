@@ -30,7 +30,7 @@ export function ModulePlaceholder({
             functionality lands when that module is built.
           </p>
           {features && features.length > 0 ? (
-            <ul className="mx-auto max-w-md list-inside list-disc text-left text-sm text-muted-foreground">
+            <ul className="mx-auto max-w-md list-inside list-disc text-start text-sm text-muted-foreground">
               {features.map((f) => (
                 <li key={f}>{f}</li>
               ))}

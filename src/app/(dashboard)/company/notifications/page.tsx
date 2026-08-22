@@ -4,6 +4,9 @@ import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
+import { EmptyState } from '@/components/ui/empty-state';
+import { PageHeader } from '@/components/ui/page-header';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { formatDate } from '@/lib/format';
 import { listNotifications, unreadCount } from '@/modules/company/notifications-data';
 import { markAllReadAction, markReadAction } from '@/modules/company/notifications-actions';
@@ -38,23 +41,21 @@ export default async function NotificationsPage({
   ]);
 
   return (
-    <div className="space-y-6">
+    <div className="mx-auto max-w-6xl space-y-6">
       <RefreshOnFocus />
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <h1 className="text-2xl font-semibold">Notifications</h1>
-          <p className="text-sm text-muted-foreground">
-            {unread > 0 ? `${unread} unread` : 'All caught up.'}
-          </p>
-        </div>
-        {activeTab === 'inbox' && unread > 0 ? (
-          <form action={markAllReadAction}>
-            <Button type="submit" variant="outline">
-              Mark all read
-            </Button>
-          </form>
-        ) : null}
-      </div>
+      <PageHeader
+        title="Notifications"
+        description={unread > 0 ? `${unread} unread` : 'All caught up.'}
+        actions={
+          activeTab === 'inbox' && unread > 0 ? (
+            <form action={markAllReadAction}>
+              <Button type="submit" variant="outline">
+                Mark all read
+              </Button>
+            </form>
+          ) : null
+        }
+      />
 
       <div className="flex flex-wrap gap-2 border-b">
         {visibleTabs.map((tab) => (
@@ -95,51 +96,49 @@ export default async function NotificationsPage({
           </CardHeader>
           <CardContent>
             {logs.length ? (
-              <div className="overflow-x-auto">
-                <table className="w-full min-w-[720px] text-sm">
-                  <thead className="border-b bg-muted/30">
-                    <tr>
-                      <th className="px-3 py-2 text-start font-medium">Time</th>
-                      <th className="px-3 py-2 text-start font-medium">Event</th>
-                      <th className="px-3 py-2 text-start font-medium">Channel</th>
-                      <th className="px-3 py-2 text-start font-medium">Recipient</th>
-                      <th className="px-3 py-2 text-start font-medium">Status</th>
-                      <th className="px-3 py-2 text-start font-medium">Error</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {logs.map((log) => (
-                      <tr key={log.id} className="border-b">
-                        <td className="px-3 py-2 text-muted-foreground">{formatDate(log.createdAt)}</td>
-                        <td className="px-3 py-2">{log.eventType.replace(/_/g, ' ')}</td>
-                        <td className="px-3 py-2">{log.channel}</td>
-                        <td className="max-w-[220px] truncate px-3 py-2">{log.recipient ?? '-'}</td>
-                        <td className="px-3 py-2">
-                          <Badge
-                            variant={log.status === 'sent' ? 'default' : log.status === 'failed' ? 'destructive' : 'secondary'}
-                          >
-                            {log.status}
-                          </Badge>
-                        </td>
-                        <td className="max-w-[260px] truncate px-3 py-2 text-muted-foreground">
-                          {log.errorMessage ?? '-'}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
+              <Table className="min-w-[720px]">
+                <TableHeader className="bg-muted/30">
+                  <TableRow>
+                    <TableHead>Time</TableHead>
+                    <TableHead>Event</TableHead>
+                    <TableHead>Channel</TableHead>
+                    <TableHead>Recipient</TableHead>
+                    <TableHead>Status</TableHead>
+                    <TableHead>Error</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {logs.map((log) => (
+                    <TableRow key={log.id}>
+                      <TableCell className="text-muted-foreground">{formatDate(log.createdAt)}</TableCell>
+                      <TableCell>{log.eventType.replace(/_/g, ' ')}</TableCell>
+                      <TableCell>{log.channel}</TableCell>
+                      <TableCell className="max-w-[220px] truncate">{log.recipient ?? '-'}</TableCell>
+                      <TableCell>
+                        <Badge
+                          variant={log.status === 'sent' ? 'default' : log.status === 'failed' ? 'destructive' : 'secondary'}
+                        >
+                          {log.status}
+                        </Badge>
+                      </TableCell>
+                      <TableCell className="max-w-[260px] truncate text-muted-foreground">
+                        {log.errorMessage ?? '-'}
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
             ) : (
               // Module 1 — nothing has been sent yet; point at the rules that decide sending.
-              <div className="space-y-3">
-                <p className="max-w-xl text-sm text-muted-foreground">
-                  No delivery attempts yet. Every email, WhatsApp, Slack, and webhook alert this workspace sends
-                  is recorded here, with the reason when one is skipped or fails.
-                </p>
-                <Button asChild size="sm" variant="outline">
-                  <Link href="/company/notifications?tab=settings">Check delivery settings</Link>
-                </Button>
-              </div>
+              <EmptyState
+                title="No delivery attempts yet."
+                body="Every email, WhatsApp, Slack, and webhook alert this workspace sends is recorded here, with the reason when one is skipped or fails."
+                action={
+                  <Button asChild size="sm" variant="outline">
+                    <Link href="/company/notifications?tab=settings">Check delivery settings</Link>
+                  </Button>
+                }
+              />
             )}
           </CardContent>
         </Card>
@@ -148,17 +147,18 @@ export default async function NotificationsPage({
       {activeTab === 'inbox' && notifications.length === 0 ? (
         // Module 2 — admins can act on this; agents only get the explanation.
         <Card>
-          <CardContent className="space-y-3 p-6">
-            <p className="text-sm font-medium">No notifications yet</p>
-            <p className="max-w-xl text-sm text-muted-foreground">
-              You will get one here whenever a lead, booking, order, or handoff request comes in. Nothing has
-              happened yet.
-            </p>
-            {canManageDelivery ? (
-              <Button asChild size="sm" variant="outline">
-                <Link href="/company/notifications?tab=settings">Choose who gets alerted</Link>
-              </Button>
-            ) : null}
+          <CardContent className="p-0">
+            <EmptyState
+              title="No notifications yet"
+              body="You will get one here whenever a lead, booking, order, or handoff request comes in. Nothing has happened yet."
+              action={
+                canManageDelivery ? (
+                  <Button asChild size="sm" variant="outline">
+                    <Link href="/company/notifications?tab=settings">Choose who gets alerted</Link>
+                  </Button>
+                ) : null
+              }
+            />
           </CardContent>
         </Card>
       ) : null}

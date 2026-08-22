@@ -1,19 +1,24 @@
+import { requireRole } from '@/lib/auth';
+import { ROLES } from '@/lib/constants';
 import { Card, CardContent } from '@/components/ui/card';
+import { EmptyState } from '@/components/ui/empty-state';
+import { PageHeader } from '@/components/ui/page-header';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { listAdminAccessLogs, listAuditLogs } from '@/modules/super-admin/data';
 import { formatDate } from '@/lib/format';
 
 export default async function AuditLogsPage() {
+  // Defence in depth: the /super-admin layout already guards this subtree, but a
+  // platform-operator surface should not rely on a single ancestor check.
+  await requireRole([ROLES.SUPER_ADMIN]);
   const [logs, accessLogs] = await Promise.all([listAuditLogs(150), listAdminAccessLogs(150)]);
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-semibold">Audit Logs</h1>
-        <p className="text-sm text-muted-foreground">
-          Sensitive platform actions, raw chat access, and super-admin impersonation.
-        </p>
-      </div>
+      <PageHeader
+        title="Audit Logs"
+        description="Sensitive platform actions, raw chat access, and super-admin impersonation."
+      />
 
       <Card>
         <CardContent className="p-0">
@@ -29,8 +34,8 @@ export default async function AuditLogsPage() {
             <TableBody>
               {logs.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={4} className="py-8 text-center text-muted-foreground">
-                    No audit entries yet.
+                  <TableCell colSpan={4} className="py-0">
+                    <EmptyState title="No audit entries yet." />
                   </TableCell>
                 </TableRow>
               ) : (
@@ -72,8 +77,8 @@ export default async function AuditLogsPage() {
             <TableBody>
               {accessLogs.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={5} className="py-8 text-center text-muted-foreground">
-                    No super-admin access entries yet.
+                  <TableCell colSpan={5} className="py-0">
+                    <EmptyState title="No super-admin access entries yet." />
                   </TableCell>
                 </TableRow>
               ) : (

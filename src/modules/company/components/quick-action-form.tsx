@@ -12,10 +12,9 @@ import type { QuickActionType } from '@/lib/quick-actions';
 import type { BotRow } from '../data';
 import { saveQuickActionAction, type QuickActionState } from '../quick-actions-actions';
 import type { QuickActionRow } from '../quick-actions-data';
+import { Select } from '@/components/ui/select';
 
 const initial: QuickActionState = {};
-const selectCls =
-  'flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring';
 
 const ACTION_OPTIONS: Array<{
   value: QuickActionType;
@@ -254,32 +253,32 @@ export function QuickActionForm({ bots, action, compact }: { bots: BotRow[]; act
               </div>
               <div className="space-y-1.5">
                 <Label>Assistant</Label>
-                <select name="botId" className={selectCls} defaultValue={action?.botId ?? ''}>
+                <Select name="botId" defaultValue={action?.botId ?? ''}>
                   <option value="">All assistants</option>
                   {bots.map((bot) => (
                     <option key={bot.id} value={bot.id}>
                       {bot.name}
                     </option>
                   ))}
-                </select>
+                </Select>
               </div>
               <div className="space-y-1.5">
                 <Label>Audience</Label>
-                <select name="audience" className={selectCls} defaultValue={action?.audience ?? 'customer'}>
+                <Select name="audience" defaultValue={action?.audience ?? 'customer'}>
                   {AUDIENCE_OPTIONS.map((option) => (
                     <option key={option.value} value={option.value}>
                       {option.label}
                     </option>
                   ))}
-                </select>
+                </Select>
               </div>
               <div className="space-y-1.5">
                 <Label>Business hours</Label>
-                <select name="businessHoursMode" className={selectCls} defaultValue={action?.businessHoursMode ?? 'any'}>
+                <Select name="businessHoursMode" defaultValue={action?.businessHoursMode ?? 'any'}>
                   <option value="any">Show any time</option>
                   <option value="during_hours">Only during business hours</option>
                   <option value="after_hours">Only after hours</option>
-                </select>
+                </Select>
               </div>
             </div>
 
@@ -342,13 +341,13 @@ export function QuickActionForm({ bots, action, compact }: { bots: BotRow[]; act
                 {fields.map((field) => (
                   <div key={field.id} className="grid gap-3 rounded-md border p-3 md:grid-cols-[1fr_150px_auto_auto]">
                     <Input value={field.label} onChange={(event) => updateField(field.id, { label: event.target.value })} placeholder="Field label" />
-                    <select className={selectCls} value={field.type} onChange={(event) => updateField(field.id, { type: event.target.value })}>
+                    <Select value={field.type} onChange={(event) => updateField(field.id, { type: event.target.value })}>
                       {FIELD_TYPES.map((option) => (
                         <option key={option.value} value={option.value}>
                           {option.label}
                         </option>
                       ))}
-                    </select>
+                    </Select>
                     <label className="flex items-center gap-2 text-sm">
                       <input type="checkbox" checked={field.required} onChange={(event) => updateField(field.id, { required: event.target.checked })} className="h-4 w-4" />
                       Required
@@ -382,13 +381,13 @@ export function QuickActionForm({ bots, action, compact }: { bots: BotRow[]; act
               </div>
               <div className="space-y-1.5">
                 <Label>Context mode</Label>
-                <select name="contextMode" className={selectCls} defaultValue={action?.contextMode ?? 'initial'}>
+                <Select name="contextMode" defaultValue={action?.contextMode ?? 'initial'}>
                   {CONTEXT_MODE_OPTIONS.map((option) => (
                     <option key={option.value} value={option.value}>
                       {option.label}
                     </option>
                   ))}
-                </select>
+                </Select>
               </div>
               <label className="flex items-center gap-2 pt-7 text-sm">
                 <input type="checkbox" name="isActive" defaultChecked={action?.isActive ?? true} className="h-4 w-4" />

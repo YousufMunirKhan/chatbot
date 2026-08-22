@@ -1,26 +1,34 @@
+import { requireRole } from '@/lib/auth';
+import { ROLES } from '@/lib/constants';
 import Link from 'next/link';
+import { Alert } from '@/components/ui/alert';
 import { Card, CardContent } from '@/components/ui/card';
+import { PageHeader } from '@/components/ui/page-header';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { InfoBanner } from '@/components/info-banner';
 import { listCompanies } from '@/modules/super-admin/data';
 
 export default async function IntegrationsPage() {
+  // Defence in depth: the /super-admin layout already guards this subtree, but a
+  // platform-operator surface should not rely on a single ancestor check.
+  await requireRole([ROLES.SUPER_ADMIN]);
   const companies = await listCompanies();
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-semibold">Integrations</h1>
-        <p className="text-sm text-muted-foreground">
-          Connected sources and sync status across all companies.
-        </p>
-      </div>
+      <PageHeader
+        title="Integrations"
+        description="Connected sources and sync status across all companies."
+      />
 
-      <InfoBanner>
+      {/*
+        "This module ships later" is a statement of fact, not a warning — the
+        operator has nothing to do about it. `info`, not the old amber banner.
+      */}
+      <Alert tone="info">
         Integration accounts and sync jobs are introduced in <strong>Module 14</strong>. Once a
         company connects Shopify / WooCommerce / CSV / Custom API, their connectors and last-sync
         status appear here.
-      </InfoBanner>
+      </Alert>
 
       <Card>
         <CardContent className="p-0">

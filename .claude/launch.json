@@ -2,9 +2,24 @@
   "version": "0.0.1",
   "configurations": [
     {
+      "name": "next-dev",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": [
+        "run",
+        "dev"
+      ],
+      "port": 3000
+    },
+    {
       "name": "widget-static",
       "runtimeExecutable": "npx",
-      "runtimeArgs": ["--yes", "serve", "public", "-l", "4173"],
+      "runtimeArgs": [
+        "--yes",
+        "serve",
+        "public",
+        "-l",
+        "4173"
+      ],
       "port": 4173
     }
   ]

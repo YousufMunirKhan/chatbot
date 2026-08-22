@@ -1,9 +1,11 @@
 'use client';
 
-import { useFormState, useFormStatus } from 'react-dom';
-import { Button } from '@/components/ui/button';
+import { useFormState } from 'react-dom';
+import { FormField } from '@/components/ui/form-field';
+import { FormMessage } from '@/components/ui/form-message';
 import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
+import { Select } from '@/components/ui/select';
+import { SubmitButton } from '@/components/ui/submit-button';
 import {
   updatePlatformNotificationsAction,
   type PlatformNotificationsActionState,
@@ -11,13 +13,6 @@ import {
 import type { PlatformNotificationSettingsView } from '../notifications-data';
 
 const initial: PlatformNotificationsActionState = {};
-const selectCls =
-  'flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring';
-
-function SubmitButton() {
-  const { pending } = useFormStatus();
-  return <Button type="submit" disabled={pending}>{pending ? 'Saving...' : 'Save platform notifications'}</Button>;
-}
 
 export function PlatformNotificationsForm({ settings }: { settings: PlatformNotificationSettingsView }) {
   const [state, formAction] = useFormState(updatePlatformNotificationsAction, initial);
@@ -25,24 +20,23 @@ export function PlatformNotificationsForm({ settings }: { settings: PlatformNoti
   return (
     <form action={formAction} className="space-y-6">
       <div className="grid gap-4 sm:grid-cols-2">
-        <div className="space-y-1.5">
-          <Label htmlFor="defaultEmailMode">Default company email option</Label>
-          <select id="defaultEmailMode" name="defaultEmailMode" className={selectCls} defaultValue={settings.defaultEmailMode}>
+        <FormField label="Default company email option" htmlFor="defaultEmailMode">
+          <Select id="defaultEmailMode" name="defaultEmailMode" defaultValue={settings.defaultEmailMode}>
             <option value="platform">Use platform sender by default</option>
             <option value="company_smtp">Let company configure SMTP by default</option>
-          </select>
-        </div>
-        <div className="space-y-1.5">
-          <Label htmlFor="whatsappProvider">Platform-managed WhatsApp provider</Label>
-          <select id="whatsappProvider" name="whatsappProvider" className={selectCls} defaultValue={settings.whatsappProvider}>
+          </Select>
+        </FormField>
+        <FormField
+          label="Platform-managed WhatsApp provider"
+          htmlFor="whatsappProvider"
+          hint="Used only when a company is explicitly set to platform-managed WhatsApp."
+        >
+          <Select id="whatsappProvider" name="whatsappProvider" defaultValue={settings.whatsappProvider}>
             <option value="disabled">Disabled</option>
             <option value="meta_cloud">Meta Cloud API</option>
             <option value="twilio">Twilio WhatsApp</option>
-          </select>
-          <p className="text-xs text-muted-foreground">
-            Used only when a company is explicitly set to platform-managed WhatsApp.
-          </p>
-        </div>
+          </Select>
+        </FormField>
       </div>
 
       <section className="space-y-3">
@@ -54,27 +48,23 @@ export function PlatformNotificationsForm({ settings }: { settings: PlatformNoti
           </p>
         </div>
         <div className="grid gap-4 sm:grid-cols-2">
-          <div className="space-y-1.5">
-            <Label htmlFor="metaPhoneNumberId">Phone number ID</Label>
+          <FormField label="Phone number ID" htmlFor="metaPhoneNumberId">
             <Input id="metaPhoneNumberId" name="metaPhoneNumberId" defaultValue={settings.metaPhoneNumberId} />
-          </div>
-          <div className="space-y-1.5">
-            <Label htmlFor="metaAccessToken">Access token</Label>
+          </FormField>
+          <FormField label="Access token" htmlFor="metaAccessToken">
             <Input
               id="metaAccessToken"
               name="metaAccessToken"
               type="password"
               placeholder={settings.hasMetaAccessToken ? 'Saved. Leave blank to keep.' : ''}
             />
-          </div>
-          <div className="space-y-1.5">
-            <Label htmlFor="metaTemplateName">Template name</Label>
+          </FormField>
+          <FormField label="Template name" htmlFor="metaTemplateName">
             <Input id="metaTemplateName" name="metaTemplateName" defaultValue={settings.metaTemplateName} placeholder="lead_alert" />
-          </div>
-          <div className="space-y-1.5">
-            <Label htmlFor="metaTemplateLanguage">Template language</Label>
+          </FormField>
+          <FormField label="Template language" htmlFor="metaTemplateLanguage">
             <Input id="metaTemplateLanguage" name="metaTemplateLanguage" defaultValue={settings.metaTemplateLanguage} placeholder="en_GB" />
-          </div>
+          </FormField>
         </div>
       </section>
 
@@ -87,29 +77,25 @@ export function PlatformNotificationsForm({ settings }: { settings: PlatformNoti
           </p>
         </div>
         <div className="grid gap-4 sm:grid-cols-2">
-          <div className="space-y-1.5">
-            <Label htmlFor="twilioAccountSid">Account SID</Label>
+          <FormField label="Account SID" htmlFor="twilioAccountSid">
             <Input id="twilioAccountSid" name="twilioAccountSid" defaultValue={settings.twilioAccountSid} />
-          </div>
-          <div className="space-y-1.5">
-            <Label htmlFor="twilioAuthToken">Auth token</Label>
+          </FormField>
+          <FormField label="Auth token" htmlFor="twilioAuthToken">
             <Input
               id="twilioAuthToken"
               name="twilioAuthToken"
               type="password"
               placeholder={settings.hasTwilioAuthToken ? 'Saved. Leave blank to keep.' : ''}
             />
-          </div>
-          <div className="space-y-1.5">
-            <Label htmlFor="twilioWhatsappFrom">WhatsApp from number</Label>
+          </FormField>
+          <FormField label="WhatsApp from number" htmlFor="twilioWhatsappFrom">
             <Input id="twilioWhatsappFrom" name="twilioWhatsappFrom" defaultValue={settings.twilioWhatsappFrom} placeholder="+14155238886" />
-          </div>
+          </FormField>
         </div>
       </section>
 
-      {state.error ? <p className="text-sm text-destructive">{state.error}</p> : null}
-      {state.ok ? <p className="text-sm text-emerald-600">Platform notification settings saved.</p> : null}
-      <SubmitButton />
+      <FormMessage state={state} okText="Platform notification settings saved." />
+      <SubmitButton pendingLabel="Saving...">Save platform notifications</SubmitButton>
     </form>
   );
 }

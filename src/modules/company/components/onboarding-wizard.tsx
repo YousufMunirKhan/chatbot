@@ -2,9 +2,10 @@
 
 import Link from 'next/link';
 import { useEffect, useMemo, useState } from 'react';
+import { Check } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent } from '@/components/ui/card';
 import { cn } from '@/lib/utils';
 import type { CompanySetupProgress } from '../setup-data';
 
@@ -36,7 +37,16 @@ function StepDot({
             : 'bg-muted text-muted-foreground',
       )}
     >
-      {complete ? 'OK' : index + 1}
+      {complete ? (
+        <>
+          <Check className="h-4 w-4" aria-hidden="true" />
+          {/* The icon replaced a literal "OK", which was the only thing telling a
+              screen-reader user this step was finished. Keep that meaning. */}
+          <span className="sr-only">Done</span>
+        </>
+      ) : (
+        index + 1
+      )}
     </span>
   );
 }
@@ -67,37 +77,37 @@ export function OnboardingWizard({ setup }: { setup: CompanySetupProgress }) {
     .key;
   const previousStepKey = (setup.steps[Math.max(activeIndex - 1, 0)] ?? activeStep).key;
 
+  /**
+   * Step guidance for the shop owner.
+   *
+   * This used to be three columns headed "Focus", "Cost control" and "Done
+   * when", carrying text written for the people building this product — product
+   * directives, notes about AI tokens and deterministic prompt assembly. None of
+   * that is the customer's business. What survives is the only part they needed:
+   * what to do, and how they know the step is finished.
+   */
   const guidance = useMemo(() => {
     if (!activeStep) return null;
-    const copy: Record<string, { focus: string; cost: string; check: string }> = {
+    const copy: Record<string, { todo: string; done: string }> = {
       purpose: {
-        focus:
-          'Start with audience: customer-facing website assistant or internal help desk. Do not force users into fixed agent templates.',
-        cost: 'No AI call needed. This is only product configuration.',
-        check: 'A saved assistant exists.',
+        todo: 'Choose who the assistant talks to: your website visitors, or your own staff. You can create one of each.',
+        done: 'You have saved an assistant.',
       },
       capabilities: {
-        focus:
-          'Pick only what the assistant should do now. Capabilities decide required data and prompt behavior.',
-        cost: 'No AI call needed. The prompt is assembled deterministically.',
-        check: 'Assistant has at least one capability.',
+        todo: 'Pick only what you want it to help with today. You can turn more on whenever you are ready.',
+        done: 'The assistant does at least one thing.',
       },
       'required-data': {
-        focus:
-          'Start from the website URL, then ask only for missing services, hours, policies, FAQs, lead rules, or catalogue data.',
-        cost: 'Website import and forms run before chat AI. For live prices/stock, use integrations, CSV refresh, Custom API, or a connector instead of re-crawling pages.',
-        check: 'Business profile, structured facts, or knowledge documents are present.',
+        todo: 'Start by importing your website, then fill in whatever is still missing: services, opening hours, policies, and common questions.',
+        done: 'Your business details and answers are saved.',
       },
       test: {
-        focus: 'Test common customer questions and missing-data questions before installing.',
-        cost: 'Testing uses real chat calls, so keep it focused and cache safe repeated questions.',
-        check: 'Assistant has enough data to test.',
+        todo: 'Ask it the questions your customers actually ask, including a few it will not know the answer to.',
+        done: 'It has enough to answer from.',
       },
       install: {
-        focus:
-          'Add website domain, copy the snippet, and launch. Keep internal help desk assistants out of public widgets.',
-        cost: 'Widget load does not call AI until a visitor sends a message.',
-        check: 'At least one allowed website domain is configured.',
+        todo: 'Add your website address, copy the snippet, and paste it into your site.',
+        done: 'At least one website address is added.',
       },
     };
     return copy[activeStep.key] ?? null;
@@ -117,7 +127,7 @@ export function OnboardingWizard({ setup }: { setup: CompanySetupProgress }) {
                     Saved progress
                   </p>
                   <p className="mt-1 text-sm text-muted-foreground">
-                    Resume is based on real setup data plus your last opened step.
+                    We remember where you left off, and tick steps off as you finish them.
                   </p>
                 </div>
                 <Badge
@@ -176,35 +186,21 @@ export function OnboardingWizard({ setup }: { setup: CompanySetupProgress }) {
               </div>
 
               {guidance ? (
-                <div className="grid gap-3 md:grid-cols-3">
+                <div className="grid gap-3 sm:grid-cols-2">
                   <div className="rounded-md border p-3">
                     <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                      Focus
+                      What to do
                     </p>
-                    <p className="mt-2 text-sm">{guidance.focus}</p>
+                    <p className="mt-2 text-sm">{guidance.todo}</p>
                   </div>
                   <div className="rounded-md border p-3">
                     <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                      Cost control
+                      You are done when
                     </p>
-                    <p className="mt-2 text-sm">{guidance.cost}</p>
-                  </div>
-                  <div className="rounded-md border p-3">
-                    <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                      Done when
-                    </p>
-                    <p className="mt-2 text-sm">{guidance.check}</p>
+                    <p className="mt-2 text-sm">{guidance.done}</p>
                   </div>
                 </div>
               ) : null}
-
-              <div className="rounded-md border bg-muted/30 p-4">
-                <p className="text-sm font-medium">Enterprise rule for this step</p>
-                <p className="mt-1 text-sm text-muted-foreground">
-                  Collect the smallest useful data set, keep internal and customer channels
-                  separate, and make every risky action explicit, confirmed, and audit logged.
-                </p>
-              </div>
 
               <div className="flex flex-wrap justify-between gap-3 border-t pt-4">
                 <Button
@@ -228,36 +224,6 @@ export function OnboardingWizard({ setup }: { setup: CompanySetupProgress }) {
           </div>
         </CardContent>
       </Card>
-
-      <div className="grid gap-4 md:grid-cols-3">
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-base">No setup AI waste</CardTitle>
-          </CardHeader>
-          <CardContent className="text-sm text-muted-foreground">
-            Forms, parsing, validation, and deterministic prompt assembly happen before any chat
-            model call.
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-base">Data decides behavior</CardTitle>
-          </CardHeader>
-          <CardContent className="text-sm text-muted-foreground">
-            Selected capabilities decide which data is required, which tools are enabled, and what
-            the assistant is allowed to answer.
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-base">Safe launch path</CardTitle>
-          </CardHeader>
-          <CardContent className="text-sm text-muted-foreground">
-            Internal help desk stays private. Website assistants require domain control and can hand
-            over to humans.
-          </CardContent>
-        </Card>
-      </div>
     </div>
   );
 }

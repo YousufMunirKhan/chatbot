@@ -1,20 +1,11 @@
 'use client';
 
 import { useEffect } from 'react';
-import { useFormState, useFormStatus } from 'react-dom';
-import { Button } from '@/components/ui/button';
+import { useFormState } from 'react-dom';
+import { SubmitButton } from '@/components/ui/submit-button';
 import { endImpersonationAction, type ImpersonationState } from '../impersonation-actions';
 
 const initial: ImpersonationState = {};
-
-function End() {
-  const { pending } = useFormStatus();
-  return (
-    <Button type="submit" variant="outline" size="sm" disabled={pending}>
-      {pending ? 'Ending…' : 'End impersonation'}
-    </Button>
-  );
-}
 
 export function EndImpersonationButton() {
   const [state, action] = useFormState(endImpersonationAction, initial);
@@ -26,7 +17,9 @@ export function EndImpersonationButton() {
 
   return (
     <form action={action}>
-      <End />
+      <SubmitButton variant="outline" size="sm" pendingLabel="Ending…">
+        End impersonation
+      </SubmitButton>
     </form>
   );
 }

@@ -1,26 +1,17 @@
 'use client';
 
-import { useFormState, useFormStatus } from 'react-dom';
-import { Button } from '@/components/ui/button';
+import { useFormState } from 'react-dom';
 import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
+import { Select } from '@/components/ui/select';
+import { FormField } from '@/components/ui/form-field';
+import { FormMessage } from '@/components/ui/form-message';
+import { SubmitButton } from '@/components/ui/submit-button';
 import { RefreshDashboardShell } from '@/components/refresh-dashboard-shell';
 import { updateProfileAction, type ActionState } from '../actions';
 import type { CompanyProfile } from '../data';
 import { COUNTRY_OPTIONS, TIMEZONE_OPTIONS } from '../form-options';
 
 const initial: ActionState = {};
-const selectCls =
-  'flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring';
-
-function Save() {
-  const { pending } = useFormStatus();
-  return (
-    <Button type="submit" disabled={pending}>
-      {pending ? 'Saving…' : 'Save profile'}
-    </Button>
-  );
-}
 
 export function ProfileForm({ company }: { company: CompanyProfile }) {
   const [state, action] = useFormState(updateProfileAction, initial);
@@ -29,17 +20,14 @@ export function ProfileForm({ company }: { company: CompanyProfile }) {
     <form action={action} className="space-y-4">
       <RefreshDashboardShell state={state} />
       <div className="grid gap-4 sm:grid-cols-2">
-        <div className="space-y-1.5">
-          <Label htmlFor="name">Company name *</Label>
-          <Input id="name" name="name" required defaultValue={company.name} />
-        </div>
-        <div className="space-y-1.5">
-          <Label htmlFor="website">Website</Label>
-          <Input id="website" name="website" type="url" defaultValue={company.website ?? ''} />
-        </div>
-        <div className="space-y-1.5">
-          <Label htmlFor="country">Country</Label>
-          <select id="country" name="country" className={selectCls} defaultValue={company.country ?? 'GB'}>
+        <FormField label="Company name" htmlFor="name" required>
+          <Input name="name" required defaultValue={company.name} />
+        </FormField>
+        <FormField label="Website" htmlFor="website">
+          <Input name="website" type="url" defaultValue={company.website ?? ''} />
+        </FormField>
+        <FormField label="Country" htmlFor="country">
+          <Select name="country" defaultValue={company.country ?? 'GB'}>
             {company.country && !COUNTRY_OPTIONS.some((country) => country.value === company.country) ? (
               <option value={company.country}>{company.country}</option>
             ) : null}
@@ -48,11 +36,10 @@ export function ProfileForm({ company }: { company: CompanyProfile }) {
                 {country.label}
               </option>
             ))}
-          </select>
-        </div>
-        <div className="space-y-1.5">
-          <Label htmlFor="timezone">Timezone</Label>
-          <select id="timezone" name="timezone" className={selectCls} defaultValue={company.timezone ?? 'Europe/London'}>
+          </Select>
+        </FormField>
+        <FormField label="Timezone" htmlFor="timezone">
+          <Select name="timezone" defaultValue={company.timezone ?? 'Europe/London'}>
             {company.timezone && !TIMEZONE_OPTIONS.includes(company.timezone) ? (
               <option value={company.timezone}>{company.timezone}</option>
             ) : null}
@@ -61,25 +48,18 @@ export function ProfileForm({ company }: { company: CompanyProfile }) {
                 {timezone}
               </option>
             ))}
-          </select>
-        </div>
-        <div className="space-y-1.5">
-          <Label htmlFor="defaultLanguage">Default language</Label>
-          <select
-            id="defaultLanguage"
-            name="defaultLanguage"
-            className={selectCls}
-            defaultValue={company.defaultLanguage}
-          >
+          </Select>
+        </FormField>
+        <FormField label="Default language" htmlFor="defaultLanguage">
+          <Select name="defaultLanguage" defaultValue={company.defaultLanguage}>
             <option value="auto">Auto-detect</option>
             <option value="en">English</option>
             <option value="ar">Arabic</option>
-          </select>
-        </div>
+          </Select>
+        </FormField>
       </div>
-      {state.error ? <p className="text-sm text-destructive">{state.error}</p> : null}
-      {state.ok ? <p className="text-sm text-emerald-600">Profile saved.</p> : null}
-      <Save />
+      <FormMessage state={state} okText="Profile saved." />
+      <SubmitButton>Save profile</SubmitButton>
     </form>
   );
 }

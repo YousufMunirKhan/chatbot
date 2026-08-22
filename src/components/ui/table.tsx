@@ -38,7 +38,10 @@ const TableHead = React.forwardRef<
   <th
     ref={ref}
     className={cn(
-      'h-10 px-3 text-left align-middle text-xs font-medium uppercase tracking-wider text-muted-foreground',
+      // `text-start`, not `text-left` (Module 22): the dashboard shell sets
+      // dir="rtl" for Arabic companies, so cells flip but a hardcoded
+      // `text-left` header would not — every table in the product misaligned.
+      'h-10 px-3 text-start align-middle text-xs font-medium uppercase tracking-wider text-muted-foreground',
       className,
     )}
     {...props}

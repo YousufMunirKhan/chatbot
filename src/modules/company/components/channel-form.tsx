@@ -1,10 +1,12 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
-import { useFormState, useFormStatus } from 'react-dom';
-import { Button } from '@/components/ui/button';
+import { useFormState } from 'react-dom';
 import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
+import { Select } from '@/components/ui/select';
+import { FormField } from '@/components/ui/form-field';
+import { FormMessage } from '@/components/ui/form-message';
+import { SubmitButton } from '@/components/ui/submit-button';
 import { createChannelIdentityAction, type ActionState } from '../channels-actions';
 
 const initial: ActionState = {};
@@ -39,15 +41,6 @@ function fieldConfig(channel: string, provider: string): FieldConfig {
   };
 }
 
-function Save() {
-  const { pending } = useFormStatus();
-  return (
-    <Button type="submit" disabled={pending}>
-      {pending ? 'Saving…' : 'Connect channel'}
-    </Button>
-  );
-}
-
 export function ChannelForm({ bots }: { bots: Array<{ id: string; name: string }> }) {
   const [state, action] = useFormState(createChannelIdentityAction, initial);
   const [channel, setChannel] = useState<'whatsapp' | 'instagram' | 'email'>('whatsapp');
@@ -60,68 +53,60 @@ export function ChannelForm({ bots }: { bots: Array<{ id: string; name: string }
 
   return (
     <form ref={ref} action={action} className="space-y-4">
-      <div className="space-y-1.5">
-        <Label htmlFor="channel">Channel</Label>
-        <select
-          id="channel"
+      <FormField label="Channel" htmlFor="channel">
+        <Select
           name="channel"
           value={channel}
           onChange={(e) => setChannel(e.target.value as typeof channel)}
-          className="h-10 w-full rounded-md border bg-background px-3 text-sm"
         >
           <option value="whatsapp">WhatsApp</option>
           <option value="instagram">Instagram / Messenger</option>
           <option value="email">Email</option>
-        </select>
-      </div>
+        </Select>
+      </FormField>
 
       {channel === 'whatsapp' ? (
-        <div className="space-y-1.5">
-          <Label htmlFor="provider">Provider</Label>
-          <select
-            id="provider"
+        <FormField label="Provider" htmlFor="provider">
+          <Select
             name="provider"
             value={provider}
             onChange={(e) => setProvider(e.target.value as typeof provider)}
-            className="h-10 w-full rounded-md border bg-background px-3 text-sm"
           >
             <option value="meta_cloud">Meta WhatsApp Cloud API (direct)</option>
             <option value="twilio">Twilio (no Meta verification)</option>
-          </select>
-        </div>
+          </Select>
+        </FormField>
       ) : (
         <input type="hidden" name="provider" value="meta_cloud" />
       )}
 
-      <div className="space-y-1.5">
-        <Label htmlFor="externalId">{meta.idLabel}</Label>
-        <Input id="externalId" name="externalId" required maxLength={200} />
-        <p className="text-xs text-muted-foreground">{meta.idHint}</p>
-      </div>
+      <FormField label={meta.idLabel} htmlFor="externalId" hint={meta.idHint}>
+        <Input name="externalId" required maxLength={200} />
+      </FormField>
 
       {meta.secretLabel ? (
-        <div className="space-y-1.5">
-          <Label htmlFor="secret">{meta.secretLabel}</Label>
-          <Input id="secret" name="secret" type="password" autoComplete="off" />
-          <p className="text-xs text-muted-foreground">Stored encrypted. Used only to send replies.</p>
-        </div>
+        <FormField
+          label={meta.secretLabel}
+          htmlFor="secret"
+          hint="Stored encrypted. Used only to send replies."
+        >
+          <Input name="secret" type="password" autoComplete="off" />
+        </FormField>
       ) : null}
 
-      <div className="space-y-1.5">
-        <Label htmlFor="botId">Answer with bot</Label>
-        <select id="botId" name="botId" className="h-10 w-full rounded-md border bg-background px-3 text-sm">
+      <FormField label="Answer with bot" htmlFor="botId">
+        <Select name="botId">
           <option value="">Default customer bot</option>
           {bots.map((b) => (
             <option key={b.id} value={b.id}>
               {b.name}
             </option>
           ))}
-        </select>
-      </div>
+        </Select>
+      </FormField>
 
-      {state.error ? <p className="text-sm text-destructive">{state.error}</p> : null}
-      {state.ok ? <p className="text-sm text-green-600">Channel connected.</p> : null}
-      <Save />
+      <FormMessage state={state} okText="Channel connected." />
+      <SubmitButton>Connect channel</SubmitButton>
     </form>
   );
 }

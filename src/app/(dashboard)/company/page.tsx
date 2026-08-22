@@ -1,23 +1,98 @@
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
-import { getCompanyDashboardSummary } from '@/modules/company/dashboard-data';
-import { getCompanySetupProgress } from '@/modules/company/setup-data';
-import { planLabel } from '@/modules/super-admin/plans';
-import { formatDate, formatNumber } from '@/lib/format';
+import { Card, CardContent } from '@/components/ui/card';
+import { PageHeader } from '@/components/ui/page-header';
+import { getCompanyDashboardSummary, type MetricTrend } from '@/modules/company/dashboard-data';
+import { getCompanySetupProgress, type CompanySetupProgress } from '@/modules/company/setup-data';
+import { formatNumber } from '@/lib/format';
 import { RefreshOnFocus } from '@/components/refresh-on-focus';
 
-function Stat({ label, value, href }: { label: string; value: string; href?: string }) {
-  const body = (
-    <Card className={href ? 'transition-colors hover:bg-muted/50' : undefined}>
+/**
+ * Company home.
+ *
+ * This page is a state machine, not a dashboard. It renders exactly one of four
+ * states, and each state asks for exactly one thing:
+ *
+ *   A  — no assistant yet          → make one
+ *   B  — setup in progress         → do the next step
+ *   C1 — live, no traffic yet      → try it, check the website
+ *   C2 — live with traffic         → reply to whoever is waiting
+ *
+ * Rules the rebuild holds to: at most one solid-variant Button per state (in C2
+ * with an empty queue there is nothing to push, so the inbox becomes a quiet
+ * link), no status badge in the header, no lifetime counters, no readiness
+ * percentage, and no plan or billing chrome — those live on their own screens.
+ */
+
+/**
+ * Imperative, owner-voice call to action for each setup step. The step titles
+ * describe the job; these describe the click.
+ */
+const STEP_CTA: Record<string, string> = {
+  purpose: 'Choose what it does',
+  capabilities: 'Pick the jobs',
+  'required-data': 'Add my details',
+  test: 'Try it now',
+  install: 'Get my website code',
+};
+
+function trendLabel(trend: MetricTrend): string {
+  if (trend.change === 0) return 'Same as last week';
+  const direction = trend.change > 0 ? '+' : '−';
+  return `${direction}${formatNumber(Math.abs(trend.change))} vs last week`;
+}
+
+function SignalTile({ label, trend }: { label: string; trend: MetricTrend }) {
+  return (
+    <Card>
       <CardContent className="p-4">
-        <p className="text-xs uppercase tracking-wider text-muted-foreground">{label}</p>
-        <div className="mt-1 text-2xl font-semibold">{value}</div>
+        <p className="text-sm text-muted-foreground">{label}</p>
+        <p className="mt-1 text-3xl font-semibold tabular-nums">{formatNumber(trend.current)}</p>
+        <p className="mt-1 text-xs text-muted-foreground">{trendLabel(trend)}</p>
       </CardContent>
     </Card>
   );
-  return href ? <Link href={href}>{body}</Link> : body;
+}
+
+/** Plain, non-interactive tiles. State A shows what they get, not what they lack. */
+function FeatureTile({ title, body }: { title: string; body: string }) {
+  return (
+    <div className="rounded-lg border p-4">
+      <p className="text-sm font-medium">{title}</p>
+      <p className="mt-1 text-sm text-muted-foreground">{body}</p>
+    </div>
+  );
+}
+
+/** A five-dot rail. Progress only — no percentage, and nothing here is a link. */
+function StepRail({ setup }: { setup: CompanySetupProgress }) {
+  const currentKey = setup.nextStep?.key;
+  return (
+    <ol className="flex flex-wrap gap-2">
+      {setup.steps.map((step, index) => {
+        const isCurrent = step.key === currentKey;
+        return (
+          <li
+            key={step.key}
+            aria-current={isCurrent ? 'step' : undefined}
+            className={[
+              'flex items-center gap-2 rounded-full border px-3 py-1 text-xs',
+              step.complete
+                ? 'border-success-border bg-success-bg text-success-fg'
+                : isCurrent
+                  ? 'border-foreground/30 font-medium'
+                  : 'text-muted-foreground',
+            ].join(' ')}
+          >
+            <span aria-hidden="true" className="tabular-nums">
+              {step.complete ? '✓' : index + 1}
+            </span>
+            <span>{step.title}</span>
+          </li>
+        );
+      })}
+    </ol>
+  );
 }
 
 export default async function CompanyOverview() {
@@ -25,134 +100,171 @@ export default async function CompanyOverview() {
     getCompanyDashboardSummary(),
     getCompanySetupProgress(),
   ]);
-  const sub = summary.company.subscription;
+
+  const hasAssistant = setup.steps.find((step) => step.key === 'purpose')?.complete ?? false;
+  const isLive = setup.steps.find((step) => step.key === 'install')?.complete ?? false;
+  const nextStep = setup.nextStep;
+  const stepNumber = nextStep ? setup.steps.findIndex((step) => step.key === nextStep.key) + 1 : 0;
 
   return (
-    <div className="mx-auto max-w-6xl space-y-6">
+    <div className="mx-auto max-w-4xl space-y-6">
       <RefreshOnFocus />
-      <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
-        <div>
-          <h1 className="text-2xl font-semibold">{summary.company.name}</h1>
-          <p className="text-sm text-muted-foreground">
-            {planLabel(sub.plan)} plan
-            {sub.freeUntil ? `, free until ${formatDate(sub.freeUntil)}` : ''}
-          </p>
-        </div>
-        <div className="flex flex-wrap items-center gap-2">
-          <Badge variant={summary.company.status === 'active' ? 'success' : 'destructive'}>
-            {summary.company.status}
-          </Badge>
-          <Button asChild>
-            <Link href={setup.nextStep?.href ?? '/company/widget'}>
-              {setup.nextStep ? `Continue setup` : 'Test widget'}
-            </Link>
-          </Button>
-        </div>
-      </div>
 
-      <Card className="overflow-hidden">
-        <CardContent className="grid gap-0 p-0 lg:grid-cols-[1.2fr_0.8fr]">
-          <div className="space-y-4 p-6">
-            <div className="flex flex-wrap items-center justify-between gap-2">
-              <div>
-                <p className="text-sm font-medium">Assistant launch readiness</p>
-                <p className="text-sm text-muted-foreground">
-                  {setup.nextStep ? `Next: ${setup.nextStep.title}` : 'Ready to keep improving'}
-                </p>
-              </div>
-              <Badge variant={setup.percent >= 80 ? 'success' : setup.percent >= 50 ? 'warning' : 'secondary'}>
-                {setup.percent}% ready
-              </Badge>
-            </div>
-            <div className="h-2 overflow-hidden rounded-full bg-muted">
-              <div className="h-full rounded-full bg-primary" style={{ width: `${setup.percent}%` }} />
-            </div>
-            <div className="flex flex-wrap gap-2">
-              <Button asChild size="sm">
-                <Link href="/company/setup">Open setup journey</Link>
+      <PageHeader title={summary.company.name} />
+
+      {/* ------------------------------------------------------------------ */}
+      {/* State A — no assistant yet. No stats: zeroes are demoralising.      */}
+      {/* ------------------------------------------------------------------ */}
+      {!hasAssistant ? (
+        <div className="space-y-4">
+          <Card>
+            <CardContent className="space-y-4 p-6">
+              <h2 className="text-lg font-semibold">Set up your assistant</h2>
+              <p className="max-w-xl text-sm text-muted-foreground">
+                It answers your customers on your website day and night, takes their details while you are busy,
+                and passes anything it cannot answer straight to you.
+              </p>
+              <Button asChild size="lg">
+                <Link href={nextStep?.href ?? '/company/bots/new'}>Set up my assistant</Link>
               </Button>
-              <Button asChild variant="outline" size="sm">
-                <Link href="/company/business-data">Improve business data</Link>
+            </CardContent>
+          </Card>
+          <div className="grid gap-3 sm:grid-cols-3">
+            <FeatureTile
+              title="It answers questions"
+              body="Opening hours, prices, delivery, returns — in your own words, from what you tell it."
+            />
+            <FeatureTile
+              title="It takes details"
+              body="Names, numbers and what the customer wanted, ready for you to follow up."
+            />
+            <FeatureTile
+              title="It hands over to you"
+              body="Anything it cannot answer lands in your inbox with the whole conversation."
+            />
+          </div>
+        </div>
+      ) : null}
+
+      {/* ------------------------------------------------------------------ */}
+      {/* State B — setup in progress. The next step is the whole page.       */}
+      {/* ------------------------------------------------------------------ */}
+      {hasAssistant && !isLive && nextStep ? (
+        <div className="space-y-4">
+          <Card>
+            <CardContent className="space-y-4 p-6">
+              <p className="text-xs uppercase tracking-wider text-muted-foreground">
+                Step {stepNumber} of {setup.total}
+              </p>
+              <h2 className="text-lg font-semibold">{nextStep.title}</h2>
+              <p className="max-w-xl text-sm text-muted-foreground">{nextStep.description}</p>
+              <Button asChild size="lg">
+                <Link href={nextStep.href}>{STEP_CTA[nextStep.key] ?? 'Continue'}</Link>
               </Button>
-            </div>
-          </div>
-          {/* Module 21 (RTL): logical seams. `border-l`/`border-r` would draw the
-              divider outside the block once the grid reverses; `border-s`/`border-e`
-              follow the reading direction. */}
-          <div className="grid grid-cols-2 border-t bg-muted/30 lg:border-s lg:border-t-0">
-            <div className="border-b border-e p-4">
-              <p className="text-xs uppercase tracking-wider text-muted-foreground">Assistants</p>
-              <p className="mt-1 text-2xl font-semibold">{formatNumber(summary.botCount)}</p>
-            </div>
-            <div className="border-b p-4">
-              <p className="text-xs uppercase tracking-wider text-muted-foreground">Team</p>
-              <p className="mt-1 text-2xl font-semibold">{formatNumber(summary.memberCount)}</p>
-            </div>
-            <div className="border-e p-4">
-              <p className="text-xs uppercase tracking-wider text-muted-foreground">Open chats</p>
-              <p className="mt-1 text-2xl font-semibold">{formatNumber(summary.activeConversations)}</p>
-            </div>
-            <div className="p-4">
-              <p className="text-xs uppercase tracking-wider text-muted-foreground">Customer work</p>
-              <p className="mt-1 text-2xl font-semibold">{formatNumber(summary.customerWork)}</p>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
+            </CardContent>
+          </Card>
+          <StepRail setup={setup} />
+        </div>
+      ) : null}
 
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <Stat label="Inbox" value={formatNumber(summary.activeConversations)} href="/company/inbox" />
-        <Stat label="Customers" value={formatNumber(summary.customerWork)} href="/company/customers" />
-        <Stat
-          label="Message limit"
-          value={sub.messageLimit == null ? 'Unlimited' : formatNumber(sub.messageLimit)}
-          href="/company/usage"
-        />
-        <Stat label="Business data" value={`${setup.stats.businessReadiness}%`} href="/company/business-data" />
-      </div>
-
-      <div className="grid gap-4 lg:grid-cols-2">
+      {/* ------------------------------------------------------------------ */}
+      {/* State C1 — live, but nobody has chatted this week.                  */}
+      {/* ------------------------------------------------------------------ */}
+      {isLive && summary.conversations7d.current === 0 ? (
         <Card>
-          <CardHeader className="flex-row items-center justify-between">
-            <CardTitle>Next actions</CardTitle>
-            <Link href="/company/setup" className="text-sm text-primary hover:underline">View setup</Link>
-          </CardHeader>
-          <CardContent className="space-y-3">
-            {setup.steps.slice(0, 4).map((step) => (
-              <div key={step.key} className="flex items-center justify-between gap-3 rounded-md border p-3">
+          <CardContent className="space-y-4 p-6">
+            <h2 className="text-lg font-semibold">Your assistant is live</h2>
+            <p className="max-w-xl text-sm text-muted-foreground">
+              Nobody has chatted this week. That is normal in the first few days — the chat only opens when
+              someone on your website clicks it.
+            </p>
+            <div className="flex flex-wrap items-center gap-4">
+              <Button asChild size="lg">
+                <Link href="/company/widget#test-assistant">Ask it a question</Link>
+              </Button>
+              <Link href="/company/widget" className="text-sm underline underline-offset-4">
+                Check my website
+              </Link>
+            </div>
+          </CardContent>
+        </Card>
+      ) : null}
+
+      {/* ------------------------------------------------------------------ */}
+      {/* State C2 — the steady state.                                        */}
+      {/* ------------------------------------------------------------------ */}
+      {isLive && summary.conversations7d.current > 0 ? (
+        <div className="space-y-6">
+          <Card>
+            <CardContent className="space-y-4 p-6">
+              {summary.needsReply > 0 ? (
+                <>
+                  <h2 className="text-xl font-semibold">
+                    {summary.needsReply === 1
+                      ? '1 person is waiting for you'
+                      : `${formatNumber(summary.needsReply)} people are waiting for you`}
+                  </h2>
+                  <p className="text-sm text-muted-foreground">
+                    Your assistant could not finish these on its own.
+                  </p>
+                  <Button asChild size="lg">
+                    <Link href="/company/inbox">Open the inbox</Link>
+                  </Button>
+                </>
+              ) : (
+                <>
+                  <h2 className="text-xl font-semibold">Nothing is waiting for you</h2>
+                  <p className="text-sm text-muted-foreground">
+                    Your assistant has handled every chat so far.{' '}
+                    <Link href="/company/inbox" className="underline underline-offset-4">
+                      Open the inbox
+                    </Link>
+                    .
+                  </p>
+                </>
+              )}
+            </CardContent>
+          </Card>
+
+          <div className="grid gap-3 sm:grid-cols-3">
+            <SignalTile label="Chats this week" trend={summary.conversations7d} />
+            <SignalTile label="Answered on its own" trend={summary.answeredByAi7d} />
+            <SignalTile label="New enquiries" trend={summary.newCustomerWork7d} />
+          </div>
+
+          {summary.unansweredQuestions.length > 0 ? (
+            <Card>
+              <CardContent className="space-y-3 p-6">
                 <div>
-                  <p className="text-sm font-medium">{step.title}</p>
-                  <p className="text-xs text-muted-foreground">{step.detail}</p>
+                  <h2 className="text-base font-semibold">Questions it could not answer</h2>
+                  <p className="text-sm text-muted-foreground">
+                    Customers asked these and your assistant had nothing to go on. Tell it the answer once and it
+                    will handle them from now on.
+                  </p>
                 </div>
-                <Button asChild variant={step.complete ? 'outline' : 'default'} size="sm">
-                  <Link href={step.href}>{step.complete ? 'Update' : 'Start'}</Link>
-                </Button>
-              </div>
-            ))}
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="flex-row items-center justify-between">
-            <CardTitle>Daily workspace</CardTitle>
-            <Link href="/company/inbox" className="text-sm text-primary hover:underline">Open inbox</Link>
-          </CardHeader>
-          <CardContent className="space-y-3">
-            <Link href="/company/inbox" className="flex items-center justify-between rounded-md border p-3 hover:bg-muted/50">
-              <span className="text-sm font-medium">Reply to active conversations</span>
-              <Badge>{summary.activeConversations}</Badge>
-            </Link>
-            <Link href="/company/customers" className="flex items-center justify-between rounded-md border p-3 hover:bg-muted/50">
-              <span className="text-sm font-medium">Review customer requests</span>
-              <Badge variant="secondary">{summary.customerWork}</Badge>
-            </Link>
-            <Link href="/company/widget" className="flex items-center justify-between rounded-md border p-3 hover:bg-muted/50">
-              <span className="text-sm font-medium">Test or install widget</span>
-              <span className="text-sm text-muted-foreground">Open</span>
-            </Link>
-          </CardContent>
-        </Card>
-      </div>
+                <ul className="divide-y rounded-lg border">
+                  {summary.unansweredQuestions.map((item) => (
+                    <li
+                      key={item.id}
+                      className="flex flex-wrap items-center justify-between gap-3 p-3"
+                    >
+                      <div className="min-w-0">
+                        <p className="text-sm font-medium">{item.question}</p>
+                        <p className="text-xs text-muted-foreground">
+                          {item.timesAsked === 1 ? 'Asked once this week' : `Asked ${item.timesAsked} times this week`}
+                        </p>
+                      </div>
+                      <Button asChild variant="outline" size="sm">
+                        <Link href="/company/business-data?tab=knowledge">Answer this</Link>
+                      </Button>
+                    </li>
+                  ))}
+                </ul>
+              </CardContent>
+            </Card>
+          ) : null}
+        </div>
+      ) : null}
     </div>
   );
 }

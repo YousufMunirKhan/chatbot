@@ -1,21 +1,16 @@
 'use client';
 
-import { useFormState, useFormStatus } from 'react-dom';
-import { Button } from '@/components/ui/button';
-import { Label } from '@/components/ui/label';
+import { useFormState } from 'react-dom';
+import { Select } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
+import { FormField } from '@/components/ui/form-field';
+import { FormMessage } from '@/components/ui/form-message';
+import { SubmitButton } from '@/components/ui/submit-button';
 import type { HelpdeskChatSettings } from '@/lib/helpdesk/chat-settings';
 import { saveHelpdeskChatSettingsAction } from '../helpdesk-chat-settings-actions';
 import type { ActionState } from '../actions';
 
 const initial: ActionState = {};
-const selectCls =
-  'flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring';
-
-function SubmitButton() {
-  const { pending } = useFormStatus();
-  return <Button type="submit" disabled={pending}>{pending ? 'Saving...' : 'Save chat rules'}</Button>;
-}
 
 export function HelpdeskChatSettingsForm({ settings }: { settings: HelpdeskChatSettings }) {
   const [state, action] = useFormState(saveHelpdeskChatSettingsAction, initial);
@@ -30,37 +25,38 @@ export function HelpdeskChatSettingsForm({ settings }: { settings: HelpdeskChatS
           <input type="checkbox" name="autoOpen" defaultChecked={settings.autoOpen} className="h-4 w-4" />
           Auto-open when allowed
         </label>
-        <div className="space-y-1.5">
-          <Label>Show mode</Label>
-          <select name="showMode" defaultValue={settings.showMode} className={selectCls}>
+        <FormField label="Show mode" htmlFor="showMode">
+          <Select name="showMode" defaultValue={settings.showMode}>
             <option value="floating">Floating bubble</option>
             <option value="embedded">Embedded panel</option>
             <option value="hidden">Hidden</option>
-          </select>
-        </div>
-        <div className="space-y-1.5">
-          <Label>Position</Label>
-          <select name="position" defaultValue={settings.position} className={selectCls}>
+          </Select>
+        </FormField>
+        <FormField label="Position" htmlFor="position">
+          <Select name="position" defaultValue={settings.position}>
             <option value="right">Right</option>
             <option value="left">Left</option>
-          </select>
-        </div>
+          </Select>
+        </FormField>
       </div>
       <div className="grid gap-4 md:grid-cols-2">
-        <div className="space-y-1.5">
-          <Label>Only these routes/screens</Label>
+        <FormField
+          label="Only these routes/screens"
+          htmlFor="allowedRoutes"
+          hint="Optional. Leave empty to show Help Desk on every staff route except blocked routes."
+        >
           <Textarea name="allowedRoutes" rows={5} defaultValue={settings.allowedRoutes.join('\n')} />
-          <p className="text-xs text-muted-foreground">Optional. Leave empty to show Help Desk on every staff route except blocked routes.</p>
-        </div>
-        <div className="space-y-1.5">
-          <Label>Blocked routes/screens</Label>
+        </FormField>
+        <FormField
+          label="Blocked routes/screens"
+          htmlFor="blockedRoutes"
+          hint="Use this for screens where Help Desk should never appear, like login, payment, or customer display."
+        >
           <Textarea name="blockedRoutes" rows={5} defaultValue={settings.blockedRoutes.join('\n')} />
-          <p className="text-xs text-muted-foreground">Use this for screens where Help Desk should never appear, like login, payment, or customer display.</p>
-        </div>
+        </FormField>
       </div>
-      {state.error ? <p className="text-sm text-destructive">{state.error}</p> : null}
-      {state.ok ? <p className="text-sm text-emerald-600">Saved.</p> : null}
-      <SubmitButton />
+      <FormMessage state={state} />
+      <SubmitButton pendingLabel="Saving...">Save chat rules</SubmitButton>
     </form>
   );
 }

@@ -1,7 +1,8 @@
 import { createSupabaseServiceClient } from '@/lib/db/server';
 import { logger } from '@/lib/logger';
 
-const USD_TO_GBP = 0.8;
+/** Single source of truth for the provider-cost FX rate (USD invoices → GBP books). */
+export const USD_TO_GBP = 0.8;
 const CUSTOMER_AI_MARKUP = 2.5;
 const MIN_AI_CHARGE_GBP = 0.001;
 

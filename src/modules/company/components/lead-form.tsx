@@ -1,22 +1,14 @@
 'use client';
 
-import { useFormState, useFormStatus } from 'react-dom';
-import { Button } from '@/components/ui/button';
+import { useFormState } from 'react-dom';
 import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
+import { FormField } from '@/components/ui/form-field';
+import { FormMessage } from '@/components/ui/form-message';
+import { SubmitButton } from '@/components/ui/submit-button';
 import { addManualLeadAction, type ActionState } from '../leads-actions';
 
 const initial: ActionState = {};
-
-function Submit() {
-  const { pending } = useFormStatus();
-  return (
-    <Button type="submit" disabled={pending}>
-      {pending ? 'Adding…' : 'Add lead'}
-    </Button>
-  );
-}
 
 export function LeadForm() {
   const [state, action] = useFormState(addManualLeadAction, initial);
@@ -24,26 +16,21 @@ export function LeadForm() {
   return (
     <form action={action} className="space-y-4">
       <div className="grid gap-4 sm:grid-cols-2">
-        <div className="space-y-1.5">
-          <Label htmlFor="name">Name *</Label>
-          <Input id="name" name="name" required />
-        </div>
-        <div className="space-y-1.5">
-          <Label htmlFor="email">Email</Label>
-          <Input id="email" name="email" type="email" />
-        </div>
-        <div className="space-y-1.5">
-          <Label htmlFor="phone">Phone</Label>
-          <Input id="phone" name="phone" />
-        </div>
+        <FormField label="Name" htmlFor="name" required>
+          <Input name="name" required />
+        </FormField>
+        <FormField label="Email" htmlFor="email">
+          <Input name="email" type="email" />
+        </FormField>
+        <FormField label="Phone" htmlFor="phone">
+          <Input name="phone" />
+        </FormField>
       </div>
-      <div className="space-y-1.5">
-        <Label htmlFor="message">Message</Label>
-        <Textarea id="message" name="message" />
-      </div>
-      {state.error ? <p className="text-sm text-destructive">{state.error}</p> : null}
-      {state.ok ? <p className="text-sm text-emerald-600">Lead added.</p> : null}
-      <Submit />
+      <FormField label="Message" htmlFor="message">
+        <Textarea name="message" />
+      </FormField>
+      <FormMessage state={state} okText="Lead added." />
+      <SubmitButton pendingLabel="Adding…">Add lead</SubmitButton>
     </form>
   );
 }

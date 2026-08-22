@@ -1,7 +1,7 @@
 'use client';
 
 import { useRouter } from 'next/navigation';
-import { useState, useTransition } from 'react';
+import { useId, useState, useTransition } from 'react';
 import { Button } from '@/components/ui/button';
 import {
   closeChatAction,
@@ -12,12 +12,18 @@ import {
 
 type Action = (formData: FormData) => Promise<ActionState>;
 
-function labelFor(actionName: 'pause' | 'resume' | 'close', pending: boolean): string {
-  if (actionName === 'pause') return pending ? 'Pausing AI...' : 'Pause AI';
-  if (actionName === 'resume') return pending ? 'Resuming AI...' : 'Resume AI';
-  return pending ? 'Closing...' : 'Close chat';
-}
-
+/**
+ * The assistant on/off control, as one switch.
+ *
+ * It used to be two alternating buttons — "Pause AI" when on, "Resume AI" when
+ * off — which never showed a state, only the opposite action, and was shadowed
+ * by a separate "AI on"/"AI off" badge in the header saying the same thing.
+ * A single `role="switch"` with `aria-checked` states the truth once and is
+ * announced correctly by screen readers.
+ *
+ * RTL note: the thumb is positioned with flex justification rather than a
+ * physical `translate-x`, so "on" is the reading-end side in both directions.
+ */
 export function ConversationAiToggle({
   conversationId,
   aiEnabled,
@@ -28,11 +34,12 @@ export function ConversationAiToggle({
   isClosed: boolean;
 }) {
   const router = useRouter();
-  const [pendingAction, setPendingAction] = useState<'pause' | 'resume' | 'close' | null>(null);
+  const labelId = useId();
+  const [pendingAction, setPendingAction] = useState<'toggle' | 'close' | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
 
-  function run(actionName: 'pause' | 'resume' | 'close', action: Action) {
+  function run(actionName: 'toggle' | 'close', action: Action) {
     setError(null);
     setPendingAction(actionName);
     const formData = new FormData();
@@ -40,11 +47,8 @@ export function ConversationAiToggle({
 
     startTransition(async () => {
       const result = await action(formData);
-      if (result.error) {
-        setError(result.error);
-      } else {
-        router.refresh();
-      }
+      if (result.error) setError(result.error);
+      else router.refresh();
       setPendingAction(null);
     });
   }
@@ -52,39 +56,42 @@ export function ConversationAiToggle({
   const busy = isPending || pendingAction !== null;
 
   return (
-    <div className="space-y-2">
-      <div className="flex flex-wrap items-center gap-2">
-        {aiEnabled ? (
-          <Button
+    <div className="flex flex-col items-end gap-1">
+      <div className="flex items-center gap-3">
+        <div className="flex items-center gap-2">
+          <span id={labelId} className="text-sm">
+            Assistant replies
+          </span>
+          <button
             type="button"
-            variant="outline"
-            size="sm"
+            role="switch"
+            aria-checked={aiEnabled}
+            aria-labelledby={labelId}
             disabled={busy || isClosed}
-            onClick={() => run('pause', pauseAiAction)}
+            onClick={() => run('toggle', aiEnabled ? pauseAiAction : resumeAiAction)}
+            className={[
+              'inline-flex h-6 w-11 shrink-0 items-center rounded-full p-0.5 transition-colors',
+              'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2',
+              'disabled:cursor-not-allowed disabled:opacity-50',
+              aiEnabled ? 'justify-end bg-primary' : 'justify-start bg-input',
+            ].join(' ')}
           >
-            {labelFor('pause', pendingAction === 'pause')}
+            <span aria-hidden="true" className="h-5 w-5 rounded-full bg-background shadow" />
+          </button>
+        </div>
+        {!isClosed ? (
+          <Button type="button" variant="ghost" size="sm" disabled={busy} onClick={() => run('close', closeChatAction)}>
+            {pendingAction === 'close' ? 'Sorting…' : 'Mark as sorted'}
           </Button>
-        ) : (
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            disabled={busy}
-            onClick={() => run('resume', resumeAiAction)}
-          >
-            {labelFor('resume', pendingAction === 'resume')}
-          </Button>
-        )}
-        <Button
-          type="button"
-          variant="ghost"
-          size="sm"
-          disabled={busy || isClosed}
-          onClick={() => run('close', closeChatAction)}
-        >
-          {labelFor('close', pendingAction === 'close')}
-        </Button>
+        ) : null}
       </div>
+      <p className="text-xs text-muted-foreground">
+        {isClosed
+          ? 'This chat is sorted.'
+          : aiEnabled
+            ? 'Turn this off to take over yourself.'
+            : 'You are handling this chat.'}
+      </p>
       {error ? <p className="text-sm text-destructive">{error}</p> : null}
     </div>
   );

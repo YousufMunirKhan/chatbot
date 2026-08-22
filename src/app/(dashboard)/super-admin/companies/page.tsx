@@ -1,29 +1,39 @@
+import { requireRole } from '@/lib/auth';
+import { ROLES } from '@/lib/constants';
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
+import { EmptyState } from '@/components/ui/empty-state';
+import { PageHeader } from '@/components/ui/page-header';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { listCompanies } from '@/modules/super-admin/data';
 import { planLabel } from '@/modules/super-admin/plans';
 import { CompanyStatusBadge, SubStatusBadge } from '@/modules/super-admin/components/badges';
 import { formatDate, formatNumber } from '@/lib/format';
+// Was a second, byte-for-byte pair of local `gbp`/`usd` formatters at the foot
+// of this file. The shared module is the one the currency work landed in.
+import { gbp, usd } from '@/modules/super-admin/money';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
 
 export default async function CompaniesPage() {
+  // Defence in depth: the /super-admin layout already guards this subtree, but a
+  // platform-operator surface should not rely on a single ancestor check.
+  await requireRole([ROLES.SUPER_ADMIN]);
   const companies = await listCompanies();
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-semibold">Companies</h1>
-          <p className="text-sm text-muted-foreground">{companies.length} total</p>
-        </div>
-        <Button asChild>
-          <Link href="/super-admin/companies/new">Onboard company</Link>
-        </Button>
-      </div>
+      <PageHeader
+        title="Companies"
+        description={`${companies.length} total`}
+        actions={
+          <Button asChild>
+            <Link href="/super-admin/companies/new">Onboard company</Link>
+          </Button>
+        }
+      />
 
       <Card>
         <CardContent className="p-0">
@@ -49,12 +59,18 @@ export default async function CompaniesPage() {
             <TableBody>
               {companies.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={13} className="py-8 text-center text-muted-foreground">
-                    No companies yet.{' '}
-                    <Link href="/super-admin/companies/new" className="text-primary hover:underline">
-                      Onboard one
-                    </Link>
-                    .
+                  <TableCell colSpan={13} className="py-0">
+                    <EmptyState
+                      title={
+                        <>
+                          No companies yet.{' '}
+                          <Link href="/super-admin/companies/new" className="text-primary hover:underline">
+                            Onboard one
+                          </Link>
+                          .
+                        </>
+                      }
+                    />
                   </TableCell>
                 </TableRow>
               ) : (
@@ -99,20 +115,4 @@ export default async function CompaniesPage() {
       </Card>
     </div>
   );
-}
-
-function gbp(value: number) {
-  return new Intl.NumberFormat('en-GB', {
-    style: 'currency',
-    currency: 'GBP',
-    maximumFractionDigits: 2,
-  }).format(value);
-}
-
-function usd(value: number) {
-  return new Intl.NumberFormat('en-US', {
-    style: 'currency',
-    currency: 'USD',
-    maximumFractionDigits: 4,
-  }).format(value);
 }

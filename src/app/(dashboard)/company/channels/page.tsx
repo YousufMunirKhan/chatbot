@@ -3,6 +3,8 @@ import { ROLES } from '@/lib/constants';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { EmptyState } from '@/components/ui/empty-state';
+import { PageHeader } from '@/components/ui/page-header';
 import { formatDate } from '@/lib/format';
 import { listBots } from '@/modules/company/data';
 import { listChannelIdentities } from '@/modules/company/channels-data';
@@ -35,13 +37,11 @@ export default async function ChannelsPage() {
   const botOptions = bots.map((b) => ({ id: b.id, name: b.name }));
 
   return (
-    <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-semibold">Channels</h1>
-        <p className="text-sm text-muted-foreground">
-          Connect WhatsApp, Instagram, and email so customers can reach your AI on the channels they already use.
-        </p>
-      </div>
+    <div className="mx-auto max-w-6xl space-y-6">
+      <PageHeader
+        title="Channels"
+        description="Connect WhatsApp, Instagram, and email so customers can reach your AI on the channels they already use."
+      />
 
       <Card id="connect-channel">
         <CardHeader>
@@ -75,16 +75,15 @@ export default async function ChannelsPage() {
         <CardContent className="p-0">
           {identities.length === 0 ? (
             // Module 1 — the connect form is on this page, so link straight to it.
-            <div className="space-y-3 p-6">
-              <p className="text-sm font-medium">No channels connected yet</p>
-              <p className="max-w-xl text-sm text-muted-foreground">
-                Your assistant only answers on your website so far. Connect WhatsApp, Instagram, or email and it
-                replies there too, in the same inbox.
-              </p>
-              <Button asChild size="sm">
-                <a href="#connect-channel">Connect a channel</a>
-              </Button>
-            </div>
+            <EmptyState
+              title="No channels connected yet"
+              body="Your assistant only answers on your website so far. Connect WhatsApp, Instagram, or email and it replies there too, in the same inbox."
+              action={
+                <Button asChild size="sm">
+                  <a href="#connect-channel">Connect a channel</a>
+                </Button>
+              }
+            />
           ) : (
             <ul className="divide-y">
               {identities.map((c) => (
@@ -94,7 +93,7 @@ export default async function ChannelsPage() {
                       <Badge variant="outline" className="capitalize">{c.channel}</Badge>
                       <Badge variant={c.isActive ? 'success' : 'outline'}>{c.isActive ? 'Active' : 'Paused'}</Badge>
                       {!c.hasSecret && c.channel !== 'email' ? (
-                        <Badge variant="destructive">No token</Badge>
+                        <Badge variant="warning">No token</Badge>
                       ) : null}
                     </div>
                     <p className="mt-1 truncate font-medium">{c.externalId}</p>

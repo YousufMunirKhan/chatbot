@@ -1,10 +1,11 @@
 import Link from 'next/link';
-import type { ReactNode } from 'react';
 import { notFound } from 'next/navigation';
+import { Alert } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
+import { EmptyState } from '@/components/ui/empty-state';
+import { PageHeader } from '@/components/ui/page-header';
+import { StatTile } from '@/components/ui/stat-tile';
 import {
   Table,
   TableBody,
@@ -14,24 +15,21 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
+import { requireRole } from '@/lib/auth';
+import { ROLES } from '@/lib/constants';
 import { getCompanyDetail } from '@/modules/super-admin/data';
 import { getCompanyEvalDetail } from '@/modules/super-admin/quality-data';
-import { SUBSCRIPTION_STATUSES } from '@/modules/super-admin/plans';
-import {
-  grantCompanyRepliesAction,
-  setCompanyStatusAction,
-  topUpCompanyCreditAction,
-  updateSubscriptionAction,
-} from '@/modules/super-admin/actions';
 import { CompanyStatusBadge } from '@/modules/super-admin/components/badges';
 import { formatDate, formatNumber } from '@/lib/format';
+import { gbp, usd } from '@/modules/super-admin/money';
 import { ImpersonationForm } from '@/modules/super-admin/components/impersonation-form';
 import { RunEvalButton } from '@/modules/super-admin/components/run-eval-button';
+import { SubscriptionForm } from '@/modules/super-admin/components/subscription-form';
+import { CreditTopUpForm } from '@/modules/super-admin/components/credit-top-up-form';
+import { ReplyGrantForm } from '@/modules/super-admin/components/reply-grant-form';
+import { CompanyStatusForm } from '@/modules/super-admin/components/company-status-form';
 import { listBillingPlans } from '@/modules/super-admin/billing-data';
 import { listChatLogs } from '@/modules/super-admin/chat-logs-data';
-
-const selectCls =
-  'flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring';
 
 const tabs = [
   { key: 'overview', label: 'Overview' },
@@ -43,17 +41,18 @@ const tabs = [
   { key: 'chats', label: 'Chats' },
   { key: 'quality', label: 'Quality' },
   { key: 'activity', label: 'Activity' },
+  { key: 'commercial', label: 'Charges & add-ons' },
   { key: 'operator', label: 'Operator tools' },
 ] as const;
 
 type TabKey = (typeof tabs)[number]['key'];
 
-function money(value: number, currency = 'GBP') {
-  return new Intl.NumberFormat(currency === 'USD' ? 'en-US' : 'en-GB', {
-    style: 'currency',
-    currency,
-    maximumFractionDigits: currency === 'USD' ? 4 : 2,
-  }).format(value);
+/**
+ * Wallet rows carry their own currency column, so this one formatter has to
+ * respect it. Platform revenue/cost figures use the shared `gbp`/`usd` helpers.
+ */
+function money(value: number, currency: string) {
+  return currency === 'USD' ? usd(value) : gbp(value);
 }
 
 function limit(value: number | null) {
@@ -71,6 +70,10 @@ export default async function CompanyDetailPage({
   params: { id: string };
   searchParams?: { tab?: string };
 }) {
+  // Defence in depth: the /super-admin layout guards the subtree, but this page
+  // reads every tenant's commercials through the service-role client, so it
+  // re-checks the role itself rather than trusting a parent it does not own.
+  await requireRole([ROLES.SUPER_ADMIN]);
   const c = await getCompanyDetail(params.id);
   if (!c) notFound();
   const tab = activeTab(searchParams?.tab);
@@ -89,20 +92,22 @@ export default async function CompanyDetailPage({
 
   return (
     <div className="space-y-6">
-      <div>
-        <Link href="/super-admin/companies" className="text-sm text-muted-foreground hover:underline">
-          Back to companies
-        </Link>
-        <div className="mt-2 flex flex-wrap items-center gap-3">
-          <h1 className="text-2xl font-semibold">{c.name}</h1>
-          <CompanyStatusBadge status={c.status} />
-        </div>
-        {c.website ? (
-          <a href={c.website} target="_blank" rel="noreferrer" className="text-sm text-primary hover:underline">
-            {c.website}
-          </a>
-        ) : null}
-      </div>
+      <PageHeader
+        backTo={{ href: '/super-admin/companies', label: 'Back to companies' }}
+        title={
+          <span className="flex flex-wrap items-center gap-3">
+            {c.name}
+            <CompanyStatusBadge status={c.status} />
+          </span>
+        }
+        description={
+          c.website ? (
+            <a href={c.website} target="_blank" rel="noreferrer" className="text-sm text-primary hover:underline">
+              {c.website}
+            </a>
+          ) : undefined
+        }
+      />
 
       <div className="flex flex-wrap gap-2 border-b">
         {tabs.map((item) => (
@@ -123,14 +128,26 @@ export default async function CompanyDetailPage({
       {tab === 'overview' ? (
         <div className="space-y-6">
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-            <Metric label="AI replies used" value={`${formatNumber(c.replyUsage.used)} / ${totalReplies}`} />
-            <Metric label="Replies remaining" value={remainingReplies} />
-            <Metric label="Extra replies" value={formatNumber(c.replyUsage.extraReplies)} />
-            <Metric label="Internal AI cost" value={money(c.aiCostThisMonth, 'USD')} />
-            <Metric label="Estimated revenue" value={money(c.estimatedRevenue)} />
-            <Metric label="Estimated margin" value={money(c.estimatedProfit)} />
-            <Metric label="Credit balance" value={c.creditAccount ? money(c.creditAccount.balanceAmount, c.creditAccount.currency) : 'Not tracked'} />
-            <Metric label="WhatsApp" value={c.whatsapp.enabled ? c.whatsapp.senderMode : 'Not enabled'} />
+            <StatTile label="AI replies used" value={`${formatNumber(c.replyUsage.used)} / ${totalReplies}`} />
+            <StatTile label="Replies remaining" value={remainingReplies} />
+            <StatTile label="Extra replies" value={formatNumber(c.replyUsage.extraReplies)} />
+            <StatTile
+              label="Internal AI cost (USD)"
+              value={usd(c.aiCostThisMonth)}
+              hint={`${gbp(c.aiCostThisMonthGbp)} at the platform FX rate`}
+            />
+            <StatTile
+              label="Estimated revenue (GBP)"
+              value={gbp(c.estimatedRevenueGbp)}
+              hint={`plan ${gbp(c.planRevenueGbp)} + add-ons ${gbp(c.addonRevenueGbp)}`}
+            />
+            <StatTile
+              label="Estimated margin (GBP)"
+              value={gbp(c.estimatedProfitGbp)}
+              hint="GBP revenue minus AI cost converted to GBP"
+            />
+            <StatTile label="Credit balance" value={c.creditAccount ? money(c.creditAccount.balanceAmount, c.creditAccount.currency) : 'Not tracked'} />
+            <StatTile label="WhatsApp" value={c.whatsapp.enabled ? c.whatsapp.senderMode : 'Not enabled'} />
           </div>
           <Card>
             <CardHeader>
@@ -156,40 +173,14 @@ export default async function CompanyDetailPage({
             </CardHeader>
             <CardContent className="space-y-5">
               <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
-                <Metric label="Base monthly replies" value={limit(c.replyUsage.monthlyAllowance)} />
-                <Metric label="Extra replies" value={formatNumber(c.replyUsage.extraReplies)} />
-                <Metric label="Used this month" value={formatNumber(c.replyUsage.used)} />
-                <Metric label="Remaining" value={remainingReplies} />
-                <Metric label="Reset date" value={formatDate(c.replyUsage.resetAt)} />
+                <StatTile label="Base monthly replies" value={limit(c.replyUsage.monthlyAllowance)} />
+                <StatTile label="Extra replies" value={formatNumber(c.replyUsage.extraReplies)} />
+                <StatTile label="Used this month" value={formatNumber(c.replyUsage.used)} />
+                <StatTile label="Remaining" value={remainingReplies} />
+                <StatTile label="Reset date" value={formatDate(c.replyUsage.resetAt)} />
               </div>
 
-              <form action={grantCompanyRepliesAction} className="grid gap-3 rounded-md border bg-muted/20 p-3 lg:grid-cols-[140px_170px_minmax(0,1fr)_170px_auto]">
-                <input type="hidden" name="companyId" value={c.id} />
-                <div className="space-y-1.5">
-                  <Label htmlFor="replyCount">Extra replies</Label>
-                  <Input id="replyCount" name="replyCount" type="number" min={1} placeholder="200" required />
-                </div>
-                <div className="space-y-1.5">
-                  <Label htmlFor="grantType">Type</Label>
-                  <select id="grantType" name="grantType" className={selectCls} defaultValue="goodwill">
-                    <option value="goodwill">Goodwill bonus</option>
-                    <option value="paid_extra">Paid extra replies</option>
-                    <option value="support_adjustment">Support adjustment</option>
-                    <option value="manual">Manual</option>
-                  </select>
-                </div>
-                <div className="space-y-1.5">
-                  <Label htmlFor="reason">Note</Label>
-                  <Input id="reason" name="reason" placeholder="Customer requested a one-off allowance" required />
-                </div>
-                <div className="space-y-1.5">
-                  <Label htmlFor="expiresAt">Expires</Label>
-                  <Input id="expiresAt" name="expiresAt" type="date" />
-                </div>
-                <div className="flex items-end">
-                  <Button type="submit" size="sm">Add replies</Button>
-                </div>
-              </form>
+              <ReplyGrantForm companyId={c.id} />
 
               <p className="text-xs text-muted-foreground">
                 Extra replies are added on top of the monthly plan allowance. If no expiry is chosen,
@@ -204,26 +195,17 @@ export default async function CompanyDetailPage({
             </CardHeader>
             <CardContent className="space-y-5">
               <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-                <Metric label="Credit balance" value={c.creditAccount ? money(c.creditAccount.balanceAmount, c.creditAccount.currency) : 'Not tracked'} />
-                <Metric label="Credit added" value={c.creditAccount ? money(c.creditAccount.lifetimeCreditAdded, c.creditAccount.currency) : '-'} />
-                <Metric label="AI charged" value={c.creditAccount ? money(c.creditAccount.lifetimeUsageCharged, c.creditAccount.currency) : '-'} />
-                <Metric label="Internal AI cost" value={money(c.aiCostThisMonth, 'USD')} />
+                <StatTile label="Credit balance" value={c.creditAccount ? money(c.creditAccount.balanceAmount, c.creditAccount.currency) : 'Not tracked'} />
+                <StatTile label="Credit added" value={c.creditAccount ? money(c.creditAccount.lifetimeCreditAdded, c.creditAccount.currency) : '-'} />
+                <StatTile label="AI charged" value={c.creditAccount ? money(c.creditAccount.lifetimeUsageCharged, c.creditAccount.currency) : '-'} />
+                <StatTile
+                  label="Internal AI cost (USD)"
+                  value={usd(c.aiCostThisMonth)}
+                  hint={`${gbp(c.aiCostThisMonthGbp)} at the platform FX rate`}
+                />
               </div>
 
-              <form action={topUpCompanyCreditAction} className="grid gap-3 rounded-md border bg-muted/20 p-3 sm:grid-cols-[160px_minmax(0,1fr)_auto]">
-                <input type="hidden" name="companyId" value={c.id} />
-                <div className="space-y-1.5">
-                  <Label htmlFor="creditTopUpAmount">Top up (GBP)</Label>
-                  <Input id="creditTopUpAmount" name="amount" type="number" min={0.01} step="0.01" placeholder="10.00" required />
-                </div>
-                <div className="space-y-1.5">
-                  <Label htmlFor="creditTopUpDescription">Note</Label>
-                  <Input id="creditTopUpDescription" name="description" placeholder="Invoice paid, bonus credit, or manual adjustment" />
-                </div>
-                <div className="flex items-end">
-                  <Button type="submit" size="sm">Add credit</Button>
-                </div>
-              </form>
+              <CreditTopUpForm companyId={c.id} />
             </CardContent>
           </Card>
 
@@ -259,43 +241,54 @@ export default async function CompanyDetailPage({
             <CardTitle>Plan and limits</CardTitle>
           </CardHeader>
           <CardContent>
-            <form action={updateSubscriptionAction} className="space-y-4">
-              <input type="hidden" name="companyId" value={c.id} />
-              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-                <Field label="Plan">
-                  <select id="plan" name="plan" className={selectCls} defaultValue={sub.plan ?? 'free_trial'}>
-                    {billingPlans.map((plan) => (
-                      <option key={plan.key} value={plan.key}>{plan.label}</option>
-                    ))}
-                  </select>
-                </Field>
-                <Field label="Status">
-                  <select id="status" name="status" className={selectCls} defaultValue={sub.status ?? 'trialing'}>
-                    {SUBSCRIPTION_STATUSES.map((s) => (
-                      <option key={s} value={s}>{s}</option>
-                    ))}
-                  </select>
-                </Field>
-                <Field label="Free until">
-                  <Input id="freeUntil" name="freeUntil" type="date" defaultValue={sub.freeUntil ?? ''} />
-                </Field>
-                <Field label="Monthly AI replies">
-                  <Input id="messageLimit" name="messageLimit" type="number" min={1} defaultValue={sub.messageLimit ?? ''} />
-                </Field>
-                <Field label="Team seats">
-                  <Input id="agentLimit" name="agentLimit" type="number" min={0} defaultValue={sub.agentLimit ?? ''} />
-                </Field>
-                <Field label="Assistants">
-                  <Input id="botLimit" name="botLimit" type="number" min={0} defaultValue={sub.botLimit ?? ''} />
-                </Field>
-                <Field label="Integrations">
-                  <Input id="integrationLimit" name="integrationLimit" type="number" min={0} defaultValue={sub.integrationLimit ?? ''} />
-                </Field>
-              </div>
-              <Button type="submit" size="sm">Save changes</Button>
-            </form>
+            <SubscriptionForm companyId={c.id} subscription={sub} plans={billingPlans} />
           </CardContent>
         </Card>
+      ) : null}
+
+      {tab === 'commercial' ? (
+        <div className="space-y-6">
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+            <StatTile label="Plan revenue (GBP)" value={gbp(c.planRevenueGbp)} hint="per month" />
+            <StatTile
+              label="Add-on revenue (GBP)"
+              value={gbp(c.addonRevenueGbp)}
+              hint="active add-ons, per month"
+            />
+            <StatTile
+              label="Total recurring (GBP)"
+              value={gbp(c.estimatedRevenueGbp)}
+              hint="what the Profit screen counts"
+            />
+          </div>
+          <SimpleTable
+            title="Add-ons"
+            empty="No add-ons on this company."
+            headers={['Add-on', 'Price / month', 'Status']}
+            rows={c.addons.map((addon) => [
+              addon.label,
+              money(addon.priceMonthly, addon.currency),
+              addon.status,
+            ])}
+          />
+          <SimpleTable
+            title="One-off commercial charges"
+            empty="No setup fees or one-off charges recorded."
+            headers={['Charge', 'Amount', 'Status', 'Note', 'Raised']}
+            rows={c.commercialCharges.map((charge) => [
+              charge.chargeType.replace(/_/g, ' '),
+              money(charge.amount, charge.currency),
+              charge.status,
+              charge.description ?? '-',
+              formatDate(charge.createdAt),
+            ])}
+          />
+          <p className="text-xs text-muted-foreground">
+            One-off charges (setup fees) are recorded here for invoicing but are deliberately
+            excluded from the monthly margin on the Profit screen, which counts recurring revenue
+            only. Newest 8 charges shown.
+          </p>
+        </div>
       ) : null}
 
       {tab === 'integrations' ? (
@@ -343,7 +336,7 @@ export default async function CompanyDetailPage({
           </CardHeader>
           <CardContent className="p-0">
             {chatLogs.length === 0 ? (
-              <p className="px-6 pb-6 text-sm text-muted-foreground">No conversations saved yet.</p>
+              <EmptyState title="No conversations saved yet." className="pt-0" />
             ) : (
               <Table>
                 <TableHeader>
@@ -387,7 +380,7 @@ export default async function CompanyDetailPage({
               <CardTitle>
                 Assistant evaluation
                 {evalDetail?.avgAnswerScore != null ? (
-                  <span className="ml-2 align-middle">
+                  <span className="ms-2 align-middle">
                     <Badge variant={evalDetail.avgAnswerScore >= 70 ? 'success' : 'warning'}>
                       {evalDetail.avgAnswerScore}% answer quality
                     </Badge>
@@ -399,9 +392,10 @@ export default async function CompanyDetailPage({
           </CardHeader>
           <CardContent className="p-0">
             {!evalDetail ? (
-              <p className="px-6 pb-6 text-sm text-muted-foreground">
-                No graded run yet. Add sample questions, then run a graded evaluation.
-              </p>
+              <EmptyState
+                title="No graded run yet. Add sample questions, then run a graded evaluation."
+                className="pt-0"
+              />
             ) : (
               <Table>
                 <TableHeader>
@@ -445,13 +439,18 @@ export default async function CompanyDetailPage({
             <CardTitle>Operator tools</CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
-            <div className="rounded-md border border-amber-200 bg-amber-50 p-3">
-              <p className="mb-3 text-sm text-amber-950">
+            {/*
+              Amber here means "sensitive access", which is the `warning` tone —
+              distinct from the `info` notes on the money screens that used to
+              share the same hardcoded amber.
+            */}
+            <Alert tone="warning">
+              <p className="mb-3">
                 Sensitive support access. Start a time-limited impersonation session only when needed,
                 and include a clear reason.
               </p>
               <ImpersonationForm companyId={c.id} />
-            </div>
+            </Alert>
             <div className="flex flex-wrap gap-2">
               <Button asChild variant="outline" size="sm">
                 <Link href={`/super-admin/companies/${c.id}/manage`}>Manage company setup</Link>
@@ -460,16 +459,25 @@ export default async function CompanyDetailPage({
                 <Link href="/super-admin/usage">Usage and cost</Link>
               </Button>
               <Button asChild variant="outline" size="sm">
+                <Link href="/super-admin/costs">AI cost</Link>
+              </Button>
+              <Button asChild variant="outline" size="sm">
+                <Link href="/super-admin/profit">Profit / loss</Link>
+              </Button>
+              <Button asChild variant="outline" size="sm">
+                <Link href="/super-admin/subscriptions">Subscriptions</Link>
+              </Button>
+              <Button asChild variant="outline" size="sm">
+                <Link href="/super-admin/integrations">Integrations</Link>
+              </Button>
+              <Button asChild variant="outline" size="sm">
                 <Link href="/super-admin/audit-logs">Audit logs</Link>
               </Button>
-            </div>
-            <form action={setCompanyStatusAction}>
-              <input type="hidden" name="companyId" value={c.id} />
-              <input type="hidden" name="status" value={isActive ? 'suspended' : 'active'} />
-              <Button type="submit" variant={isActive ? 'destructive' : 'default'} size="sm">
-                {isActive ? 'Suspend company' : 'Activate company'}
+              <Button asChild variant="outline" size="sm">
+                <Link href="/super-admin/security">Security logs</Link>
               </Button>
-            </form>
+            </div>
+            <CompanyStatusForm companyId={c.id} companyName={c.name} isActive={isActive} />
           </CardContent>
         </Card>
       ) : null}
@@ -477,29 +485,16 @@ export default async function CompanyDetailPage({
   );
 }
 
-function Metric({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="rounded-md border bg-card p-3">
-      <p className="text-xs uppercase tracking-wider text-muted-foreground">{label}</p>
-      <p className="mt-1 text-xl font-semibold">{value}</p>
-    </div>
-  );
-}
-
+/**
+ * Read-only label/value pair inside a summary card. Deliberately not
+ * `FormField`: there is no control here, and `FormField` renders a `<label>`
+ * pointing at one.
+ */
 function Row({ label, value }: { label: string; value: string }) {
   return (
     <div className="flex justify-between gap-3 border-b pb-2 last:border-0">
       <span className="text-muted-foreground">{label}</span>
-      <span className="text-right font-medium">{value}</span>
-    </div>
-  );
-}
-
-function Field({ label, children }: { label: string; children: ReactNode }) {
-  return (
-    <div className="space-y-1.5">
-      <Label>{label}</Label>
-      {children}
+      <span className="text-end font-medium">{value}</span>
     </div>
   );
 }
@@ -522,7 +517,7 @@ function SimpleTable({
       </CardHeader>
       <CardContent className="p-0">
         {rows.length === 0 ? (
-          <p className="px-6 pb-6 text-sm text-muted-foreground">{empty}</p>
+          <EmptyState title={empty} className="pt-0" />
         ) : (
           <Table>
             <TableHeader>

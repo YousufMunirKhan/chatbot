@@ -35,10 +35,17 @@ async function writeAudit(
   });
 }
 
+/**
+ * A plan limit. `nonnegative`, NOT `positive`: `0` is a real, shipped value —
+ * Free Trial and Starter both carry `integrationLimit: 0` — and rejecting it
+ * meant opening the plan form on those companies and pressing save threw.
+ */
 const optNum = z.preprocess(
   (x) => (x === '' || x == null ? undefined : x),
-  z.coerce.number().int().positive().optional(),
+  z.coerce.number().int().nonnegative('Limits cannot be negative').optional(),
 );
+/** `on` from a checkbox, for limits an operator wants explicitly uncapped. */
+const optFlag = z.preprocess((x) => x === 'on', z.boolean());
 const optMoney = z.preprocess(
   (x) => (x === '' || x == null ? undefined : x),
   z.coerce.number().nonnegative().optional(),
@@ -74,8 +81,6 @@ const onboardSchema = z.object({
   agentLimit: optNum,
   botLimit: optNum,
   integrationLimit: optNum,
-  overageEnabled: z.preprocess((x) => x === 'on', z.boolean()).default(false),
-  overageUnitPrice: optMoney,
   monthlyAiBudgetUsd: optMoney,
   hardStopEnabled: z.preprocess((x) => x === 'on', z.boolean()).default(false),
   cacheEnabled: z.preprocess((x) => x !== 'off', z.boolean()).default(true),
@@ -125,8 +130,12 @@ export async function createCompanyAction(
     bot_limit: v.botLimit ?? plan.botLimit,
     agent_limit: v.agentLimit ?? plan.agentLimit,
     integration_limit: v.integrationLimit ?? plan.integrationLimit,
-    overage_enabled: v.overageEnabled,
-    overage_unit_price: v.overageUnitPrice ?? null,
+    // `overage_enabled` / `overage_unit_price` are deliberately NOT written.
+    // The columns exist (migration 0018) but nothing in the billing enforcement
+    // path (`src/lib/billing`) reads them, so the onboarding controls promised a
+    // paid-overage policy that could never take effect. The inputs have been
+    // removed rather than left as decoration; restore them together with real
+    // enforcement.
   });
   if (sErr) {
     await sb.from('companies').delete().eq('id', company.id);
@@ -255,8 +264,6 @@ export async function createCompanyAction(
       agentLimit: v.agentLimit ?? plan.agentLimit,
       botLimit: v.botLimit ?? plan.botLimit,
       integrationLimit: v.integrationLimit ?? plan.integrationLimit,
-      overageEnabled: v.overageEnabled,
-      overageUnitPrice: v.overageUnitPrice ?? null,
       monthlyAiBudgetUsd: v.monthlyAiBudgetUsd ?? null,
       hardStopEnabled: v.hardStopEnabled,
       cacheEnabled: v.cacheEnabled,
@@ -280,25 +287,66 @@ const statusSchema = z.object({
   status: z.enum(['active', 'suspended']),
 });
 
-export async function setCompanyStatusAction(formData: FormData): Promise<void> {
+export async function setCompanyStatusAction(
+  _prev: ActionState,
+  formData: FormData,
+): Promise<ActionState> {
   const admin = await requireRole([ROLES.SUPER_ADMIN]);
-  const v = statusSchema.parse(Object.fromEntries(formData));
+  const parsed = statusSchema.safeParse(Object.fromEntries(formData));
+  if (!parsed.success) return { error: parsed.error.issues[0]?.message ?? 'Invalid input' };
+  const v = parsed.data;
   const sb = createSupabaseServiceClient();
 
-  await sb.from('companies').update({ status: v.status }).eq('id', v.companyId);
+  const { error: companyErr } = await sb
+    .from('companies')
+    .update({ status: v.status })
+    .eq('id', v.companyId);
+  if (companyErr) return { error: `Could not update the company: ${companyErr.message}` };
+
+  // Suspending mirrors onto the subscription so the AI stops; activating has to
+  // mirror back, or the company goes "active" while `withinMessageQuota()` keeps
+  // returning false off the still-suspended subscription and the assistant stays
+  // dead with nothing on screen to explain it.
+  const { data: sub, error: subReadErr } = await sb
+    .from('subscriptions')
+    .select('plan,status')
+    .eq('company_id', v.companyId)
+    .maybeSingle();
+  if (subReadErr) return { error: `Could not read the subscription: ${subReadErr.message}` };
+
+  let subscriptionStatus: string | null = null;
   if (v.status === 'suspended') {
-    await sb.from('subscriptions').update({ status: 'suspended' }).eq('company_id', v.companyId);
+    if (sub && sub.status !== 'suspended') subscriptionStatus = 'suspended';
+  } else if (sub?.status === 'suspended') {
+    // Only un-suspend. A `past_due` or `canceled` subscription is a separate
+    // billing fact and must not be silently overwritten by a status toggle.
+    subscriptionStatus = sub.plan === 'free_trial' ? 'trialing' : 'active';
   }
+  if (subscriptionStatus) {
+    const { error: subErr } = await sb
+      .from('subscriptions')
+      .update({ status: subscriptionStatus })
+      .eq('company_id', v.companyId);
+    if (subErr) {
+      return {
+        error: `Company set to ${v.status}, but its subscription could not be updated: ${subErr.message}`,
+      };
+    }
+  }
+
   await writeAudit(sb, {
     companyId: v.companyId,
     actorId: admin.userId,
     action: v.status === 'suspended' ? 'company.suspended' : 'company.activated',
     targetType: 'company',
     targetId: v.companyId,
+    metadata: { companyStatus: v.status, subscriptionStatus },
   });
   revalidatePath(`/super-admin/companies/${v.companyId}`);
   revalidatePath(`/super-admin/companies/${v.companyId}/manage`);
   revalidatePath('/super-admin/companies');
+  revalidatePath('/super-admin/subscriptions');
+  return {};
 }
 
 // ---------------------------------------------------------------------------
@@ -310,28 +358,87 @@ const subSchema = z.object({
   status: z.enum(SUBSCRIPTION_STATUSES),
   freeUntil: optDate,
   messageLimit: optNum,
+  messageLimitUnlimited: optFlag,
   agentLimit: optNum,
+  agentLimitUnlimited: optFlag,
   botLimit: optNum,
+  botLimitUnlimited: optFlag,
   integrationLimit: optNum,
+  integrationLimitUnlimited: optFlag,
 });
 
-export async function updateSubscriptionAction(formData: FormData): Promise<void> {
+/**
+ * Resolve one limit field to the value that goes in the column.
+ *
+ * A blank input used to mean opposite things in the two forms: onboarding fell
+ * back to the plan default, editing wrote `null` (= unlimited). Because `0` was
+ * rejected by the old schema, clearing the field was the only way to get past
+ * the crash — so the workaround for a validation bug silently handed the company
+ * unlimited integrations.
+ *
+ * Both forms now agree: **blank = inherit the plan default**. Unlimited is a
+ * separate, explicit checkbox, and the form says so next to the fields.
+ */
+function resolveLimit(
+  entered: number | undefined,
+  unlimited: boolean,
+  planDefault: number | null | undefined,
+): number | null {
+  if (unlimited) return null;
+  if (entered != null) return entered;
+  return planDefault ?? null;
+}
+
+export async function updateSubscriptionAction(
+  _prev: ActionState,
+  formData: FormData,
+): Promise<ActionState> {
   const admin = await requireRole([ROLES.SUPER_ADMIN]);
-  const v = subSchema.parse(Object.fromEntries(formData));
+  const parsed = subSchema.safeParse(Object.fromEntries(formData));
+  if (!parsed.success) return { error: parsed.error.issues[0]?.message ?? 'Invalid input' };
+  const v = parsed.data;
   const sb = createSupabaseServiceClient();
 
-  await sb
+  // Plan defaults come from `billing_plans` (the editable source of record), and
+  // fall back to the static catalogue only for keys that predate that table.
+  const { data: planRow, error: planErr } = await sb
+    .from('billing_plans')
+    .select('message_limit,bot_limit,agent_limit,integration_limit')
+    .eq('key', v.plan)
+    .maybeSingle();
+  if (planErr) return { error: `Could not read the plan defaults: ${planErr.message}` };
+  const fallback = v.plan in PLANS ? PLANS[v.plan as keyof typeof PLANS] : null;
+  const p = (planRow ?? {}) as Record<string, unknown>;
+  const planDefaults = {
+    messageLimit: planRow ? (p.message_limit as number | null) : (fallback?.messageLimit ?? null),
+    botLimit: planRow ? (p.bot_limit as number | null) : (fallback?.botLimit ?? null),
+    agentLimit: planRow ? (p.agent_limit as number | null) : (fallback?.agentLimit ?? null),
+    integrationLimit: planRow
+      ? (p.integration_limit as number | null)
+      : (fallback?.integrationLimit ?? null),
+  };
+
+  const limits = {
+    message_limit: resolveLimit(v.messageLimit, v.messageLimitUnlimited, planDefaults.messageLimit),
+    agent_limit: resolveLimit(v.agentLimit, v.agentLimitUnlimited, planDefaults.agentLimit),
+    bot_limit: resolveLimit(v.botLimit, v.botLimitUnlimited, planDefaults.botLimit),
+    integration_limit: resolveLimit(
+      v.integrationLimit,
+      v.integrationLimitUnlimited,
+      planDefaults.integrationLimit,
+    ),
+  };
+
+  const { error: updateErr } = await sb
     .from('subscriptions')
     .update({
       plan: v.plan,
       status: v.status,
       free_until: v.freeUntil ?? null,
-      message_limit: v.messageLimit ?? null,
-      agent_limit: v.agentLimit ?? null,
-      bot_limit: v.botLimit ?? null,
-      integration_limit: v.integrationLimit ?? null,
+      ...limits,
     })
     .eq('company_id', v.companyId);
+  if (updateErr) return { error: `Could not save the subscription: ${updateErr.message}` };
 
   await writeAudit(sb, {
     companyId: v.companyId,
@@ -343,16 +450,17 @@ export async function updateSubscriptionAction(formData: FormData): Promise<void
       plan: v.plan,
       status: v.status,
       freeUntil: v.freeUntil ?? null,
-      messageLimit: v.messageLimit ?? null,
-      agentLimit: v.agentLimit ?? null,
-      botLimit: v.botLimit ?? null,
-      integrationLimit: v.integrationLimit ?? null,
+      messageLimit: limits.message_limit,
+      agentLimit: limits.agent_limit,
+      botLimit: limits.bot_limit,
+      integrationLimit: limits.integration_limit,
     },
   });
   revalidatePath(`/super-admin/companies/${v.companyId}`);
   // `/manage` renders the same `getCompanyDetail(id)` payload as the detail page.
   revalidatePath(`/super-admin/companies/${v.companyId}/manage`);
   revalidatePath('/super-admin/subscriptions');
+  return {};
 }
 
 /** Email a company's "how to improve" report to its admins — super-admin only. */
@@ -362,28 +470,36 @@ const creditTopUpSchema = z.object({
   description: optText,
 });
 
-export async function topUpCompanyCreditAction(formData: FormData): Promise<void> {
+export async function topUpCompanyCreditAction(
+  _prev: ActionState,
+  formData: FormData,
+): Promise<ActionState> {
   const admin = await requireRole([ROLES.SUPER_ADMIN]);
-  const v = creditTopUpSchema.parse(Object.fromEntries(formData));
+  const parsed = creditTopUpSchema.safeParse(Object.fromEntries(formData));
+  if (!parsed.success) return { error: parsed.error.issues[0]?.message ?? 'Invalid input' };
+  const v = parsed.data;
   const sb = createSupabaseServiceClient();
 
-  const { data: account } = await sb
+  const { data: account, error: readErr } = await sb
     .from('company_credit_accounts')
     .select('balance_amount,lifetime_credit_added')
     .eq('company_id', v.companyId)
     .maybeSingle();
+  if (readErr) return { error: `Could not read the credit wallet: ${readErr.message}` };
 
   const nextBalance = Number(account?.balance_amount ?? 0) + v.amount;
   const nextLifetime = Number(account?.lifetime_credit_added ?? 0) + v.amount;
 
-  await sb.from('company_credit_accounts').upsert({
+  const { error: upsertErr } = await sb.from('company_credit_accounts').upsert({
     company_id: v.companyId,
     currency: 'GBP',
     balance_amount: nextBalance,
     lifetime_credit_added: nextLifetime,
     low_balance_threshold: 2,
   });
-  await sb.from('company_credit_transactions').insert({
+  if (upsertErr) return { error: `Could not credit the wallet: ${upsertErr.message}` };
+
+  const { error: txErr } = await sb.from('company_credit_transactions').insert({
     company_id: v.companyId,
     type: 'top_up',
     amount: v.amount,
@@ -391,6 +507,13 @@ export async function topUpCompanyCreditAction(formData: FormData): Promise<void
     description: v.description ?? 'Manual AI credit top-up',
     created_by: admin.userId,
   });
+  if (txErr) {
+    // The balance moved but the ledger did not. Say so loudly: a silent gap here
+    // makes the wallet impossible to reconcile.
+    return {
+      error: `Balance updated but the ledger entry failed: ${txErr.message}. Reconcile before topping up again.`,
+    };
+  }
   await writeAudit(sb, {
     companyId: v.companyId,
     actorId: admin.userId,
@@ -402,6 +525,7 @@ export async function topUpCompanyCreditAction(formData: FormData): Promise<void
   revalidatePath(`/super-admin/companies/${v.companyId}`);
   revalidatePath(`/super-admin/companies/${v.companyId}/manage`);
   revalidatePath('/super-admin/usage');
+  return {};
 }
 
 const replyGrantSchema = z.object({
@@ -419,9 +543,14 @@ function expiryIso(value: string | undefined): string {
   return new Date(`${value}T23:59:59.999Z`).toISOString();
 }
 
-export async function grantCompanyRepliesAction(formData: FormData): Promise<void> {
+export async function grantCompanyRepliesAction(
+  _prev: ActionState,
+  formData: FormData,
+): Promise<ActionState> {
   const admin = await requireRole([ROLES.SUPER_ADMIN]);
-  const v = replyGrantSchema.parse(Object.fromEntries(formData));
+  const parsed = replyGrantSchema.safeParse(Object.fromEntries(formData));
+  if (!parsed.success) return { error: parsed.error.issues[0]?.message ?? 'Invalid input' };
+  const v = parsed.data;
   const sb = createSupabaseServiceClient();
   const expiresAt = expiryIso(v.expiresAt);
 
@@ -437,7 +566,7 @@ export async function grantCompanyRepliesAction(formData: FormData): Promise<voi
     })
     .select('id')
     .single();
-  if (error) throw error;
+  if (error) return { error: `Could not grant the extra replies: ${error.message}` };
 
   await writeAudit(sb, {
     companyId: v.companyId,
@@ -456,6 +585,7 @@ export async function grantCompanyRepliesAction(formData: FormData): Promise<voi
   revalidatePath(`/super-admin/companies/${v.companyId}/manage`);
   revalidatePath('/super-admin/companies');
   revalidatePath('/super-admin/usage');
+  return {};
 }
 
 export async function emailImprovementsAction(formData: FormData): Promise<void> {

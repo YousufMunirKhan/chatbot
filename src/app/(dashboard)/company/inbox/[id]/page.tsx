@@ -5,10 +5,12 @@ import { ROLES } from '@/lib/constants';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent } from '@/components/ui/card';
 import { cn } from '@/lib/utils';
-import { formatDate } from '@/lib/format';
+import { formatAbsoluteTime, formatRelativeTime } from '@/lib/relative-time';
 import {
+  conversationDisplayName,
   conversationSource,
   conversationTicketNumber,
+  DEFAULT_MESSAGE_WINDOW,
   getConversationDetail,
   type ConversationDetail,
   type InboxMessage,
@@ -20,47 +22,52 @@ import { ChatAutoScroll } from '@/modules/company/components/chat-auto-scroll';
 import { TicketPanel } from '@/modules/company/components/ticket-panel';
 import { ConversationPresence } from '@/modules/company/components/conversation-presence';
 
+/**
+ * One conversation.
+ *
+ * What changed and why:
+ *  - Every bubble carries a timestamp. Without one an agent could not tell
+ *    whether the last message arrived four minutes or four days ago, which was
+ *    the worst defect on this screen.
+ *  - The composer is pinned and the transcript scrolls. It used to be a
+ *    `max-h-[55vh]` box inside a scrolling page, so replying meant scrolling the
+ *    page away from the messages you were replying to.
+ *  - The header carries two badges instead of nine, and the AI control is a real
+ *    labelled switch rather than two alternating buttons plus a duplicate badge.
+ *  - `TicketTimeline` is gone. It restated the transcript, restated the notes,
+ *    and printed each entry's title twice — once as text and again as a badge
+ *    containing the same text. Genuine system events already render inline in
+ *    the transcript as centred pills, which is where they belong.
+ *  - Raw enums are never printed: `needs_human` reads "Waiting for you",
+ *    `closed` reads "Sorted", `expired` reads "Went quiet".
+ */
+
 type BadgeVariant = 'default' | 'secondary' | 'success' | 'warning' | 'destructive' | 'outline';
+type Chip = { label: string; variant: BadgeVariant };
 
-function statusVariant(status: string): BadgeVariant {
-  if (status === 'ai_active') return 'secondary';
-  if (status === 'needs_human') return 'warning';
-  if (status === 'human_active') return 'warning';
-  if (status === 'closed') return 'outline';
-  return 'outline';
+function statusChip(convo: ConversationDetail): Chip | null {
+  if (convo.status === 'needs_human') return { label: 'Waiting for you', variant: 'warning' };
+  if (convo.status === 'closed') return { label: 'Sorted', variant: 'outline' };
+  if (convo.status === 'expired') return { label: 'Went quiet', variant: 'outline' };
+  if (convo.status === 'human_active') return { label: 'A person is on it', variant: 'secondary' };
+  // `ai_active` is the default state. The switch already says so.
+  return null;
 }
 
-function displayStatus(status: string, aiEnabled: boolean): string {
-  if (status === 'closed' || status === 'expired' || status === 'needs_human') return status;
-  return aiEnabled ? 'ai_active' : 'human_active';
-}
-
-function statusLabel(status: string): string {
-  if (status === 'ai_active') return 'AI active';
-  return status
-    .replace(/_/g, ' ')
-    .replace(/^\w/, (letter) => letter.toUpperCase());
-}
-
-function sourceLabel(source: ReturnType<typeof conversationSource>): string {
-  if (source === 'helpdesk') return 'Help Desk chat';
-  if (source === 'connector') return 'Connector failure';
-  if (source === 'manual') return 'Manual';
-  return 'Customer chat';
-}
-
-function sourceVariant(source: ReturnType<typeof conversationSource>): BadgeVariant {
-  if (source === 'connector') return 'destructive';
-  if (source === 'helpdesk') return 'secondary';
-  if (source === 'manual') return 'outline';
-  return 'success';
+/** At most one exception, so the header never exceeds two badges. */
+function exceptionChip(convo: ConversationDetail): Chip | null {
+  if (convo.priority === 'urgent') return { label: 'Urgent', variant: 'destructive' };
+  if (conversationSource(convo) === 'connector') return { label: 'Connector problem', variant: 'destructive' };
+  if (typeof convo.csatRating === 'number' && convo.csatRating <= 2) {
+    return { label: `Rated ${convo.csatRating}/5`, variant: 'destructive' };
+  }
+  return null;
 }
 
 function senderLabel(senderType: string): string {
-  if (senderType === 'ai') return 'AI';
-  if (senderType === 'agent') return 'Agent';
-  if (senderType === 'system') return 'System';
-  return 'Visitor';
+  if (senderType === 'ai') return 'Assistant';
+  if (senderType === 'agent') return 'Your team';
+  return 'Customer';
 }
 
 function displayMessage(content: string): string {
@@ -71,17 +78,30 @@ function displayMessage(content: string): string {
     .trim();
 }
 
-function MessageBubble({ message }: { message: InboxMessage }) {
+/** Centred pill used for both system messages and the closing divider. */
+function SystemDivider({ text, at, now }: { text: string; at: string | null; now: Date }) {
+  return (
+    <div className="flex justify-center">
+      <div className="max-w-[80%] rounded-full bg-muted px-3 py-1 text-center text-xs text-muted-foreground">
+        {text}
+        {at ? (
+          <>
+            {' · '}
+            <time dateTime={at} title={formatAbsoluteTime(at)}>
+              {formatRelativeTime(at, now)}
+            </time>
+          </>
+        ) : null}
+      </div>
+    </div>
+  );
+}
+
+function MessageBubble({ message, now }: { message: InboxMessage; now: Date }) {
   const { senderType } = message;
 
   if (senderType === 'system') {
-    return (
-      <div className="flex justify-center">
-        <div className="max-w-[80%] rounded-full bg-muted px-3 py-1 text-center text-xs text-muted-foreground">
-          {message.content}
-        </div>
-      </div>
-    );
+    return <SystemDivider text={message.content} at={message.createdAt} now={now} />;
   }
 
   const isAgent = senderType === 'agent';
@@ -91,151 +111,111 @@ function MessageBubble({ message }: { message: InboxMessage }) {
         className={cn(
           'max-w-[80%] rounded-lg px-3 py-2 text-sm',
           senderType === 'visitor' && 'bg-muted',
-          senderType === 'ai' && 'bg-blue-50 text-blue-900',
+          senderType === 'ai' && 'bg-info-bg text-info-fg',
           senderType === 'agent' && 'bg-primary/10',
         )}
       >
-        <p className="mb-0.5 text-xs font-medium text-muted-foreground">{senderLabel(senderType)}</p>
+        <p className="mb-0.5 flex items-baseline gap-2 text-xs text-muted-foreground">
+          <span className="font-medium">{senderLabel(senderType)}</span>
+          <time dateTime={message.createdAt} title={formatAbsoluteTime(message.createdAt)}>
+            {formatRelativeTime(message.createdAt, now)}
+          </time>
+        </p>
         <p className="whitespace-pre-wrap leading-relaxed">{displayMessage(message.content)}</p>
       </div>
     </div>
   );
 }
 
-function buildTicketTimeline(convo: ConversationDetail) {
-  const items: Array<{ key: string; title: string; body?: string; at: string | null; tone?: BadgeVariant }> = [];
-  items.push({
-    key: 'created',
-    title: 'Created',
-    body: `${conversationTicketNumber(convo)} from ${sourceLabel(conversationSource(convo))}`,
-    at: convo.startedAt,
-  });
-
-  if (convo.assignedAgentId) {
-    items.push({ key: 'assigned', title: 'Assigned', body: 'Ticket is owned by a support agent or admin.', at: convo.startedAt });
-  } else if (convo.status !== 'closed') {
-    items.push({ key: 'unassigned', title: 'Unassigned', body: 'No owner yet. Routing will assign an online agent or company admin.', at: null, tone: 'warning' });
-  }
-
-  convo.messages
-    .filter((m) => m.senderType === 'system')
-    .filter((m) => /ticket|connector|failed|queued|resolved/i.test(m.content))
-    .forEach((m) => {
-      const isFailure = /failed|error|queued/i.test(m.content);
-      const isResolved = /resolved/i.test(m.content);
-      items.push({
-        key: `message-${m.id}`,
-        title: isResolved ? 'Resolved' : isFailure ? 'Connector action failed' : 'System event',
-        body: m.content,
-        at: m.createdAt,
-        tone: isResolved ? 'success' : isFailure ? 'destructive' : 'secondary',
-      });
-    });
-
-  convo.notes.forEach((note) => {
-    items.push({
-      key: `note-${note.id}`,
-      title: 'Note added',
-      body: note.note,
-      at: note.createdAt,
-      tone: 'outline',
-    });
-  });
-
-  if (convo.status === 'closed' && convo.closedAt && !items.some((item) => item.title === 'Resolved')) {
-    items.push({ key: 'closed', title: 'Resolved', body: 'Ticket was closed.', at: convo.closedAt, tone: 'success' });
-  }
-
-  return items.sort((a, b) => {
-    if (!a.at) return 1;
-    if (!b.at) return -1;
-    return new Date(a.at).getTime() - new Date(b.at).getTime();
-  });
-}
-
-function TicketTimeline({ convo }: { convo: ConversationDetail }) {
-  const items = buildTicketTimeline(convo);
-  return (
-    <Card>
-      <CardContent className="p-4">
-        <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">Ticket timeline</p>
-        {/* Module 21 (RTL): logical rail — the border, its padding and the dot all
-            sit on the reading-start edge, so the timeline stays beside its text. */}
-        <div className="mt-3 space-y-3">
-          {items.map((item) => (
-            <div key={item.key} className="relative border-s ps-3">
-              <div className="absolute -start-[5px] top-1 h-2.5 w-2.5 rounded-full bg-primary" />
-              <div className="flex flex-wrap items-center gap-2">
-                <p className="text-sm font-medium">{item.title}</p>
-                {item.tone ? <Badge variant={item.tone}>{item.title}</Badge> : null}
-              </div>
-              {item.at ? <p className="text-xs text-muted-foreground">{formatDate(item.at)}</p> : null}
-              {item.body ? <p className="mt-1 line-clamp-4 whitespace-pre-wrap text-xs leading-5 text-muted-foreground">{item.body}</p> : null}
-            </div>
-          ))}
-        </div>
-      </CardContent>
-    </Card>
-  );
-}
-
-export default async function ConversationPage({ params }: { params: { id: string } }) {
+export default async function ConversationPage({
+  params,
+  searchParams,
+}: {
+  params: { id: string };
+  searchParams?: { msgs?: string };
+}) {
   await requireRole([ROLES.COMPANY_ADMIN, ROLES.AGENT]);
-  const convo = await getConversationDetail(params.id);
+  const messageLimit = Number(searchParams?.msgs) || DEFAULT_MESSAGE_WINDOW;
+  const convo = await getConversationDetail(params.id, { messageLimit });
   if (!convo) notFound();
 
-  const visitorName = convo.visitorId
-    ? convo.visitorId.length > 8
-      ? convo.visitorId.slice(0, 8)
-      : convo.visitorId
-    : 'Visitor';
-  const status = displayStatus(convo.status, convo.aiEnabled);
-  const source = conversationSource(convo);
+  const now = new Date();
+  const { label: name, suffix } = conversationDisplayName(convo);
+  const chips = [statusChip(convo), exceptionChip(convo)].filter((chip): chip is Chip => chip !== null);
   const ticketNumber = conversationTicketNumber(convo);
-  const priorityVariant: BadgeVariant =
-    convo.priority === 'urgent' ? 'destructive' : convo.priority === 'high' ? 'warning' : 'outline';
+  const contactLine = [convo.leadName ? convo.leadContact : null, convo.assignedAgentName ? `Assigned to ${convo.assignedAgentName}` : null]
+    .filter(Boolean)
+    .join(' · ');
 
   return (
     <div className="mx-auto grid max-w-6xl gap-6 lg:grid-cols-[minmax(0,1fr)_320px]">
-      <div className="space-y-6">
+      {/* The conversation column owns the viewport height on desktop: the header
+          and composer are fixed rows, and only the transcript scrolls. */}
+      <div className="flex min-w-0 flex-col gap-4 lg:h-[calc(100vh-7.5rem)]">
         <InboxRealtime conversationId={convo.id} />
         <ConversationPresence conversationId={convo.id} />
 
         <div>
           <Link href="/company/inbox" className="text-sm text-muted-foreground hover:underline">
-            Back to Inbox
+            <span className="dir-arrow" aria-hidden="true">
+              &larr;
+            </span>{' '}
+            Inbox
           </Link>
-          <div className="mt-2 flex flex-wrap items-center gap-3">
-            <h1 className="text-2xl font-semibold">{visitorName}</h1>
-            <Badge variant="outline">{ticketNumber}</Badge>
-            <Badge variant={sourceVariant(source)}>{sourceLabel(source)}</Badge>
-            <Badge variant={statusVariant(status)}>{statusLabel(status)}</Badge>
-            <Badge variant={convo.aiEnabled ? 'success' : 'outline'}>
-              {convo.aiEnabled ? 'AI on' : 'AI off'}
-            </Badge>
-            {convo.priority !== 'normal' ? (
-              <Badge variant={priorityVariant} className="capitalize">{convo.priority}</Badge>
-            ) : null}
-            {convo.csatRating ? (
-              <Badge variant="secondary">{convo.csatRating} stars CSAT</Badge>
-            ) : null}
+          <div className="mt-2 flex flex-wrap items-start justify-between gap-3">
+            <div className="min-w-0">
+              <div className="flex flex-wrap items-center gap-2">
+                <h1 className="text-xl font-semibold">
+                  {name}
+                  {suffix ? <span className="font-normal text-muted-foreground"> · {suffix}</span> : null}
+                </h1>
+                {chips.map((chip) => (
+                  <Badge key={chip.label} variant={chip.variant}>
+                    {chip.label}
+                  </Badge>
+                ))}
+              </div>
+              <p className="mt-1 text-xs text-muted-foreground">
+                {ticketNumber}
+                {contactLine ? ` · ${contactLine}` : ''}
+                {convo.startedAt ? ` · started ${formatRelativeTime(convo.startedAt, now)}` : ''}
+              </p>
+            </div>
+            <ConversationAiToggle
+              key={convo.id}
+              conversationId={convo.id}
+              aiEnabled={convo.aiEnabled}
+              isClosed={convo.status === 'closed'}
+            />
           </div>
         </div>
 
-        <Card>
-          <CardContent className="max-h-[55vh] space-y-3 overflow-y-auto p-4">
+        <Card className="flex min-h-0 flex-1 flex-col">
+          <CardContent className="max-h-[60vh] flex-1 space-y-3 overflow-y-auto p-4 lg:max-h-none">
+            {convo.hasEarlierMessages ? (
+              <div className="flex justify-center">
+                <Link
+                  href={`/company/inbox/${convo.id}?msgs=${convo.messages.length + 100}`}
+                  className="rounded-full border px-3 py-1 text-xs text-muted-foreground hover:bg-muted"
+                >
+                  Load earlier messages ({convo.totalMessages - convo.messages.length} more)
+                </Link>
+              </div>
+            ) : null}
             {convo.messages.length === 0 ? (
               <p className="text-sm text-muted-foreground">No messages yet.</p>
             ) : (
-              convo.messages.map((m) => <MessageBubble key={m.id} message={m} />)
+              convo.messages.map((m) => <MessageBubble key={m.id} message={m} now={now} />)
             )}
+            {convo.status === 'closed' && convo.closedAt ? (
+              <SystemDivider text="Marked as sorted" at={convo.closedAt} now={now} />
+            ) : null}
             <ChatAutoScroll count={convo.messages.length} />
           </CardContent>
         </Card>
 
-        <ConversationAiToggle key={convo.id} conversationId={convo.id} aiEnabled={convo.aiEnabled} isClosed={convo.status === 'closed'} />
-
-        <Card>
+        {/* Pinned composer — outside the scroll area, so it never moves. */}
+        <Card className="shrink-0">
           <CardContent className="p-4">
             <AgentReplyForm key={convo.id} conversationId={convo.id} cannedResponses={convo.cannedResponses} />
           </CardContent>
@@ -246,12 +226,13 @@ export default async function ConversationPage({ params }: { params: { id: strin
         {convo.csatComment ? (
           <Card>
             <CardContent className="p-4">
-              <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">CSAT feedback</p>
+              <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
+                What the customer said
+              </p>
               <p className="mt-1 text-sm">{convo.csatComment}</p>
             </CardContent>
           </Card>
         ) : null}
-        <TicketTimeline convo={convo} />
         <Card>
           <CardContent className="p-4">
             <TicketPanel

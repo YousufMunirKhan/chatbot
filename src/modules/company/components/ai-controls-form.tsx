@@ -1,17 +1,13 @@
 'use client';
 
-import { useFormState, useFormStatus } from 'react-dom';
-import { Button } from '@/components/ui/button';
+import { useFormState } from 'react-dom';
 import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
+import { FormField } from '@/components/ui/form-field';
+import { FormMessage } from '@/components/ui/form-message';
+import { SubmitButton } from '@/components/ui/submit-button';
 import { saveAiControlsAction, type AiControlsState } from '../ai-controls-actions';
 
 const initial: AiControlsState = {};
-
-function Submit() {
-  const { pending } = useFormStatus();
-  return <Button type="submit" disabled={pending}>{pending ? 'Saving...' : 'Save AI controls'}</Button>;
-}
 
 export function AiControlsForm({ monthlyBudgetUsd, hardStopEnabled, cacheEnabled }: {
   monthlyBudgetUsd: number | null;
@@ -22,8 +18,7 @@ export function AiControlsForm({ monthlyBudgetUsd, hardStopEnabled, cacheEnabled
   return (
     <form action={action} className="space-y-4">
       <div className="grid gap-4 sm:grid-cols-3">
-        <div className="space-y-1.5">
-          <Label>Monthly AI spend limit</Label>
+        <FormField label="Monthly AI spend limit" htmlFor="monthlyBudgetUsd">
           <Input
             name="monthlyBudgetUsd"
             type="number"
@@ -33,12 +28,12 @@ export function AiControlsForm({ monthlyBudgetUsd, hardStopEnabled, cacheEnabled
             defaultValue={monthlyBudgetUsd ?? ''}
             placeholder="No limit"
           />
-          <datalist id="ai-budget-presets">
-            {[25, 50, 100, 250, 500, 1000].map((amount) => (
-              <option key={amount} value={amount} />
-            ))}
-          </datalist>
-        </div>
+        </FormField>
+        <datalist id="ai-budget-presets">
+          {[25, 50, 100, 250, 500, 1000].map((amount) => (
+            <option key={amount} value={amount} />
+          ))}
+        </datalist>
         <label className="flex items-center gap-2 pt-7 text-sm">
           <input type="checkbox" name="hardStopEnabled" defaultChecked={hardStopEnabled} className="h-4 w-4" />
           Stop AI replies at the limit
@@ -48,9 +43,8 @@ export function AiControlsForm({ monthlyBudgetUsd, hardStopEnabled, cacheEnabled
           Reuse repeated answers to reduce cost
         </label>
       </div>
-      {state.error ? <p className="text-sm text-destructive">{state.error}</p> : null}
-      {state.ok ? <p className="text-sm text-emerald-600">Saved.</p> : null}
-      <Submit />
+      <FormMessage state={state} />
+      <SubmitButton pendingLabel="Saving...">Save AI controls</SubmitButton>
     </form>
   );
 }

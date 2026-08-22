@@ -4,6 +4,9 @@ import { ROLES } from '@/lib/constants';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { EmptyState } from '@/components/ui/empty-state';
+import { PageHeader } from '@/components/ui/page-header';
+import { Select } from '@/components/ui/select';
 import {
   Table,
   TableBody,
@@ -18,9 +21,6 @@ import { setChatOrderStatusAction } from '@/modules/company/orders-actions';
 import { RefreshOnFocus } from '@/components/refresh-on-focus';
 
 const CHAT_ORDER_STATUSES = ['pending', 'confirmed', 'paid', 'fulfilled', 'cancelled'] as const;
-
-const selectCls =
-  'flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring';
 
 function statusVariant(status: string | null): 'success' | 'warning' | 'destructive' | 'secondary' {
   switch (status) {
@@ -42,31 +42,29 @@ export default async function OrdersPage() {
   const [chatOrders, syncedOrders] = await Promise.all([listChatOrders(), listSyncedOrders()]);
 
   return (
-    <div className="space-y-6">
+    <div className="mx-auto max-w-6xl space-y-6">
       <RefreshOnFocus />
-      <div>
-        <h1 className="text-2xl font-semibold">Orders</h1>
-        <p className="text-sm text-muted-foreground">
-          Conversational orders placed by your assistants and orders synced from connected stores.
-        </p>
-      </div>
+      <PageHeader
+        title="Orders"
+        description="Conversational orders placed by your assistants and orders synced from connected stores."
+      />
 
       <Card>
         <CardHeader>
           <CardTitle>Chat orders</CardTitle>
         </CardHeader>
-        <CardContent>
+        <CardContent className="p-0">
           {chatOrders.length === 0 ? (
             // Module 1 — orders start in the widget, so send the owner to the catalog first.
-            <div className="space-y-3">
-              <p className="max-w-xl text-sm text-muted-foreground">
-                No chat orders yet. When a visitor places an order through the assistant, it lands here with its
-                items and total, and you move it through to fulfilled.
-              </p>
-              <Button asChild size="sm" variant="outline">
-                <Link href="/company/catalog">Check your catalog</Link>
-              </Button>
-            </div>
+            <EmptyState
+              title="No chat orders yet."
+              body="When a visitor places an order through the assistant, it lands here with its items and total, and you move it through to fulfilled."
+              action={
+                <Button asChild size="sm" variant="outline">
+                  <Link href="/company/catalog">Check your catalog</Link>
+                </Button>
+              }
+            />
           ) : (
             <Table>
               <TableHeader>
@@ -96,13 +94,13 @@ export default async function OrdersPage() {
                     <TableCell>
                       <form action={setChatOrderStatusAction} className="flex items-center gap-2">
                         <input type="hidden" name="orderId" value={o.id} />
-                        <select name="status" defaultValue={o.status} className={selectCls}>
+                        <Select name="status" size="sm" defaultValue={o.status} aria-label="Order status">
                           {CHAT_ORDER_STATUSES.map((s) => (
                             <option key={s} value={s}>
                               {s}
                             </option>
                           ))}
-                        </select>
+                        </Select>
                         <Button type="submit" size="sm" variant="outline">
                           Update
                         </Button>
@@ -120,18 +118,23 @@ export default async function OrdersPage() {
         <CardHeader>
           <CardTitle>Synced orders</CardTitle>
         </CardHeader>
-        <CardContent>
+        <CardContent className="p-0">
           {syncedOrders.length === 0 ? (
             // Module 2 — nothing syncs until a store is connected.
-            <div className="space-y-3">
-              <p className="max-w-xl text-sm text-muted-foreground">
-                No synced orders yet. Connect your WooCommerce or Shopify store and its orders copy across
-                automatically, so the assistant can answer &ldquo;where is my order&rdquo;.
-              </p>
-              <Button asChild size="sm">
-                <Link href="/company/integrations">Connect a store</Link>
-              </Button>
-            </div>
+            <EmptyState
+              title="No synced orders yet."
+              body={
+                <>
+                  Connect your WooCommerce or Shopify store and its orders copy across automatically, so the
+                  assistant can answer &ldquo;where is my order&rdquo;.
+                </>
+              }
+              action={
+                <Button asChild size="sm">
+                  <Link href="/company/integrations">Connect a store</Link>
+                </Button>
+              }
+            />
           ) : (
             <Table>
               <TableHeader>

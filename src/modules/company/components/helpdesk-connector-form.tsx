@@ -1,9 +1,15 @@
 'use client';
 
-import { useFormState, useFormStatus } from 'react-dom';
+import { useFormState } from 'react-dom';
+import { Alert } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Select } from '@/components/ui/select';
+import { Textarea } from '@/components/ui/textarea';
+import { FormField } from '@/components/ui/form-field';
+import { FormMessage } from '@/components/ui/form-message';
+import { SubmitButton } from '@/components/ui/submit-button';
 import { RefreshDashboardShell } from '@/components/refresh-dashboard-shell';
 import {
   createHelpdeskConnectorAction,
@@ -15,15 +21,6 @@ import type { ActionState } from '../actions';
 const connectorInitial: ConnectorActionState = {};
 const eventInitial: ActionState = {};
 
-function SubmitButton({ label }: { label: string }) {
-  const { pending } = useFormStatus();
-  return (
-    <Button type="submit" disabled={pending}>
-      {pending ? 'Saving...' : label}
-    </Button>
-  );
-}
-
 export function HelpdeskConnectorForm() {
   const [state, action] = useFormState(createHelpdeskConnectorAction, connectorInitial);
 
@@ -31,18 +28,15 @@ export function HelpdeskConnectorForm() {
     <form action={action} className="space-y-4">
       <RefreshDashboardShell state={state} />
       <div className="grid gap-4 sm:grid-cols-2">
-        <div className="space-y-1.5">
-          <Label htmlFor="connector-name">Connector name</Label>
-          <Input id="connector-name" name="name" placeholder="Main POS connector" required />
-        </div>
-        <div className="space-y-1.5">
-          <Label htmlFor="connector-platform">Platform</Label>
-          <select
-            id="connector-platform"
-            name="platform"
-            className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
-            defaultValue="dotnet"
-          >
+        <FormField label="Connector name" htmlFor="connector-name">
+          <Input name="name" placeholder="Main POS connector" required />
+        </FormField>
+        <FormField
+          label="Platform"
+          htmlFor="connector-platform"
+          hint="Node, Laravel, React, and Vue use the web connector token, but their downloads are separate."
+        >
+          <Select name="platform" defaultValue="dotnet">
             <option value="dotnet">.NET / Windows POS</option>
             <option value="android">Android app</option>
             <option value="web">Web backend</option>
@@ -50,21 +44,22 @@ export function HelpdeskConnectorForm() {
             <option value="laravel">Laravel backend</option>
             <option value="react">React admin UI</option>
             <option value="vue">Vue admin UI</option>
-          </select>
-          <p className="text-xs text-muted-foreground">
-            Node, Laravel, React, and Vue use the web connector token, but their downloads are separate.
-          </p>
-        </div>
+          </Select>
+        </FormField>
       </div>
-      {state.error ? <p className="text-sm text-destructive">{state.error}</p> : null}
+      <FormMessage state={{ error: state.error }} />
       {state.token ? (
-        <div className="rounded-md border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-950">
+        // Rich success payload, so `Alert` + a hand-added live region rather
+        // than `FormMessage` (which is a single `<p>`). The `<pre>` was
+        // `bg-white`, which is invisible in dark mode; `bg-background` is the
+        // same white in light mode and follows the theme.
+        <Alert tone="success" role="status" aria-live="polite" className="p-3">
           <p className="font-medium">Connector token for {state.connectorName}</p>
           <p className="mt-1">Copy it now. It is shown only once.</p>
-          <pre className="mt-2 overflow-auto rounded bg-white p-2 text-xs">{state.token}</pre>
-        </div>
+          <pre className="mt-2 overflow-auto rounded bg-background p-2 text-xs">{state.token}</pre>
+        </Alert>
       ) : null}
-      <SubmitButton label="Create connector" />
+      <SubmitButton pendingLabel="Saving...">Create connector</SubmitButton>
     </form>
   );
 }
@@ -78,11 +73,13 @@ export function QueueConnectorEventForm({ actionId }: { actionId: string }) {
       <Label htmlFor={`request-${actionId}`} className="text-xs">
         Test request JSON
       </Label>
-      <textarea
+      {/* `min-h-0 p-2`: `Textarea` brings the shared border/background/ring, but
+          its 80px floor and `px-3 py-2` would grow this 3-row mono box. */}
+      <Textarea
         id={`request-${actionId}`}
         name="requestJson"
         rows={3}
-        className="w-full rounded-md border bg-background p-2 font-mono text-xs"
+        className="min-h-0 p-2 font-mono text-xs"
         defaultValue={'{"query":"Pepsi"}'}
       />
       <div className="grid gap-2 text-xs">
@@ -95,8 +92,11 @@ export function QueueConnectorEventForm({ actionId }: { actionId: string }) {
           Confirm real write action
         </label>
       </div>
-      {state.error ? <p className="text-xs text-destructive">{state.error}</p> : null}
-      {state.ok ? <p className="text-xs text-emerald-600">Queued. Connector can receive it by WebSocket or polling.</p> : null}
+      <FormMessage
+        state={state}
+        okText="Queued. Connector can receive it by WebSocket or polling."
+        className="text-xs"
+      />
       <Button type="submit" size="sm" variant="outline">
         Queue sandbox event
       </Button>

@@ -18,22 +18,28 @@ import type { InternalNote } from '../inbox-data';
 
 const PRIORITIES = ['low', 'normal', 'high', 'urgent'] as const;
 const initial: ActionState = {};
+/**
+ * Written for the person reading the reply, not for the engineer writing it.
+ * The old set opened with lines like "Needs connector update. The platform is
+ * ready, but the customer connector must be updated or restarted" — three
+ * nouns a shop owner has never met.
+ */
 const RESOLUTION_TEMPLATES = [
   {
-    label: 'Fixed',
-    body: 'Fixed. The issue has been checked and the affected workflow is working again.',
+    label: 'Sorted it',
+    body: 'We looked into this and it is working again now. Let us know if you see it happen a second time.',
   },
   {
-    label: 'Needs connector update',
-    body: 'Needs connector update. The platform is ready, but the customer connector must be updated or restarted before this works reliably.',
+    label: 'Update needed on the till',
+    body: 'Everything is ready on our side. The app on your till needs updating or restarting, and then this will work as expected.',
   },
   {
-    label: 'User permissions issue',
-    body: 'User permissions issue. The staff member needs the correct POS/app permission before this action can be completed.',
+    label: 'Staff member needs access',
+    body: 'The member of staff who tried this does not have permission for it yet. Once someone with admin access turns that on for them, they can do it themselves.',
   },
   {
-    label: 'External POS API down',
-    body: 'External POS API down. The request reached the connector, but the POS/API dependency is currently unavailable.',
+    label: 'Your till system was down',
+    body: 'The request reached your till system, but it was not responding at the time. Nothing was lost, and this will work once that service is back.',
   },
 ] as const;
 
@@ -50,7 +56,7 @@ function ResolveSubmit() {
   const { pending } = useFormStatus();
   return (
     <Button type="submit" size="sm" disabled={pending}>
-      {pending ? 'Resolving...' : 'Resolve ticket'}
+      {pending ? 'Saving…' : 'Mark as sorted'}
     </Button>
   );
 }
@@ -140,7 +146,7 @@ export function TicketPanel({
 
       <div>
         <p className="mb-1.5 text-xs font-medium uppercase tracking-wider text-muted-foreground">
-          Resolution
+          How it was sorted
         </p>
         <form action={resolveAction} className="space-y-2 rounded-md border bg-emerald-50/50 p-3">
           <input type="hidden" name="conversationId" value={conversationId} />
@@ -167,7 +173,7 @@ export function TicketPanel({
             placeholder="What was fixed? This message is saved on the ticket and can be emailed to the reporter."
           />
           {resolveState.error ? <p className="text-sm text-destructive">{resolveState.error}</p> : null}
-          {resolveState.ok ? <p className="text-sm text-emerald-700">Resolved. Automations were triggered.</p> : null}
+          {resolveState.ok ? <p className="text-sm text-emerald-700">Sorted. Anyone following this has been told.</p> : null}
           <ResolveSubmit />
         </form>
       </div>

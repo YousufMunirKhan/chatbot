@@ -1,4 +1,5 @@
 import { Card, CardContent } from '@/components/ui/card';
+import { PageHeader } from '@/components/ui/page-header';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { requireRole } from '@/lib/auth';
 import { ROLES } from '@/lib/constants';
@@ -10,10 +11,10 @@ export default async function SuperAdminSecurityPage() {
   const logs = await listSecurityLogs();
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-semibold">Security Logs</h1>
-        <p className="text-sm text-muted-foreground">Login, 2FA, and account security events.</p>
-      </div>
+      <PageHeader
+        title="Security Logs"
+        description="Login, 2FA, and account security events."
+      />
       <Card>
         <CardContent className="p-0">
           <Table>

@@ -1,23 +1,15 @@
 'use client';
 
 import { useEffect, useRef } from 'react';
-import { useFormState, useFormStatus } from 'react-dom';
-import { Button } from '@/components/ui/button';
+import { useFormState } from 'react-dom';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
-import { Label } from '@/components/ui/label';
+import { FormField } from '@/components/ui/form-field';
+import { FormMessage } from '@/components/ui/form-message';
+import { SubmitButton } from '@/components/ui/submit-button';
 import { createCannedResponseAction, type ActionState } from '../inbox-actions';
 
 const initial: ActionState = {};
-
-function Submit() {
-  const { pending } = useFormStatus();
-  return (
-    <Button type="submit" disabled={pending}>
-      {pending ? 'Saving…' : 'Add saved reply'}
-    </Button>
-  );
-}
 
 export function CannedResponseForm() {
   const [state, action] = useFormState(createCannedResponseAction, initial);
@@ -29,16 +21,16 @@ export function CannedResponseForm() {
 
   return (
     <form ref={formRef} action={action} className="space-y-3">
-      <div className="space-y-1.5">
-        <Label htmlFor="title">Title</Label>
-        <Input id="title" name="title" required maxLength={120} placeholder="e.g. Refund policy" />
-      </div>
-      <div className="space-y-1.5">
-        <Label htmlFor="body">Reply text</Label>
-        <Textarea id="body" name="body" required rows={3} maxLength={4000} placeholder="The message agents can insert with one click." />
-      </div>
-      {state.error ? <p className="text-sm text-destructive">{state.error}</p> : null}
-      <Submit />
+      <FormField label="Title" htmlFor="title">
+        <Input name="title" required maxLength={120} placeholder="e.g. Refund policy" />
+      </FormField>
+      <FormField label="Reply text" htmlFor="body">
+        <Textarea name="body" required rows={3} maxLength={4000} placeholder="The message agents can insert with one click." />
+      </FormField>
+      {/* This form resets on success rather than confirming in place, so the
+          live region carries the failure branch only. */}
+      <FormMessage state={{ error: state.error }} />
+      <SubmitButton>Add saved reply</SubmitButton>
     </form>
   );
 }

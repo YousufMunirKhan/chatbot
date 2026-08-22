@@ -2,7 +2,11 @@ import Link from 'next/link';
 import { AlertTriangle, CheckCircle2, Database, SearchCheck } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { Alert } from '@/components/ui/alert';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { EmptyState } from '@/components/ui/empty-state';
+import { PageHeader } from '@/components/ui/page-header';
+import { Progress } from '@/components/ui/progress';
 import { requireRole } from '@/lib/auth';
 import { ROLES } from '@/lib/constants';
 import { getQualityRoom } from '@/modules/company/suggestions-data';
@@ -46,21 +50,19 @@ export default async function CompanyQualityPage() {
     .slice(0, 8);
 
   return (
-    <div className="space-y-6">
-      <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
-        <div className="max-w-3xl">
-          <h1 className="text-2xl font-semibold">Quality Room</h1>
-          <p className="mt-1 text-sm text-muted-foreground">
-            Review weak answers, add the missing business knowledge, and confirm it is indexed for AI search.
-          </p>
-        </div>
-        <Button asChild variant="outline">
-          <Link href="/company/business-data?tab=knowledge">
-            <Database className="me-2 h-4 w-4" />
-            Open knowledge base
-          </Link>
-        </Button>
-      </div>
+    <div className="mx-auto max-w-6xl space-y-6">
+      <PageHeader
+        title="Quality Room"
+        description="Review weak answers, add the missing business knowledge, and confirm it is indexed for AI search."
+        actions={
+          <Button asChild variant="outline">
+            <Link href="/company/business-data?tab=knowledge">
+              <Database className="me-2 h-4 w-4" />
+              Open knowledge base
+            </Link>
+          </Button>
+        }
+      />
 
       <TestAssistant />
 
@@ -69,9 +71,7 @@ export default async function CompanyQualityPage() {
           <CardContent className="pt-6">
             <div className="text-sm text-muted-foreground">Setup ready</div>
             <div className="mt-2 text-3xl font-semibold">{pct}%</div>
-            <div className="mt-3 h-2 overflow-hidden rounded-full bg-muted">
-              <div className="h-full rounded-full bg-emerald-500" style={{ width: `${pct}%` }} />
-            </div>
+            <Progress className="mt-3" value={pct} tone="success" label="Setup ready" />
             <p className="mt-2 text-xs text-muted-foreground">{room.setupCompleted} of {room.setupTotal} items complete</p>
           </CardContent>
         </Card>
@@ -80,7 +80,7 @@ export default async function CompanyQualityPage() {
             <div className="text-sm text-muted-foreground">AI-search index</div>
             <div className="mt-2 flex items-center gap-2 text-3xl font-semibold">
               {index.totalChunks}
-              <SearchCheck className="h-6 w-6 text-emerald-500" />
+              <SearchCheck className="h-6 w-6 text-success" />
             </div>
             <p className="mt-2 text-xs text-muted-foreground">{index.readyDocuments} ready documents</p>
           </CardContent>
@@ -104,7 +104,7 @@ export default async function CompanyQualityPage() {
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2 text-base">
-            <SearchCheck className="h-5 w-5 text-emerald-500" />
+            <SearchCheck className="h-5 w-5 text-success" />
             Knowledge indexing status
           </CardTitle>
         </CardHeader>
@@ -186,10 +186,10 @@ export default async function CompanyQualityPage() {
             ))
           ) : (
             // Module 1 — no action to offer yet: fixes are created from the section below.
-            <p className="max-w-2xl text-sm text-muted-foreground">
-              No fixes saved yet. When you correct a weak answer below, the correction is saved into the right
-              business section and shows up here with a shortcut back to it.
-            </p>
+            <EmptyState
+              title="No fixes saved yet."
+              body="When you correct a weak answer below, the correction is saved into the right business section and shows up here with a shortcut back to it."
+            />
           )}
         </CardContent>
       </Card>
@@ -197,7 +197,7 @@ export default async function CompanyQualityPage() {
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2 text-base">
-            <AlertTriangle className="h-5 w-5 text-amber-500" />
+            <AlertTriangle className="h-5 w-5 text-warning" />
             Fix weak answers
           </CardTitle>
           <p className="text-sm text-muted-foreground">
@@ -225,29 +225,30 @@ export default async function CompanyQualityPage() {
                   </div>
                 </div>
                 {item.autoAuditReason || item.suggestedFix ? (
-                  <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-950">
+                  <Alert tone="warning" className="px-3 py-2">
                     {item.autoAuditReason ? <p>{item.autoAuditReason}</p> : null}
                     {item.suggestedFix ? <p className="mt-1 font-medium">{item.suggestedFix}</p> : null}
-                  </div>
+                  </Alert>
                 ) : null}
                 <QualityFeedbackForm qualityLogId={item.id} />
               </div>
             ))
           ) : (
             // Module 2 — nothing to fix, so offer the way to prevent the next gap.
-            <div className="rounded-xl border bg-emerald-50 p-5 text-sm text-emerald-800">
-              <div className="flex items-center gap-2 font-semibold">
-                <CheckCircle2 className="h-5 w-5" />
-                No weak answers logged recently
-              </div>
-              <p className="mt-1">
+            <Alert
+              tone="success"
+              className="p-5"
+              icon={<CheckCircle2 className="h-5 w-5" />}
+              title="No weak answers logged recently"
+            >
+              <p>
                 When a customer asks something your assistant cannot answer well, the question lands here with the
                 answer it gave, so you can correct it.
               </p>
               <Button asChild variant="outline" size="sm" className="mt-3">
                 <Link href="/company/business-data?tab=faqs">Add an FAQ instead</Link>
               </Button>
-            </div>
+            </Alert>
           )}
         </CardContent>
       </Card>
@@ -262,15 +263,15 @@ export default async function CompanyQualityPage() {
           <CardContent className="space-y-3">
             {room.suggestions.length === 0 ? (
               // Module 3 — the CTA used to live only in the populated branch; it belongs here too.
-              <div className="space-y-3">
-                <p className="max-w-2xl text-sm text-muted-foreground">
-                  Nothing to suggest right now. Your saved business facts cover the topics we check. New
-                  suggestions appear as customers ask about things you have not filled in.
-                </p>
-                <Button asChild variant="outline" size="sm">
-                  <Link href="/company/business-data">Review your business data</Link>
-                </Button>
-              </div>
+              <EmptyState
+                title="Nothing to suggest right now."
+                body="Your saved business facts cover the topics we check. New suggestions appear as customers ask about things you have not filled in."
+                action={
+                  <Button asChild variant="outline" size="sm">
+                    <Link href="/company/business-data">Review your business data</Link>
+                  </Button>
+                }
+              />
             ) : (
               room.suggestions.map((s) => (
                 <div key={s.id} className="flex flex-col gap-3 rounded-lg border p-4 sm:flex-row sm:items-center sm:justify-between">
@@ -312,9 +313,10 @@ export default async function CompanyQualityPage() {
               </ul>
             ) : (
               // Module 4 — was rendering null under a heading; the form above is the action.
-              <p className="text-sm text-muted-foreground">
-                No test questions saved yet. Saved questions show up in this list.
-              </p>
+              <EmptyState
+                title="No test questions saved yet."
+                body="Saved questions show up in this list."
+              />
             )}
           </CardContent>
         </Card>

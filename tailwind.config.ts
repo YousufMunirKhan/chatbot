@@ -15,9 +15,45 @@ const config: Config = {
     },
     extend: {
       colors: {
+        // Brand (Module 22). `DEFAULT` used to be a fourth, unrelated hex
+        // (#1d4ed8) with zero usages; it now tracks `--primary`, the one blue.
+        // `sidebar` is left as a literal because the visible sidebar is painted
+        // by the `.bg-brand-sidebar` gradient utility in globals.css, and this
+        // entry only backstops it.
         brand: {
-          DEFAULT: '#1d4ed8',
-          sidebar: '#13224b',
+          DEFAULT: 'hsl(var(--primary))',
+          // Backstop behind the `.bg-brand-sidebar` gradient, and the ring
+          // offset for focus rings on it. Was the literal `#13224b`, which in
+          // dark mode sat a full stop lighter than the ramp it backs; now it
+          // tracks `--sidebar-base`, defined in both themes.
+          sidebar: 'hsl(var(--sidebar-base))',
+          // The white plate under the logo PNG — white in both themes on
+          // purpose (Module 23; see globals.css).
+          plate: 'hsl(var(--brand-plate))',
+        },
+        // Sidebar chrome (Module 23). The gradient is a fixed dark surface in
+        // either theme, so these are near-white in either theme; they exist so
+        // the nav stops reaching into the raw blue palette for its text.
+        sidebar: {
+          fg: 'hsl(var(--sidebar-fg))',
+          'fg-muted': 'hsl(var(--sidebar-fg-muted))',
+          'fg-subtle': 'hsl(var(--sidebar-fg-subtle))',
+          // Alpha is baked into these two so one value works over all four
+          // stops of the ramp; they take no Tailwind opacity modifier.
+          active: 'var(--sidebar-item-active-bg)',
+          hover: 'var(--sidebar-item-hover-bg)',
+        },
+        // Impersonation banner (Module 23). Fuchsia is used by nothing else in
+        // the product, which is the entire point of it — see globals.css.
+        impersonation: {
+          DEFAULT: 'hsl(var(--impersonation))',
+          border: 'hsl(var(--impersonation-border))',
+          critical: 'hsl(var(--impersonation-critical) / <alpha-value>)',
+          fg: 'hsl(var(--impersonation-fg))',
+          'fg-muted': 'hsl(var(--impersonation-fg-muted))',
+          accent: 'hsl(var(--impersonation-accent))',
+          'alarm-bg': 'hsl(var(--impersonation-alarm-bg))',
+          'alarm-fg': 'hsl(var(--impersonation-alarm-fg))',
         },
         border: 'hsl(var(--border))',
         input: 'hsl(var(--input))',
@@ -47,6 +83,33 @@ const config: Config = {
         card: {
           DEFAULT: 'hsl(var(--card))',
           foreground: 'hsl(var(--card-foreground))',
+        },
+        // Semantic state triplets (Module 22). `bg-success-bg` /
+        // `border-success-border` / `text-success-fg` is the tinted-surface
+        // set; bare `bg-success` is the solid mark. See globals.css.
+        success: {
+          DEFAULT: 'hsl(var(--success))',
+          bg: 'hsl(var(--success-bg))',
+          border: 'hsl(var(--success-border))',
+          fg: 'hsl(var(--success-fg))',
+        },
+        warning: {
+          DEFAULT: 'hsl(var(--warning))',
+          bg: 'hsl(var(--warning-bg))',
+          border: 'hsl(var(--warning-border))',
+          fg: 'hsl(var(--warning-fg))',
+        },
+        danger: {
+          DEFAULT: 'hsl(var(--danger))',
+          bg: 'hsl(var(--danger-bg))',
+          border: 'hsl(var(--danger-border))',
+          fg: 'hsl(var(--danger-fg))',
+        },
+        info: {
+          DEFAULT: 'hsl(var(--info))',
+          bg: 'hsl(var(--info-bg))',
+          border: 'hsl(var(--info-border))',
+          fg: 'hsl(var(--info-fg))',
         },
       },
       borderRadius: {

@@ -1,11 +1,16 @@
 'use client';
 
 import { useMemo, useState } from 'react';
-import { useFormState, useFormStatus } from 'react-dom';
+import { useFormState } from 'react-dom';
+import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Select } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
+import { FormField } from '@/components/ui/form-field';
+import { FormMessage } from '@/components/ui/form-message';
+import { SubmitButton } from '@/components/ui/submit-button';
 import type { BotRow, CompanyProfile } from '../data';
 import {
   updateWidgetDesignAction,
@@ -17,8 +22,6 @@ type PreviewMode = 'desktop' | 'mobile';
 type PreviewBg = 'light' | 'dark' | 'brand';
 
 const initial: WidgetDesignActionState = {};
-const selectCls =
-  'flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring';
 
 const themePresets = [
   { name: 'Switch blue', color: '#045fff', headerText: '#ffffff', dot: '#ef4444', style: 'solid' },
@@ -47,29 +50,6 @@ function initials(text: string): string {
   const second = parts[1] ?? first;
   if (parts.length === 1) return first.slice(0, 2).toUpperCase();
   return `${first[0] ?? 'A'}${second[0] ?? 'I'}`.toUpperCase();
-}
-
-function SubmitButton() {
-  const { pending } = useFormStatus();
-  return <Button type="submit" disabled={pending}>{pending ? 'Saving...' : 'Save and update live widget'}</Button>;
-}
-
-function Field({
-  label,
-  children,
-  hint,
-}: {
-  label: string;
-  children: React.ReactNode;
-  hint?: string;
-}) {
-  return (
-    <div className="space-y-1.5">
-      <Label>{label}</Label>
-      {children}
-      {hint ? <p className="text-xs text-muted-foreground">{hint}</p> : null}
-    </div>
-  );
 }
 
 export function WidgetDesignStudio({
@@ -142,6 +122,16 @@ export function WidgetDesignStudio({
     [headerStyle, primaryColor],
   );
   const avatarText = initials(title || company.name);
+  // Module 22 (semantic colour): these palette values are DELIBERATE and must
+  // not be swapped for `--success` / `--info` / `bg-muted` tokens. They are not
+  // dashboard chrome — they paint the mock of the *visitor's own website*
+  // behind the widget preview, and the light/dark/brand toggle lets the admin
+  // check contrast against a pale site, a dark site and a tinted one. Tokens
+  // follow the dashboard theme, so tokenising this would make "light" turn dark
+  // whenever the admin flipped their own theme, and the preview would stop
+  // answering the question it exists to answer. Same reasoning applies to the
+  // hardcoded whites, slates and the emerald status dot inside the preview
+  // frame below.
   const previewBackground =
     previewBg === 'dark'
       ? 'bg-slate-950'
@@ -208,7 +198,11 @@ export function WidgetDesignStudio({
             </div>
 
             <div className="grid gap-3">
-              <Field label="Theme presets">
+              {/* Not `FormField`: there is no single control here to label, and
+                  a `htmlFor` pointing at a button group would be a broken
+                  association rather than a missing one. */}
+              <div className="space-y-1.5">
+                <Label>Theme presets</Label>
                 <div className="flex flex-wrap gap-2">
                   {themePresets.map((preset) => (
                     <button
@@ -222,60 +216,67 @@ export function WidgetDesignStudio({
                     </button>
                   ))}
                 </div>
-              </Field>
+              </div>
 
               <div className="grid gap-3 sm:grid-cols-2">
-                <Field label="Widget title">
+                <FormField label="Widget title" htmlFor="title">
                   <Input name="title" value={title} onChange={(e) => setTitle(e.target.value)} />
-                </Field>
-                <Field label="Agent label">
+                </FormField>
+                <FormField label="Agent label" htmlFor="agentLabel">
                   <Input name="agentLabel" value={agentLabel} onChange={(e) => setAgentLabel(e.target.value)} />
-                </Field>
+                </FormField>
               </div>
-              <Field label="Welcome message">
+              <FormField label="Welcome message" htmlFor="welcomeMessage">
                 <Textarea name="welcomeMessage" rows={2} value={welcomeMessage} onChange={(e) => setWelcomeMessage(e.target.value)} />
-              </Field>
-              <Field label="Proactive message">
+              </FormField>
+              <FormField label="Proactive message" htmlFor="proactiveMessage">
                 <Input name="proactiveMessage" value={proactiveMessage} onChange={(e) => setProactiveMessage(e.target.value)} />
-              </Field>
+              </FormField>
             </div>
           </section>
 
           <section className="rounded-md border bg-card p-4">
             <h2 className="mb-4 text-base font-semibold">Colors and header</h2>
             <div className="grid gap-3 sm:grid-cols-2">
-              <Field label="Primary color">
+              {/* These two are composite — a colour swatch plus a hex box, both
+                  driving the same value. `FormField` wires exactly one control
+                  (it clones its single child), so it would put the id on the
+                  wrapping div and point the label at a non-control. Labelled by
+                  hand instead, against the swatch that carries the field name. */}
+              <div className="space-y-1.5">
+                <Label htmlFor="primaryColor">Primary color</Label>
                 <div className="flex gap-2">
-                  <Input name="primaryColor" type="color" value={primaryColor} onChange={(e) => setPrimaryColor(e.target.value)} className="h-10 w-16 p-1" />
-                  <Input value={primaryColor} onChange={(e) => setPrimaryColor(e.target.value)} className="font-mono" />
+                  <Input id="primaryColor" name="primaryColor" type="color" value={primaryColor} onChange={(e) => setPrimaryColor(e.target.value)} className="h-10 w-16 p-1" />
+                  <Input aria-label="Primary color hex value" value={primaryColor} onChange={(e) => setPrimaryColor(e.target.value)} className="font-mono" />
                 </div>
-              </Field>
-              <Field label="Header text color">
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="headerTextColor">Header text color</Label>
                 <div className="flex gap-2">
-                  <Input name="headerTextColor" type="color" value={headerTextColor} onChange={(e) => setHeaderTextColor(e.target.value)} className="h-10 w-16 p-1" />
-                  <Input value={headerTextColor} onChange={(e) => setHeaderTextColor(e.target.value)} className="font-mono" />
+                  <Input id="headerTextColor" name="headerTextColor" type="color" value={headerTextColor} onChange={(e) => setHeaderTextColor(e.target.value)} className="h-10 w-16 p-1" />
+                  <Input aria-label="Header text color hex value" value={headerTextColor} onChange={(e) => setHeaderTextColor(e.target.value)} className="font-mono" />
                 </div>
-              </Field>
-              <Field label="Header style">
-                <select name="headerStyle" className={selectCls} value={headerStyle} onChange={(e) => setHeaderStyle(e.target.value)}>
+              </div>
+              <FormField label="Header style" htmlFor="headerStyle">
+                <Select name="headerStyle" value={headerStyle} onChange={(e) => setHeaderStyle(e.target.value)}>
                   <option value="solid">Solid</option>
                   <option value="gradient">Soft gradient</option>
-                </select>
-              </Field>
-              <Field label="Alert dot color">
+                </Select>
+              </FormField>
+              <FormField label="Alert dot color" htmlFor="launcherDotColor">
                 <Input name="launcherDotColor" type="color" value={launcherDotColor} onChange={(e) => setLauncherDotColor(e.target.value)} className="h-10 w-16 p-1" />
-              </Field>
+              </FormField>
             </div>
           </section>
 
           <section className="rounded-md border bg-card p-4">
             <h2 className="mb-4 text-base font-semibold">Launcher and avatar</h2>
             <div className="grid gap-3 sm:grid-cols-2">
-              <Field label="Launcher label">
+              <FormField label="Launcher label" htmlFor="launcherLabel">
                 <Input name="launcherLabel" value={launcherLabel} onChange={(e) => setLauncherLabel(e.target.value)} />
-              </Field>
-              <Field label="Launcher icon">
-                <select name="launcherIcon" className={selectCls} value={launcherIcon} onChange={(e) => setLauncherIcon(e.target.value)}>
+              </FormField>
+              <FormField label="Launcher icon" htmlFor="launcherIcon">
+                <Select name="launcherIcon" value={launcherIcon} onChange={(e) => setLauncherIcon(e.target.value)}>
                   <option value="chat">Chat</option>
                   <option value="headset">Headset</option>
                   <option value="spark">Spark</option>
@@ -283,62 +284,62 @@ export function WidgetDesignStudio({
                   <option value="question">Question</option>
                   <option value="initials">Initials</option>
                   <option value="custom">Custom image</option>
-                </select>
-              </Field>
-              <Field label="Launcher style">
-                <select name="launcherStyle" className={selectCls} value={launcherStyle} onChange={(e) => setLauncherStyle(e.target.value)}>
+                </Select>
+              </FormField>
+              <FormField label="Launcher style" htmlFor="launcherStyle">
+                <Select name="launcherStyle" value={launcherStyle} onChange={(e) => setLauncherStyle(e.target.value)}>
                   <option value="pill">Pill with label</option>
                   <option value="circle">Circle</option>
-                </select>
-              </Field>
-              <Field label="Launcher size">
-                <select name="launcherSize" className={selectCls} value={launcherSize} onChange={(e) => setLauncherSize(e.target.value)}>
+                </Select>
+              </FormField>
+              <FormField label="Launcher size" htmlFor="launcherSize">
+                <Select name="launcherSize" value={launcherSize} onChange={(e) => setLauncherSize(e.target.value)}>
                   <option value="compact">Compact</option>
                   <option value="default">Default</option>
                   <option value="large">Large</option>
-                </select>
-              </Field>
-              <Field label="Avatar style">
-                <select name="avatarMode" className={selectCls} value={avatarMode} onChange={(e) => setAvatarMode(e.target.value)}>
+                </Select>
+              </FormField>
+              <FormField label="Avatar style" htmlFor="avatarMode">
+                <Select name="avatarMode" value={avatarMode} onChange={(e) => setAvatarMode(e.target.value)}>
                   <option value="initials">Initials</option>
                   <option value="headset">Headset</option>
                   <option value="chat">Chat bubble</option>
                   <option value="spark">Spark</option>
                   <option value="image">Use avatar image</option>
-                </select>
-              </Field>
-              <Field label="Alert dot">
-                <select name="launcherDotMode" className={selectCls} value={launcherDotMode} onChange={(e) => setLauncherDotMode(e.target.value)}>
+                </Select>
+              </FormField>
+              <FormField label="Alert dot" htmlFor="launcherDotMode">
+                <Select name="launcherDotMode" value={launcherDotMode} onChange={(e) => setLauncherDotMode(e.target.value)}>
                   <option value="unread">Show</option>
                   <option value="always">Always show</option>
                   <option value="hidden">Hide</option>
-                </select>
-              </Field>
-              <Field label="Avatar image URL" hint="Only used when avatar style is image.">
+                </Select>
+              </FormField>
+              <FormField label="Avatar image URL" htmlFor="agentAvatarUrl" hint="Only used when avatar style is image.">
                 <Input name="agentAvatarUrl" value={agentAvatarUrl} onChange={(e) => setAgentAvatarUrl(e.target.value)} />
-              </Field>
-              <Field label="Launcher image URL" hint="Only used when launcher icon is custom image.">
+              </FormField>
+              <FormField label="Launcher image URL" htmlFor="launcherImageUrl" hint="Only used when launcher icon is custom image.">
                 <Input name="launcherImageUrl" value={launcherImageUrl} onChange={(e) => setLauncherImageUrl(e.target.value)} />
-              </Field>
+              </FormField>
             </div>
           </section>
 
           <section className="rounded-md border bg-card p-4">
             <h2 className="mb-4 text-base font-semibold">Behavior and layout</h2>
             <div className="grid gap-3 sm:grid-cols-2">
-              <Field label="Window size">
-                <select name="windowSize" className={selectCls} value={windowSize} onChange={(e) => setWindowSize(e.target.value)}>
+              <FormField label="Window size" htmlFor="windowSize">
+                <Select name="windowSize" value={windowSize} onChange={(e) => setWindowSize(e.target.value)}>
                   <option value="compact">Compact</option>
                   <option value="default">Default</option>
                   <option value="large">Large</option>
-                </select>
-              </Field>
-              <Field label="Mobile mode">
-                <select name="mobileMode" className={selectCls} value={mobileMode} onChange={(e) => setMobileMode(e.target.value)}>
+                </Select>
+              </FormField>
+              <FormField label="Mobile mode" htmlFor="mobileMode">
+                <Select name="mobileMode" value={mobileMode} onChange={(e) => setMobileMode(e.target.value)}>
                   <option value="fullscreen">Fullscreen</option>
                   <option value="bottom_sheet">Bottom sheet</option>
-                </select>
-              </Field>
+                </Select>
+              </FormField>
               {/*
                 Module 21 (RTL): this setting is deliberately PHYSICAL, not logical.
                 `public/widget/widget.js` pins the launcher and window with
@@ -349,27 +350,28 @@ export function WidgetDesignStudio({
                 and the hint states that reading direction does not move it.
                 The submitted field name stays `position` with values right/left.
               */}
-              <Field
+              <FormField
                 label="Launcher corner"
+                htmlFor="position"
                 hint="The fixed corner of the visitor's browser window. Arabic (right-to-left) chats still open in this same corner."
               >
-                <select name="position" className={selectCls} value={position} onChange={(e) => setPosition(e.target.value)}>
+                <Select name="position" value={position} onChange={(e) => setPosition(e.target.value)}>
                   <option value="right">Bottom right of the visitor&apos;s screen</option>
                   <option value="left">Bottom left of the visitor&apos;s screen</option>
-                </select>
-              </Field>
-              <Field label="Desktop auto-open delay" hint="Seconds before the chat opens on laptops/desktops.">
+                </Select>
+              </FormField>
+              <FormField label="Desktop auto-open delay" htmlFor="autoOpenDelayDesktopSeconds" hint="Seconds before the chat opens on laptops/desktops.">
                 <Input name="autoOpenDelayDesktopSeconds" type="number" min={0} max={120} value={autoOpenDelayDesktopSeconds} onChange={(e) => setAutoOpenDelayDesktopSeconds(e.target.value)} />
-              </Field>
-              <Field label="Mobile auto-open delay" hint="Seconds before the chat opens on phones (e.g. 60).">
+              </FormField>
+              <FormField label="Mobile auto-open delay" htmlFor="autoOpenDelayMobileSeconds" hint="Seconds before the chat opens on phones (e.g. 60).">
                 <Input name="autoOpenDelayMobileSeconds" type="number" min={0} max={600} value={autoOpenDelayMobileSeconds} onChange={(e) => setAutoOpenDelayMobileSeconds(e.target.value)} />
-              </Field>
-              <Field label="Bottom spacing">
+              </FormField>
+              <FormField label="Bottom spacing" htmlFor="bottomOffset">
                 <Input name="bottomOffset" type="number" min={0} max={120} value={bottomOffset} onChange={(e) => setBottomOffset(e.target.value)} />
-              </Field>
-              <Field label="Side spacing">
+              </FormField>
+              <FormField label="Side spacing" htmlFor="sideOffset">
                 <Input name="sideOffset" type="number" min={0} max={120} value={sideOffset} onChange={(e) => setSideOffset(e.target.value)} />
-              </Field>
+              </FormField>
             </div>
             <div className="mt-3 grid gap-2 sm:grid-cols-2">
               <label className="flex items-center gap-2 rounded-md border p-2.5 text-sm">
@@ -406,18 +408,18 @@ export function WidgetDesignStudio({
           <section className="rounded-md border bg-card p-4">
             <h2 className="mb-4 text-base font-semibold">Status labels and footer</h2>
             <div className="grid gap-3">
-              <Field label="Online label">
+              <FormField label="Online label" htmlFor="onlineLabel">
                 <Input name="onlineLabel" value={onlineLabel} onChange={(e) => setOnlineLabel(e.target.value)} />
-              </Field>
-              <Field label="Offline label">
+              </FormField>
+              <FormField label="Offline label" htmlFor="offlineLabel">
                 <Input name="offlineLabel" value={offlineLabel} onChange={(e) => setOfflineLabel(e.target.value)} />
-              </Field>
-              <Field label="Typing label">
+              </FormField>
+              <FormField label="Typing label" htmlFor="typingLabel">
                 <Input name="typingLabel" value={typingLabel} onChange={(e) => setTypingLabel(e.target.value)} />
-              </Field>
-              <Field label="Footer text">
+              </FormField>
+              <FormField label="Footer text" htmlFor="footerBranding">
                 <Textarea name="footerBranding" rows={2} value={footerBranding} onChange={(e) => setFooterBranding(e.target.value)} />
-              </Field>
+              </FormField>
             </div>
           </section>
 
@@ -436,12 +438,12 @@ export function WidgetDesignStudio({
                 <input type="checkbox" name="csatCommentEnabled" checked={csatCommentEnabled} onChange={(e) => setCsatCommentEnabled(e.target.checked)} className="h-4 w-4" />
                 Allow an optional comment
               </label>
-              <Field label="Rating prompt">
+              <FormField label="Rating prompt" htmlFor="csatPrompt">
                 <Input name="csatPrompt" value={csatPrompt} onChange={(e) => setCsatPrompt(e.target.value)} />
-              </Field>
-              <Field label="Thank-you message">
+              </FormField>
+              <FormField label="Thank-you message" htmlFor="csatThanks">
                 <Input name="csatThanks" value={csatThanks} onChange={(e) => setCsatThanks(e.target.value)} />
-              </Field>
+              </FormField>
             </div>
           </section>
         </div>
@@ -583,18 +585,20 @@ export function WidgetDesignStudio({
                     <p className="font-medium">{item.label}</p>
                     <p className="text-xs text-muted-foreground">{item.detail}</p>
                   </div>
-                  <span className={`rounded-full px-2 py-1 text-xs font-semibold ${item.ok ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-800'}`}>
+                  {/* Dashboard chrome, not preview: these two DO tokenise.
+                      `Badge` adds a border and runs `px-2.5 py-0.5
+                      font-medium` against the old `px-2 py-1 font-semibold`. */}
+                  <Badge variant={item.ok ? 'success' : 'warning'}>
                     {item.ok ? 'Ready' : 'Check'}
-                  </span>
+                  </Badge>
                 </div>
               ))}
             </div>
           </section>
 
           <div className="flex flex-wrap items-center gap-3">
-            <SubmitButton />
-            {state.error ? <span className="text-sm text-destructive">{state.error}</span> : null}
-            {state.ok ? <span className="text-sm text-emerald-600">Saved. Live widget config updated.</span> : null}
+            <SubmitButton pendingLabel="Saving...">Save and update live widget</SubmitButton>
+            <FormMessage state={state} okText="Saved. Live widget config updated." />
           </div>
         </div>
       </div>

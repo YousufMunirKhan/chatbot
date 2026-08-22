@@ -1,28 +1,18 @@
 'use client';
 
 import { useMemo, useState } from 'react';
-import { useFormState, useFormStatus } from 'react-dom';
-import { Button } from '@/components/ui/button';
+import { useFormState } from 'react-dom';
+import { FormField } from '@/components/ui/form-field';
+import { FormMessage } from '@/components/ui/form-message';
 import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
+import { Select } from '@/components/ui/select';
+import { SubmitButton } from '@/components/ui/submit-button';
 import { cn } from '@/lib/utils';
 import { COUNTRY_OPTIONS } from '@/modules/company/form-options';
 import { createCompanyAction, type ActionState } from '../actions';
 import { PLANS, PLAN_KEYS, type PlanKey } from '../plans';
 
 const initial: ActionState = {};
-const field = 'space-y-1.5';
-const selectCls =
-  'flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring';
-
-function Submit() {
-  const { pending } = useFormStatus();
-  return (
-    <Button type="submit" disabled={pending} size="lg" className="w-full">
-      {pending ? 'Creating company...' : 'Create company and admin login'}
-    </Button>
-  );
-}
 
 function limitText(value: number | null) {
   return value == null ? 'Unlimited' : value.toLocaleString();
@@ -44,7 +34,6 @@ export function CompanyForm() {
   const [botLimit, setBotLimit] = useState('');
   const [integrationLimit, setIntegrationLimit] = useState('');
   const [monthlyAiBudgetUsd, setMonthlyAiBudgetUsd] = useState('');
-  const [overageEnabled, setOverageEnabled] = useState(false);
   const [hardStopEnabled, setHardStopEnabled] = useState(true);
   const [cacheEnabled, setCacheEnabled] = useState(true);
   const [initialCreditAmount, setInitialCreditAmount] = useState('');
@@ -78,8 +67,7 @@ export function CompanyForm() {
             </div>
           </div>
           <div className="grid gap-4 sm:grid-cols-2">
-            <div className={field}>
-              <Label htmlFor="name">Company name *</Label>
+            <FormField label="Company name *" htmlFor="name">
               <Input
                 id="name"
                 name="name"
@@ -88,34 +76,26 @@ export function CompanyForm() {
                 value={companyName}
                 onChange={(event) => setCompanyName(event.target.value)}
               />
-            </div>
-            <div className={field}>
-              <Label htmlFor="website">Website</Label>
+            </FormField>
+            <FormField label="Website" htmlFor="website">
               <Input id="website" name="website" type="url" placeholder="https://acme.com" />
-            </div>
-            <div className={field}>
-              <Label htmlFor="country">Country</Label>
-              <select id="country" name="country" className={selectCls} defaultValue="GB">
+            </FormField>
+            <FormField label="Country" htmlFor="country">
+              <Select id="country" name="country" defaultValue="GB">
                 {COUNTRY_OPTIONS.map((country) => (
                   <option key={country.value} value={country.value}>
                     {country.label}
                   </option>
                 ))}
-              </select>
-            </div>
-            <div className={field}>
-              <Label htmlFor="defaultLanguage">Default language</Label>
-              <select
-                id="defaultLanguage"
-                name="defaultLanguage"
-                className={selectCls}
-                defaultValue="auto"
-              >
+              </Select>
+            </FormField>
+            <FormField label="Default language" htmlFor="defaultLanguage">
+              <Select id="defaultLanguage" name="defaultLanguage" defaultValue="auto">
                 <option value="auto">Auto-detect</option>
                 <option value="en">English</option>
                 <option value="ar">Arabic</option>
-              </select>
-            </div>
+              </Select>
+            </FormField>
           </div>
         </section>
 
@@ -130,12 +110,10 @@ export function CompanyForm() {
             </p>
           </div>
           <div className="grid gap-4 sm:grid-cols-2">
-            <div className={field}>
-              <Label htmlFor="adminName">Admin name</Label>
+            <FormField label="Admin name" htmlFor="adminName">
               <Input id="adminName" name="adminName" placeholder="Jane Doe" />
-            </div>
-            <div className={field}>
-              <Label htmlFor="adminEmail">Admin email *</Label>
+            </FormField>
+            <FormField label="Admin email *" htmlFor="adminEmail">
               <Input
                 id="adminEmail"
                 name="adminEmail"
@@ -145,9 +123,8 @@ export function CompanyForm() {
                 value={adminEmail}
                 onChange={(event) => setAdminEmail(event.target.value)}
               />
-            </div>
-            <div className={field}>
-              <Label htmlFor="adminPassword">Temporary password *</Label>
+            </FormField>
+            <FormField label="Temporary password *" htmlFor="adminPassword">
               <Input
                 id="adminPassword"
                 name="adminPassword"
@@ -156,7 +133,7 @@ export function CompanyForm() {
                 minLength={8}
                 placeholder="min. 8 characters"
               />
-            </div>
+            </FormField>
           </div>
         </section>
 
@@ -183,7 +160,7 @@ export function CompanyForm() {
                   type="button"
                   onClick={() => setPlanKey(key)}
                   className={cn(
-                    'rounded-lg border p-3 text-left transition-colors',
+                    'rounded-lg border p-3 text-start transition-colors',
                     selected ? 'border-primary bg-primary/5 shadow-sm' : 'hover:border-primary/50',
                   )}
                 >
@@ -195,7 +172,7 @@ export function CompanyForm() {
                   <span className="mt-3 block text-xs text-muted-foreground">
                     {plan.description}
                   </span>
-                  <span className="mt-2 block text-xs font-medium text-emerald-700">
+                  <span className="mt-2 block text-xs font-medium text-success-fg">
                     £{plan.includedCreditGbp.toLocaleString()} AI credit included
                   </span>
                 </button>
@@ -204,59 +181,62 @@ export function CompanyForm() {
           </div>
 
           <div className="mt-5 grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
-            <div className={field}>
-              <Label htmlFor="freeUntil">Free until</Label>
+            <FormField label="Free until" htmlFor="freeUntil">
               <Input id="freeUntil" name="freeUntil" type="date" />
-            </div>
-            <div className={field}>
-              <Label htmlFor="messageLimit">Messages</Label>
+            </FormField>
+            <FormField label="Messages" htmlFor="messageLimit">
               <Input
                 id="messageLimit"
                 name="messageLimit"
                 type="number"
-                min={1}
+                min={0}
                 placeholder={limitText(selectedPlan.messageLimit)}
                 value={messageLimit}
                 onChange={(event) => setMessageLimit(event.target.value)}
               />
-            </div>
-            <div className={field}>
-              <Label htmlFor="botLimit">Assistants</Label>
+            </FormField>
+            <FormField label="Assistants" htmlFor="botLimit">
               <Input
                 id="botLimit"
                 name="botLimit"
                 type="number"
-                min={1}
+                min={0}
                 placeholder={limitText(selectedPlan.botLimit)}
                 value={botLimit}
                 onChange={(event) => setBotLimit(event.target.value)}
               />
-            </div>
-            <div className={field}>
-              <Label htmlFor="agentLimit">Team seats</Label>
+            </FormField>
+            <FormField label="Team seats" htmlFor="agentLimit">
               <Input
                 id="agentLimit"
                 name="agentLimit"
                 type="number"
-                min={1}
+                min={0}
                 placeholder={limitText(selectedPlan.agentLimit)}
                 value={agentLimit}
                 onChange={(event) => setAgentLimit(event.target.value)}
               />
-            </div>
-            <div className={field}>
-              <Label htmlFor="integrationLimit">Integrations</Label>
+            </FormField>
+            <FormField label="Integrations" htmlFor="integrationLimit">
               <Input
                 id="integrationLimit"
                 name="integrationLimit"
                 type="number"
-                min={1}
+                min={0}
                 placeholder={limitText(selectedPlan.integrationLimit)}
                 value={integrationLimit}
                 onChange={(event) => setIntegrationLimit(event.target.value)}
               />
-            </div>
+            </FormField>
           </div>
+
+          <p className="mt-4 rounded-md border bg-muted/20 p-3 text-xs text-muted-foreground">
+            <strong className="font-medium text-foreground">How limits are read:</strong> a number is
+            used exactly as typed (<code>0</code> is a valid limit and blocks the feature). Leave a
+            box blank to use the plan default shown in the placeholder — the same rule the
+            company&apos;s Plan &amp; limits tab uses. To remove a cap entirely, pick the Custom plan
+            or tick <em>Unlimited</em> on that tab after onboarding.
+          </p>
         </section>
 
         <section className="rounded-lg border bg-card p-5">
@@ -270,8 +250,11 @@ export function CompanyForm() {
             </p>
           </div>
           <div className="grid gap-4 sm:grid-cols-2">
-            <div className={field}>
-              <Label htmlFor="monthlyAiBudgetUsd">Monthly AI budget cap (USD)</Label>
+            <FormField
+              label="Monthly AI budget cap (USD)"
+              htmlFor="monthlyAiBudgetUsd"
+              hint="This is your internal AI cost cap, not customer credit."
+            >
               <Input
                 id="monthlyAiBudgetUsd"
                 name="monthlyAiBudgetUsd"
@@ -282,24 +265,17 @@ export function CompanyForm() {
                 value={monthlyAiBudgetUsd}
                 onChange={(event) => setMonthlyAiBudgetUsd(event.target.value)}
               />
-              <p className="text-xs text-muted-foreground">
-                This is your internal AI cost cap, not customer credit.
-              </p>
-            </div>
-            <div className={field}>
-              <Label htmlFor="overageUnitPrice">Overage charge per extra message</Label>
-              <Input
-                id="overageUnitPrice"
-                name="overageUnitPrice"
-                type="number"
-                min={0}
-                step="0.0001"
-                placeholder="e.g. 0.03"
-              />
-            </div>
+            </FormField>
           </div>
 
-          <div className="mt-4 grid gap-2 sm:grid-cols-3">
+          {/*
+            The "Allow paid overage" checkbox and its unit-price input were
+            removed: they wrote `subscriptions.overage_enabled` /
+            `overage_unit_price`, which nothing in plan enforcement reads, so the
+            controls promised a billing policy that never applied. Reinstate them
+            together with real enforcement in the billing layer.
+          */}
+          <div className="mt-4 grid gap-2 sm:grid-cols-2">
             <label className="flex items-start gap-2 rounded-md border p-3 text-sm">
               <input
                 type="checkbox"
@@ -330,21 +306,6 @@ export function CompanyForm() {
                 </span>
               </span>
             </label>
-            <label className="flex items-start gap-2 rounded-md border p-3 text-sm">
-              <input
-                type="checkbox"
-                name="overageEnabled"
-                checked={overageEnabled}
-                onChange={(event) => setOverageEnabled(event.target.checked)}
-                className="mt-1 h-4 w-4"
-              />
-              <span>
-                <span className="block font-medium">Allow paid overage</span>
-                <span className="text-xs text-muted-foreground">
-                  Use only when billing terms are agreed.
-                </span>
-              </span>
-            </label>
           </div>
           {!cacheEnabled ? <input type="hidden" name="cacheEnabled" value="off" /> : null}
         </section>
@@ -362,8 +323,11 @@ export function CompanyForm() {
           </div>
 
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            <div className={field}>
-              <Label htmlFor="initialCreditAmount">Starting AI credit (£)</Label>
+            <FormField
+              label="Starting AI credit (£)"
+              htmlFor="initialCreditAmount"
+              hint="Leave blank to use the plan included credit."
+            >
               <Input
                 id="initialCreditAmount"
                 name="initialCreditAmount"
@@ -374,12 +338,8 @@ export function CompanyForm() {
                 value={initialCreditAmount}
                 onChange={(event) => setInitialCreditAmount(event.target.value)}
               />
-              <p className="text-xs text-muted-foreground">
-                Leave blank to use the plan included credit.
-              </p>
-            </div>
-            <div className={field}>
-              <Label htmlFor="setupFeeAmount">Setup fee (£)</Label>
+            </FormField>
+            <FormField label="Setup fee (£)" htmlFor="setupFeeAmount">
               <Input
                 id="setupFeeAmount"
                 name="setupFeeAmount"
@@ -390,7 +350,7 @@ export function CompanyForm() {
                 value={setupFeeAmount}
                 onChange={(event) => setSetupFeeAmount(event.target.value)}
               />
-            </div>
+            </FormField>
             <label className="flex items-start gap-2 rounded-md border p-3 text-sm">
               <input
                 type="checkbox"
@@ -408,20 +368,26 @@ export function CompanyForm() {
             </label>
           </div>
 
-          <label className="mt-4 flex items-start gap-2 rounded-md border border-amber-200 bg-amber-50 p-3 text-sm">
+          {/*
+            A consent gate, not a standing notice — the amber surface has to be
+            the clickable `<label>` itself, so this takes the `warning` triplet
+            directly rather than wrapping an `Alert` (which is a plain div and
+            would put the tint on the wrong element).
+          */}
+          <label className="mt-4 flex items-start gap-2 rounded-md border border-warning-border bg-warning-bg p-3 text-sm">
             <input type="checkbox" name="privacyAcknowledged" required className="mt-1 h-4 w-4" />
             <span>
-              <span className="block font-medium text-amber-950">
+              <span className="block font-medium text-warning-fg">
                 Privacy and data processing confirmed
               </span>
-              <span className="text-xs text-amber-900">
+              <span className="text-xs text-warning-fg">
                 The customer has been told to upload only data they have permission to use, and has
                 access to the
                 <a href="/privacy" className="mx-1 font-medium underline" target="_blank">
                   Privacy Policy
                 </a>
                 and
-                <a href="/data-processing" className="ml-1 font-medium underline" target="_blank">
+                <a href="/data-processing" className="ms-1 font-medium underline" target="_blank">
                   Data Processing Notice
                 </a>
                 before any business data or files are added.
@@ -497,9 +463,11 @@ export function CompanyForm() {
             guardrail.
           </div>
 
-          {state.error ? <p className="mt-4 text-sm text-destructive">{state.error}</p> : null}
+          <FormMessage state={state} className="mt-4" />
           <div className="mt-5">
-            <Submit />
+            <SubmitButton size="lg" className="w-full" pendingLabel="Creating company...">
+              Create company and admin login
+            </SubmitButton>
           </div>
         </div>
       </aside>

@@ -3,6 +3,9 @@ import { ROLES } from '@/lib/constants';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { EmptyState } from '@/components/ui/empty-state';
+import { PageHeader } from '@/components/ui/page-header';
+import { Progress } from '@/components/ui/progress';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { formatDate } from '@/lib/format';
 import {
@@ -59,14 +62,11 @@ export default async function WebhooksPage() {
   const atEndpointLimit = usage.endpointCount >= usage.limits.maxEndpoints;
 
   return (
-    <div className="space-y-6">
-      <div>
-          <h1 className="text-2xl font-semibold">Webhooks &amp; automations</h1>
-        <p className="text-sm text-muted-foreground">
-          Push leads, appointments, orders, and ticket events into Slack, Jira, your CRM,
-          or any app that accepts a signed webhook.
-        </p>
-      </div>
+    <div className="mx-auto max-w-6xl space-y-6">
+      <PageHeader
+        title={<>Webhooks &amp; automations</>}
+        description="Push leads, appointments, orders, and ticket events into Slack, Jira, your CRM, or any app that accepts a signed webhook."
+      />
 
       {/* Usage / limits (server-cost control) */}
       <Card>
@@ -94,12 +94,11 @@ export default async function WebhooksPage() {
             </div>
           </div>
           {monthlyLimit ? (
-            <div className="h-2 w-full overflow-hidden rounded-full bg-muted">
-              <div
-                className={`h-full ${pct >= 100 ? 'bg-destructive' : 'bg-primary'}`}
-                style={{ width: `${pct}%` }}
-              />
-            </div>
+            <Progress
+              value={pct}
+              tone={pct >= 100 ? 'danger' : 'primary'}
+              label="Webhook deliveries used this month"
+            />
           ) : null}
           <p className="text-xs text-muted-foreground">
             A &quot;delivery&quot; is one event sent to one endpoint. Over the monthly limit,
@@ -126,7 +125,7 @@ export default async function WebhooksPage() {
         </CardHeader>
         <CardContent className="p-0">
           {endpoints.length === 0 ? (
-            <p className="p-6 text-sm text-muted-foreground">No webhooks yet.</p>
+            <EmptyState title="No webhooks yet." />
           ) : (
             <Table>
               <TableHeader>
@@ -203,7 +202,7 @@ export default async function WebhooksPage() {
         </CardHeader>
         <CardContent className="p-0">
           {deliveries.length === 0 ? (
-            <p className="p-6 text-sm text-muted-foreground">No deliveries yet.</p>
+            <EmptyState title="No deliveries yet." />
           ) : (
             <Table>
               <TableHeader>

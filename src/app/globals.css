@@ -2,10 +2,24 @@
 @tailwind components;
 @tailwind utilities;
 
+/* Design tokens (Module 22).
+   Every value below is measured against its real pairing, not eyeballed. The
+   contrast ratios quoted in the comments are computed with the WCAG 2.1
+   relative-luminance formula against the `--background` of the same block.
+   `src/components/ui/README.md` is the written-down version of these rules. */
 @layer base {
   :root {
+    /* Brand. `--primary` is the single source of truth for the brand blue:
+       `themeColor` in src/app/layout.tsx and `brand.DEFAULT` in
+       tailwind.config.ts both derive from it rather than restating a hex.
+       The sidebar gradient below is a separate decorative treatment.
+       All four stops of that ramp are named here; two of them used to be
+       literal hexes buried inside the `.bg-brand-sidebar` rule, which is why
+       the gradient had no dark-mode story. The ramp's shape is unchanged. */
     --sidebar-blue: #2857b8;
     --sidebar-blue-mid: #244f9c;
+    --sidebar-blue-deep: #1f4d7a;
+    --sidebar-green: #157a52;
     --background: 0 0% 100%;
     --foreground: 222.2 84% 4.9%;
     --card: 0 0% 100%;
@@ -16,14 +30,104 @@
     --secondary-foreground: 222.2 47.4% 11.2%;
     --muted: 210 40% 96.1%;
     --muted-foreground: 215.4 16.3% 46.9%;
-    --accent: 210 40% 96.1%;
+    /* `--accent` used to be byte-identical to `--muted` and `--secondary`,
+       which made `hover:bg-accent` invisible on any muted panel. One step
+       darker so the hover state actually reads. */
+    --accent: 210 40% 92%;
     --accent-foreground: 222.2 47.4% 11.2%;
-    --destructive: 0 84.2% 60.2%;
+    /* `text-destructive` is the colour of every error message in the product.
+       Was `0 84.2% 60.2%` = 3.76:1 on white (fails AA). Now 5.12:1, and still
+       4.90:1 with `--destructive-foreground` on top for the solid button. */
+    --destructive: 0 76% 48%;
     --destructive-foreground: 210 40% 98%;
+    /* `--border` is decorative (card rules, dividers) and stays light.
+       `--input` is the SOLE visual indicator of a text control, so WCAG 1.4.11
+       requires 3:1. Was identical to `--border` at 1.23:1; now 3.21:1. */
     --border: 214.3 31.8% 91.4%;
-    --input: 214.3 31.8% 91.4%;
+    --input: 214.3 31.8% 59%;
     --ring: 214 94% 47%;
     --radius: 0.5rem;
+
+    /* Semantic state triplets. `-bg` is the tinted surface, `-border` its rule,
+       `-fg` the text/icon colour — `-fg` is tuned to clear 4.5:1 on `-bg`, not
+       just on the page background. `--success`/`--warning`/`--danger`/`--info`
+       are the solid marks (progress fills, dots, chart series). */
+    --success: 160 84% 25%; /* 5.68:1 on background */
+    --success-bg: 152 76% 95%;
+    --success-border: 160 55% 78%;
+    --success-fg: 160 84% 25%; /* 5.39:1 on --success-bg */
+
+    --warning: 23 82% 31%; /* 7.09:1 on background */
+    --warning-bg: 48 96% 89%;
+    --warning-border: 40 90% 76%;
+    --warning-fg: 23 82% 31%; /* 6.37:1 on --warning-bg */
+
+    --danger: 0 76% 48%; /* 5.12:1 on background */
+    --danger-bg: 0 86% 97%;
+    --danger-border: 0 85% 84%;
+    --danger-fg: 0 74% 42%; /* 5.86:1 on --danger-bg */
+
+    /* Deliberately cyan, NOT the 214-hue brand blue: `bg-blue-50` currently
+       means "selected" in one place and "informational" in another. Keeping
+       info off the brand hue lets those two meanings stop colliding. */
+    --info: 193 82% 31%; /* 5.35:1 on background */
+    --info-bg: 183 100% 96%;
+    --info-border: 188 65% 76%;
+    --info-fg: 193 82% 31%; /* 5.15:1 on --info-bg */
+
+    /* ---------------------------------------------------------------------
+       Shell chrome (Module 23).
+
+       The three blocks below exist because the dashboard shell paints three
+       surfaces that are NOT the page background, and so cannot borrow
+       `--foreground` / `--muted-foreground`:
+
+         1. the sidebar, painted by the `.bg-brand-sidebar` gradient;
+         2. the impersonation banner, deliberately fuchsia;
+         3. the modal overlay.
+
+       Before this they were 14 hardcoded Tailwind palette classes
+       (`text-blue-100/70`, `bg-white/15`, `bg-fuchsia-800`, `bg-black/40`, …)
+       that had no dark-mode definition at all.
+       --------------------------------------------------------------------- */
+
+    /* The white plate the logo PNG sits on. White in BOTH themes on purpose:
+       the artwork is dark-on-transparent, so a themed plate would erase it.
+       Tokenised rather than left as `bg-white` so the audit has no exceptions. */
+    --brand-plate: 0 0% 100%;
+
+    /* Sidebar. The gradient is a fixed dark decorative ramp in either theme,
+       so its foregrounds are near-white in either theme — they are contrast-
+       checked against the MID stop (--sidebar-blue-mid), the lightest large
+       area of the ramp behind body text. */
+    --sidebar-fg: 0 0% 100%; /* 10.2:1 on --sidebar-blue-mid */
+    --sidebar-fg-muted: 213 100% 93%; /* inactive nav item — 8.7:1 */
+    --sidebar-fg-subtle: 214 62% 82%; /* group headings, "Account" — 5.9:1 */
+    /* Item states are alpha over the gradient rather than opaque colours, so
+       one pair works over all four stops of the ramp. */
+    --sidebar-item-active-bg: hsl(0 0% 100% / 0.15);
+    --sidebar-item-hover-bg: hsl(0 0% 100% / 0.1);
+    /* Solid backstop behind a focus ring's offset. Never actually seen through
+       the gradient; it only has to be dark enough that the white ring reads. */
+    --sidebar-base: 224 59% 18%;
+
+    /* Impersonation. Fuchsia is used by nothing else in the product — amber
+       already carries five meanings — so this bar means exactly one thing.
+       Defined in both themes so that stays true in dark. */
+    --impersonation: 295 70% 33%; /* fuchsia-800 */
+    --impersonation-border: 297 64% 28%;
+    --impersonation-critical: 297 90% 16%; /* <= 60s left, or expired */
+    --impersonation-fg: 0 0% 100%; /* 12.2:1 on --impersonation */
+    --impersonation-fg-muted: 287 100% 95%; /* 7.08:1 on --impersonation */
+    --impersonation-accent: 288 96% 91%; /* the account name in the sidebar */
+    --impersonation-alarm-bg: 0 0% 100%; /* inverted chip at the sharp end */
+    --impersonation-alarm-fg: 297 90% 16%; /* 14.8:1 on --impersonation-alarm-bg */
+
+    /* Modal scrim, shared by Dialog / AlertDialog / Sheet and the mobile nav
+       drawer. Opacity is a token too: in dark mode a 40% black scrim over an
+       already-dark page does not read as a scrim at all. */
+    --overlay: 222.2 47% 11%;
+    --overlay-opacity: 0.45;
   }
 
   .dark {
@@ -37,13 +141,76 @@
     --secondary-foreground: 210 40% 98%;
     --muted: 217.2 32.6% 17.5%;
     --muted-foreground: 215 20.2% 65.1%;
-    --accent: 217.2 32.6% 17.5%;
+    --accent: 217.2 32.6% 24%;
     --accent-foreground: 210 40% 98%;
-    --destructive: 0 62.8% 30.6%;
-    --destructive-foreground: 210 40% 98%;
+    /* Was `0 62.8% 30.6%` = 1.99:1 as text on the dark background. No single
+       value can be AA as text (needs L >= 0.186) and also carry near-white
+       text (needs L <= 0.183), so the pair is inverted here: bright red
+       surface, near-black label. 4.95:1 as text, 4.74:1 for the button. */
+    --destructive: 0 75% 58%;
+    --destructive-foreground: 0 0% 6%;
     --border: 217.2 32.6% 17.5%;
-    --input: 217.2 32.6% 17.5%;
+    --input: 217.2 32.6% 42%; /* was 1.37:1, now 3.28:1 */
     --ring: 224.3 76.3% 48%;
+
+    --success: 158 64% 45%; /* 8.24:1 on background */
+    --success-bg: 160 60% 12%;
+    --success-border: 158 45% 26%;
+    --success-fg: 158 64% 45%;
+
+    --warning: 46 97% 64%; /* 13.86:1 on background */
+    --warning-bg: 32 70% 13%;
+    --warning-border: 36 50% 28%;
+    --warning-fg: 46 97% 64%;
+
+    --danger: 0 75% 58%;
+    --danger-bg: 0 63% 15%;
+    --danger-border: 0 50% 30%;
+    --danger-fg: 0 91% 78%; /* 7.61:1 on --danger-bg */
+
+    --info: 187 92% 69%;
+    --info-bg: 192 70% 14%;
+    --info-border: 190 50% 28%;
+    --info-fg: 187 92% 69%; /* 9.36:1 on --info-bg */
+
+    /* ---- Shell chrome, dark (Module 23) ---------------------------------- */
+
+    /* Unchanged: the logo artwork is dark-on-transparent in both themes. */
+    --brand-plate: 0 0% 100%;
+
+    /* The gradient itself is re-stated, NOT re-designed. Same four hues in the
+       same blue -> blue -> teal -> green order; every stop is dropped ~40% in
+       lightness. At the light values the sidebar is LIGHTER than a dark page
+       background, so it reads as a lit panel floating on black rather than as
+       the frame of the app. Delete this block and the light ramp returns. */
+    --sidebar-blue: #1a356a;
+    --sidebar-blue-mid: #182f59;
+    --sidebar-blue-deep: #152e47;
+    --sidebar-green: #124e37;
+
+    --sidebar-fg: 0 0% 100%;
+    --sidebar-fg-muted: 213 100% 93%;
+    --sidebar-fg-subtle: 214 62% 82%;
+    /* Slightly stronger: the darker ramp gives a white wash less to work with. */
+    --sidebar-item-active-bg: hsl(0 0% 100% / 0.18);
+    --sidebar-item-hover-bg: hsl(0 0% 100% / 0.12);
+    --sidebar-base: 224 59% 12%;
+
+    /* The escalation is INVERTED here on purpose. In light mode "critical"
+       goes darker, which is more severe against a white page; against a 4.9%
+       page that same value is the least visible thing on screen. Dark mode
+       escalates by going brighter instead, so the meaning survives the flip. */
+    --impersonation: 296 64% 28%; /* fuchsia-900 */
+    --impersonation-border: 297 90% 16%;
+    --impersonation-critical: 293 72% 45%; /* 5.39:1 with white on top */
+    --impersonation-fg: 0 0% 100%;
+    --impersonation-fg-muted: 287 100% 95%; /* 8.7:1 on --impersonation */
+    --impersonation-accent: 288 96% 91%;
+    --impersonation-alarm-bg: 0 0% 100%;
+    --impersonation-alarm-fg: 297 90% 16%;
+
+    --overlay: 0 0% 0%;
+    --overlay-opacity: 0.72;
   }
 }
 
@@ -63,9 +230,15 @@
         180deg,
         var(--sidebar-blue) 0%,
         var(--sidebar-blue-mid) 52%,
-        #1f4d7a 82%,
-        #157a52 100%
+        var(--sidebar-blue-deep) 82%,
+        var(--sidebar-green) 100%
       );
+  }
+
+  /* Modal scrim. A class rather than a Tailwind colour because the opacity is
+     part of the token — see --overlay-opacity in globals' :root/.dark. */
+  .bg-overlay {
+    background-color: hsl(var(--overlay) / var(--overlay-opacity));
   }
 }
 
@@ -99,4 +272,75 @@
 [dir='rtl'] code {
   direction: ltr;
   text-align: left;
+}
+
+/* ---------------------------------------------------------------------------
+   Overlay motion for Dialog / AlertDialog / Sheet (Module 23).
+
+   Hand-written instead of `tailwindcss-animate`'s `slide-in-from-left` because
+   those utilities are PHYSICAL. A drawer pinned with the logical `start-0`
+   flies out of the correct edge under RTL but would slide in from the opposite
+   one, which looks like two different panels. The travel distance is a custom
+   property that RTL flips, so one rule covers both directions.
+
+   Radix portals its content to <body>, i.e. OUTSIDE the shell wrapper that
+   carries dir="rtl" — so the selectors match `dir` on the panel itself as well
+   as on an ancestor. `useDirectionAnchor` in src/components/ui/use-direction.ts
+   is what puts that attribute there.
+   --------------------------------------------------------------------------- */
+@keyframes ui-fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+@keyframes ui-fade-out {
+  from { opacity: 1; }
+  to { opacity: 0; }
+}
+@keyframes ui-panel-in {
+  from {
+    opacity: 0;
+    transform: translate3d(var(--ui-panel-x, 0), var(--ui-panel-y, 0), 0)
+      scale(var(--ui-panel-scale, 1));
+  }
+  to { opacity: 1; transform: none; }
+}
+@keyframes ui-panel-out {
+  from { opacity: 1; transform: none; }
+  to {
+    opacity: 0;
+    transform: translate3d(var(--ui-panel-x, 0), var(--ui-panel-y, 0), 0)
+      scale(var(--ui-panel-scale, 1));
+  }
+}
+
+.ui-overlay[data-state='open'] { animation: ui-fade-in 150ms ease-out; }
+.ui-overlay[data-state='closed'] { animation: ui-fade-out 130ms ease-in; }
+.ui-panel[data-state='open'] { animation: ui-panel-in 200ms cubic-bezier(0.16, 1, 0.3, 1); }
+.ui-panel[data-state='closed'] { animation: ui-panel-out 150ms ease-in; }
+
+.ui-panel[data-side='start'] { --ui-panel-x: -100%; }
+.ui-panel[data-side='end'] { --ui-panel-x: 100%; }
+.ui-panel[dir='rtl'][data-side='start'],
+[dir='rtl'] .ui-panel[data-side='start'] { --ui-panel-x: 100%; }
+.ui-panel[dir='rtl'][data-side='end'],
+[dir='rtl'] .ui-panel[data-side='end'] { --ui-panel-x: -100%; }
+.ui-panel[data-side='top'] { --ui-panel-y: -100%; }
+.ui-panel[data-side='bottom'] { --ui-panel-y: 100%; }
+/* Centred modals do not travel; they lift and settle. */
+.ui-panel[data-side='center'] { --ui-panel-y: -6px; --ui-panel-scale: 0.97; }
+
+/* Popovers are small and anchored, so they only need the settle. */
+.ui-popover[data-state='open'] { animation: ui-panel-in 130ms ease-out; }
+.ui-popover[data-state='closed'] { animation: ui-fade-out 100ms ease-in; }
+.ui-popover { --ui-panel-y: -4px; --ui-panel-scale: 0.97; }
+
+/* Motion is decoration here — the focus trap, Escape handler and scrim all
+   still work. Users who ask for less of it get the state change with none. */
+@media (prefers-reduced-motion: reduce) {
+  .ui-overlay[data-state],
+  .ui-panel[data-state],
+  .ui-popover[data-state] {
+    animation-duration: 0.01ms;
+    animation-iteration-count: 1;
+  }
 }

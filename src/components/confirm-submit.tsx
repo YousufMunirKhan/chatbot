@@ -60,7 +60,11 @@ export function ConfirmSubmit({
 
   return (
     <div className="flex flex-wrap items-center gap-2">
-      <span className="text-xs text-muted-foreground">{question}</span>
+      {/* role="alert" so the consequence is ANNOUNCED when the control arms.
+          Without it a screen-reader user just gets a silently-changed button. */}
+      <span role="alert" className="text-xs text-muted-foreground">
+        {question}
+      </span>
       {typeToConfirm ? (
         <Input
           autoFocus

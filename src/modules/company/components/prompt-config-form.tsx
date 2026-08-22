@@ -1,25 +1,16 @@
 'use client';
 
-import { useFormState, useFormStatus } from 'react-dom';
-import { Button } from '@/components/ui/button';
+import { useFormState } from 'react-dom';
 import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
+import { Select } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
+import { FormField } from '@/components/ui/form-field';
+import { FormMessage } from '@/components/ui/form-message';
+import { SubmitButton } from '@/components/ui/submit-button';
 import { updatePromptConfigAction, type ActionState } from '../actions';
 import type { PromptConfig } from '@/lib/ai/prompts/assemble';
 
 const initial: ActionState = {};
-const selectCls =
-  'flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring';
-
-function Save() {
-  const { pending } = useFormStatus();
-  return (
-    <Button type="submit" disabled={pending}>
-      {pending ? 'Saving…' : 'Save & rebuild prompt'}
-    </Button>
-  );
-}
 
 export function PromptConfigForm({
   botId,
@@ -36,46 +27,40 @@ export function PromptConfigForm({
     <form action={action} className="space-y-4">
       <input type="hidden" name="botId" value={botId} />
       <div className="grid gap-4 sm:grid-cols-2">
-        <div className="space-y-1.5">
-          <Label htmlFor="industry">Industry</Label>
-          <Input id="industry" name="industry" defaultValue={config.industry ?? ''} placeholder="restaurant, clinic, retail…" />
-        </div>
-        <div className="space-y-1.5">
-          <Label htmlFor="tone">Tone</Label>
-          <select id="tone" name="tone" className={selectCls} defaultValue={config.tone ?? 'professional'}>
+        <FormField label="Industry" htmlFor="industry">
+          <Input name="industry" defaultValue={config.industry ?? ''} placeholder="restaurant, clinic, retail…" />
+        </FormField>
+        <FormField label="Tone" htmlFor="tone">
+          <Select name="tone" defaultValue={config.tone ?? 'professional'}>
             <option value="professional">Professional</option>
             <option value="friendly">Friendly</option>
             <option value="concise">Concise</option>
             <option value="warm">Warm</option>
-          </select>
-        </div>
+          </Select>
+        </FormField>
       </div>
 
-      <div className="space-y-1.5">
-        <Label htmlFor="customInstructions">Additional instructions</Label>
+      <FormField label="Additional instructions" htmlFor="customInstructions">
         <Textarea
-          id="customInstructions"
           name="customInstructions"
           defaultValue={config.customInstructions ?? ''}
           placeholder="e.g. Always mention free delivery over 200 AED. Office hours 9–6 Sun–Thu."
         />
-      </div>
+      </FormField>
 
-      <div className="space-y-1.5">
-        <Label htmlFor="customPrompt">
-          Custom base prompt {botType === 'custom' ? '(used — type is Custom)' : '(used only when type = Custom)'}
-        </Label>
+      <FormField
+        label={`Custom base prompt ${botType === 'custom' ? '(used — type is Custom)' : '(used only when type = Custom)'}`}
+        htmlFor="customPrompt"
+      >
         <Textarea
-          id="customPrompt"
           name="customPrompt"
           defaultValue={config.customPrompt ?? ''}
           placeholder="Override the base persona entirely…"
         />
-      </div>
+      </FormField>
 
-      {state.error ? <p className="text-sm text-destructive">{state.error}</p> : null}
-      {state.ok ? <p className="text-sm text-emerald-600">Saved — system prompt rebuilt.</p> : null}
-      <Save />
+      <FormMessage state={state} okText="Saved — system prompt rebuilt." />
+      <SubmitButton>Save &amp; rebuild prompt</SubmitButton>
     </form>
   );
 }

@@ -3,6 +3,8 @@ import { requireRole } from '@/lib/auth';
 import { ROLES } from '@/lib/constants';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { EmptyState } from '@/components/ui/empty-state';
+import { PageHeader } from '@/components/ui/page-header';
 import { getCurrentCompany, listBots } from '@/modules/company/data';
 import { WidgetDesignStudio } from '@/modules/company/components/widget-design-studio';
 import { TestAssistant } from '@/modules/company/components/test-assistant';
@@ -14,14 +16,11 @@ export default async function WidgetPage() {
   const bots = allBots.filter((bot) => bot.assistantAudience === 'customer');
 
   return (
-    <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-semibold">Website Widget</h1>
-        <p className="text-sm text-muted-foreground">
-          Design the customer-facing chat widget, preview it against different website backgrounds,
-          then save it to update the live embed.
-        </p>
-      </div>
+    <div className="mx-auto max-w-6xl space-y-6">
+      <PageHeader
+        title="Website Widget"
+        description="Design the customer-facing chat widget, preview it against different website backgrounds, then save it to update the live embed."
+      />
 
       {/* The setup wizard's test step lands here, so the real test tool sits above
           the design studio — the studio preview is a design mock, not a chat. */}
@@ -45,11 +44,15 @@ export default async function WidgetPage() {
 
       {bots.length === 0 ? (
         <Card>
-          <CardContent className="py-8 text-center text-sm text-muted-foreground">
-            Create a customer-facing assistant first to get a preview and embed snippet.{' '}
-            <Link href="/company/bots/new" className="text-primary hover:underline">
-              New assistant
-            </Link>
+          <CardContent className="p-0">
+            <EmptyState
+              title="Create a customer-facing assistant first to get a preview and embed snippet."
+              action={
+                <Button asChild size="sm">
+                  <Link href="/company/bots/new">New assistant</Link>
+                </Button>
+              }
+            />
           </CardContent>
         </Card>
       ) : (

@@ -1,6 +1,12 @@
+import { requireRole } from '@/lib/auth';
+import { ROLES } from '@/lib/constants';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
+import { EmptyState } from '@/components/ui/empty-state';
+import { Input } from '@/components/ui/input';
+import { PageHeader } from '@/components/ui/page-header';
+import { Select } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { formatDate } from '@/lib/format';
 import { resolveErrorLogAction } from '@/modules/super-admin/error-log-actions';
@@ -38,6 +44,9 @@ export default async function ErrorLogsPage({
 }: {
   searchParams: Record<string, string | string[] | undefined>;
 }) {
+  // Defence in depth: the /super-admin layout already guards this subtree, but a
+  // platform-operator surface should not rely on a single ancestor check.
+  await requireRole([ROLES.SUPER_ADMIN]);
   const filters = {
     companyId: first(searchParams.companyId),
     severity: cleanSeverity(first(searchParams.severity)),
@@ -54,55 +63,54 @@ export default async function ErrorLogsPage({
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
-        <div>
-          <h1 className="text-2xl font-semibold">Error Logs</h1>
-          <p className="text-sm text-muted-foreground">
-            Super Admin-only operational errors from APIs, chat, widgets, integrations, and client reports.
-          </p>
-        </div>
-        <Button asChild variant="outline">
-          <a href={`/api/super-admin/error-logs/export?${exportParams.toString()}`}>Export CSV</a>
-        </Button>
-      </div>
+      <PageHeader
+        title="Error Logs"
+        description="Super Admin-only operational errors from APIs, chat, widgets, integrations, and client reports."
+        actions={
+          <Button asChild variant="outline">
+            <a href={`/api/super-admin/error-logs/export?${exportParams.toString()}`}>Export CSV</a>
+          </Button>
+        }
+      />
 
       <Card>
         <CardContent className="pt-6">
           <form className="grid gap-3 md:grid-cols-5">
-            <select name="companyId" defaultValue={filters.companyId ?? ''} className="h-10 rounded-md border bg-background px-3 text-sm">
+            <Select name="companyId" defaultValue={filters.companyId ?? ''} aria-label="Company">
               <option value="">All companies</option>
               {companies.map((company) => (
                 <option key={company.id} value={company.id}>
                   {company.name}
                 </option>
               ))}
-            </select>
-            <select name="severity" defaultValue={filters.severity} className="h-10 rounded-md border bg-background px-3 text-sm">
+            </Select>
+            <Select name="severity" defaultValue={filters.severity} aria-label="Severity">
               {severities.map((severity) => (
                 <option key={severity} value={severity}>
                   {severity === 'all' ? 'All severities' : severity}
                 </option>
               ))}
-            </select>
-            <select name="status" defaultValue={filters.status} className="h-10 rounded-md border bg-background px-3 text-sm">
+            </Select>
+            <Select name="status" defaultValue={filters.status} aria-label="Status">
               {statuses.map((status) => (
                 <option key={status} value={status}>
                   {status === 'open' ? 'Open only' : status}
                 </option>
               ))}
-            </select>
-            <input
+            </Select>
+            <Input
               name="source"
               defaultValue={filters.source ?? ''}
               placeholder="Source"
-              className="h-10 rounded-md border bg-background px-3 text-sm"
+              aria-label="Source"
             />
             <div className="flex gap-2">
-              <input
+              <Input
                 name="q"
                 defaultValue={filters.q ?? ''}
                 placeholder="Search message"
-                className="h-10 min-w-0 flex-1 rounded-md border bg-background px-3 text-sm"
+                aria-label="Search message"
+                className="min-w-0 flex-1"
               />
               <Button type="submit">Filter</Button>
             </div>
@@ -127,8 +135,8 @@ export default async function ErrorLogsPage({
             <TableBody>
               {logs.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={7} className="py-8 text-center text-muted-foreground">
-                    No error logs match these filters.
+                  <TableCell colSpan={7} className="py-0">
+                    <EmptyState title="No error logs match these filters." />
                   </TableCell>
                 </TableRow>
               ) : (
@@ -164,7 +172,7 @@ export default async function ErrorLogsPage({
                         <Badge variant="outline">Open</Badge>
                       )}
                     </TableCell>
-                    <TableCell className="text-right">
+                    <TableCell className="text-end">
                       {!log.resolvedAt ? (
                         <form action={resolveErrorLogAction}>
                           <input type="hidden" name="id" value={log.id} />

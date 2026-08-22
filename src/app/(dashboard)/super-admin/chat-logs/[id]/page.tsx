@@ -1,7 +1,10 @@
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
+import { Alert } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { EmptyState } from '@/components/ui/empty-state';
+import { PageHeader } from '@/components/ui/page-header';
 import { requireRole } from '@/lib/auth';
 import { ROLES } from '@/lib/constants';
 import { formatDate } from '@/lib/format';
@@ -53,7 +56,7 @@ function MessageBubble({ message }: { message: ChatMessageRow }) {
         className={cn(
           'max-w-[82%] rounded-lg px-3 py-2 text-sm',
           message.senderType === 'visitor' && 'bg-muted',
-          message.senderType === 'ai' && 'bg-blue-50 text-blue-950',
+          message.senderType === 'ai' && 'bg-info-bg text-info-fg',
           message.senderType === 'agent' && 'bg-primary/10',
         )}
       >
@@ -74,20 +77,18 @@ export default async function SuperAdminChatLogDetailPage({ params }: { params: 
 
   return (
     <div className="mx-auto max-w-5xl space-y-6">
-      <div>
-        <Link href="/super-admin/chat-logs" className="text-sm text-muted-foreground hover:underline">
-          Back to chat logs
-        </Link>
-        <div className="mt-2 flex flex-wrap items-center gap-3">
-          <h1 className="text-2xl font-semibold">{chat.companyName}</h1>
-          <Badge variant="outline">{label(chat.status)}</Badge>
-          <Badge variant={auditVariant(chat.qualityStatus)}>{label(chat.qualityStatus)}</Badge>
-          {chat.qualityScore == null ? null : <Badge variant="secondary">{chat.qualityScore}% audit</Badge>}
-        </div>
-        <p className="mt-1 text-sm text-muted-foreground">
-          {chat.botName ?? 'No bot'} · {chat.channel.replace(/_/g, ' ')} · visitor {chat.visitorId ?? '-'}
-        </p>
-      </div>
+      <PageHeader
+        backTo={{ href: '/super-admin/chat-logs', label: 'Back to chat logs' }}
+        title={
+          <span className="flex flex-wrap items-center gap-3">
+            {chat.companyName}
+            <Badge variant="outline">{label(chat.status)}</Badge>
+            <Badge variant={auditVariant(chat.qualityStatus)}>{label(chat.qualityStatus)}</Badge>
+            {chat.qualityScore == null ? null : <Badge variant="secondary">{chat.qualityScore}% audit</Badge>}
+          </span>
+        }
+        description={`${chat.botName ?? 'No bot'} · ${chat.channel.replace(/_/g, ' ')} · visitor ${chat.visitorId ?? '-'}`}
+      />
 
       <div className="grid gap-6 lg:grid-cols-[1fr_340px]">
         <Card>
@@ -96,7 +97,7 @@ export default async function SuperAdminChatLogDetailPage({ params }: { params: 
           </CardHeader>
           <CardContent className="max-h-[68vh] space-y-3 overflow-y-auto">
             {chat.messages.length === 0 ? (
-              <p className="text-sm text-muted-foreground">No messages saved for this conversation.</p>
+              <EmptyState title="No messages saved for this conversation." />
             ) : (
               chat.messages.map((message) => <MessageBubble key={message.id} message={message} />)
             )}
@@ -115,7 +116,7 @@ export default async function SuperAdminChatLogDetailPage({ params }: { params: 
               </div>
               <div className="flex items-center justify-between gap-3">
                 <span className="text-muted-foreground">Issue</span>
-                <span className="text-right">{label(chat.qualityLabel)}</span>
+                <span className="text-end">{label(chat.qualityLabel)}</span>
               </div>
               <div className="flex items-center justify-between gap-3">
                 <span className="text-muted-foreground">Score</span>
@@ -123,7 +124,7 @@ export default async function SuperAdminChatLogDetailPage({ params }: { params: 
               </div>
               <div className="flex items-center justify-between gap-3">
                 <span className="text-muted-foreground">Last activity</span>
-                <span className="text-right">{formatDate(chat.lastMessageAt)}</span>
+                <span className="text-end">{formatDate(chat.lastMessageAt)}</span>
               </div>
             </CardContent>
           </Card>
@@ -134,7 +135,7 @@ export default async function SuperAdminChatLogDetailPage({ params }: { params: 
             </CardHeader>
             <CardContent className="space-y-4">
               {chat.qualityLogs.length === 0 ? (
-                <p className="text-sm text-muted-foreground">No AI answer quality logs yet.</p>
+                <EmptyState title="No AI answer quality logs yet." />
               ) : (
                 chat.qualityLogs.map((log) => (
                   <div key={log.id} className="space-y-2 rounded-md border p-3 text-sm">
@@ -145,9 +146,9 @@ export default async function SuperAdminChatLogDetailPage({ params }: { params: 
                     <p className="font-medium">{log.question}</p>
                     {log.autoAuditReason ? <p className="text-muted-foreground">{log.autoAuditReason}</p> : null}
                     {log.suggestedFix ? (
-                      <div className="rounded-md border border-amber-200 bg-amber-50 p-2 text-amber-950">
+                      <Alert tone="warning" className="p-2">
                         {log.suggestedFix}
-                      </div>
+                      </Alert>
                     ) : null}
                     <div className="text-xs text-muted-foreground">
                       {log.model ?? 'model unknown'} · {log.latencyMs == null ? '-' : `${log.latencyMs}ms`} · {formatDate(log.createdAt)}
