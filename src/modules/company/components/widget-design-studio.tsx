@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState, type KeyboardEvent } from 'react';
 import { useFormState } from 'react-dom';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -59,6 +59,63 @@ const themePresets = [
     style: 'solid',
   },
 ] as const;
+
+/**
+ * Pre-chat form and out-of-hours wording.
+ *
+ * These are the one part of this screen that is NOT stored in the assistant's
+ * `appearance_json`, so they do not ride along with the design form's save.
+ * They belong to the company (one answer to "do we ask strangers for an email",
+ * however many assistants there are), they live in `widget_prechat_settings`,
+ * and they are read and written through `/api/widget/settings` — the design
+ * studio is already one `<form>` from top to bottom and a second one cannot be
+ * nested inside it.
+ */
+type ContactSettings = {
+  prechatEnabled: boolean;
+  prechatAskName: boolean;
+  prechatAskEmail: boolean;
+  prechatAskPhone: boolean;
+  prechatRequired: boolean;
+  prechatAllowSkip: boolean;
+  prechatTitle: string;
+  prechatIntro: string;
+  prechatButtonLabel: string;
+  offlineEnabled: boolean;
+  offlineMessage: string;
+  offlineFormEnabled: boolean;
+  offlineButtonLabel: string;
+};
+
+const CONTACT_DEFAULTS: ContactSettings = {
+  prechatEnabled: false,
+  prechatAskName: true,
+  prechatAskEmail: true,
+  prechatAskPhone: false,
+  prechatRequired: true,
+  prechatAllowSkip: true,
+  prechatTitle: 'Before we start',
+  prechatIntro: 'Leave your details and we can pick this up again if we get cut off.',
+  prechatButtonLabel: 'Start chat',
+  offlineEnabled: true,
+  offlineMessage:
+    'We are closed at the moment. Leave your details and we will reply as soon as we are back.',
+  offlineFormEnabled: true,
+  offlineButtonLabel: 'Leave a message',
+};
+
+/**
+ * The embed tag as the customer will paste it.
+ *
+ * The page that builds the snippet still emits a plain blocking `<script>`, and
+ * a blocking tag holds up the render of every page it is pasted into. Nothing
+ * in `widget.js` needs to run before the page has parsed, so the copy button
+ * hands out the async form.
+ */
+function asyncEmbed(embed: string): string {
+  if (/<script[^>]*\basync\b/.test(embed)) return embed;
+  return embed.replace(/<script\b/, '<script async');
+}
 
 function readString(value: unknown, fallback = ''): string {
   return typeof value === 'string' && value.trim() ? value : fallback;
@@ -166,6 +223,59 @@ export function WidgetDesignStudio({
   const [csatThanks, setCsatThanks] = useState(
     readString(a.csatThanks, 'Thanks for your feedback!'),
   );
+
+  const [contact, setContact] = useState<ContactSettings>(CONTACT_DEFAULTS);
+  const [contactSaving, setContactSaving] = useState(false);
+  const [contactState, setContactState] = useState<{ ok?: boolean; error?: string }>({});
+
+  // Fetched rather than passed in: the two pages that render this studio build
+  // its props, and neither can be edited from here.
+  useEffect(() => {
+    let cancelled = false;
+    fetch('/api/widget/settings')
+      .then((res) => (res.ok ? res.json() : Promise.reject(new Error('load_failed'))))
+      .then((data: { settings?: Partial<ContactSettings> }) => {
+        if (!cancelled && data.settings) {
+          setContact({ ...CONTACT_DEFAULTS, ...data.settings });
+        }
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setContactState({ error: 'Could not load the contact settings. Reload to try again.' });
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  function patchContact(next: Partial<ContactSettings>) {
+    setContact((current) => ({ ...current, ...next }));
+    setContactState({});
+  }
+
+  function saveContact() {
+    setContactSaving(true);
+    setContactState({});
+    fetch('/api/widget/settings', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(contact),
+    })
+      .then((res) => (res.ok ? res.json() : Promise.reject(new Error('save_failed'))))
+      .then((data: { settings?: Partial<ContactSettings> }) => {
+        if (data.settings) setContact({ ...CONTACT_DEFAULTS, ...data.settings });
+        setContactState({ ok: true });
+      })
+      .catch(() => setContactState({ error: 'Could not save. Please try again.' }))
+      .finally(() => setContactSaving(false));
+  }
+
+  // These inputs sit inside the design form but are saved by their own button,
+  // so Enter must not fire the design form's submit and quietly discard them.
+  function blockEnterSubmit(event: KeyboardEvent<HTMLElement>) {
+    if (event.key === 'Enter') event.preventDefault();
+  }
 
   const headerBackground = useMemo(
     () =>
@@ -898,6 +1008,171 @@ export function WidgetDesignStudio({
               )}
             </div>
           </section>
+
+          <section className="rounded-md border bg-card p-4">
+            <h2 className="mb-1 text-base font-semibold">Getting contact details</h2>
+            <p className="mb-1 text-sm text-muted-foreground">
+              Ask visitors who they are before they start, and say something useful when you are
+              closed instead of leaving the chat looking staffed.
+            </p>
+            {/* Saved separately, and it says so, because everything else on this
+                screen belongs to one assistant and these two belong to the whole
+                company — the same answer whichever assistant is on the page. */}
+            <p className="mb-4 text-xs text-muted-foreground">
+              These apply to every assistant in your company and save with their own button below.
+            </p>
+
+            <div className="grid gap-3">
+              <label className="flex items-center gap-2 rounded-md border p-2.5 text-sm">
+                <input
+                  type="checkbox"
+                  checked={contact.prechatEnabled}
+                  onChange={(e) => patchContact({ prechatEnabled: e.target.checked })}
+                  className="h-4 w-4"
+                />
+                Ask for contact details before the conversation starts
+              </label>
+
+              {contact.prechatEnabled ? (
+                <>
+                  <div className="grid gap-2 sm:grid-cols-3">
+                    <label className="flex items-center gap-2 rounded-md border p-2.5 text-sm">
+                      <input
+                        type="checkbox"
+                        checked={contact.prechatAskName}
+                        onChange={(e) => patchContact({ prechatAskName: e.target.checked })}
+                        className="h-4 w-4"
+                      />
+                      Name
+                    </label>
+                    <label className="flex items-center gap-2 rounded-md border p-2.5 text-sm">
+                      <input
+                        type="checkbox"
+                        checked={contact.prechatAskEmail}
+                        onChange={(e) => patchContact({ prechatAskEmail: e.target.checked })}
+                        className="h-4 w-4"
+                      />
+                      Email
+                    </label>
+                    <label className="flex items-center gap-2 rounded-md border p-2.5 text-sm">
+                      <input
+                        type="checkbox"
+                        checked={contact.prechatAskPhone}
+                        onChange={(e) => patchContact({ prechatAskPhone: e.target.checked })}
+                        className="h-4 w-4"
+                      />
+                      Phone
+                    </label>
+                  </div>
+                  <label className="flex items-center gap-2 rounded-md border p-2.5 text-sm">
+                    <input
+                      type="checkbox"
+                      checked={contact.prechatRequired}
+                      onChange={(e) => patchContact({ prechatRequired: e.target.checked })}
+                      className="h-4 w-4"
+                    />
+                    They must fill it in before they can type
+                  </label>
+                  <label className="flex items-center gap-2 rounded-md border p-2.5 text-sm">
+                    <input
+                      type="checkbox"
+                      checked={contact.prechatAllowSkip}
+                      onChange={(e) => patchContact({ prechatAllowSkip: e.target.checked })}
+                      className="h-4 w-4"
+                    />
+                    Show a Skip link as well
+                  </label>
+                  <FormField
+                    label="Heading on the form"
+                    htmlFor="prechatTitle"
+                    hint="Shown at the top of the card, above the boxes."
+                  >
+                    <Input
+                      value={contact.prechatTitle}
+                      onChange={(e) => patchContact({ prechatTitle: e.target.value })}
+                      onKeyDown={blockEnterSubmit}
+                    />
+                  </FormField>
+                  <FormField
+                    label="Why you are asking"
+                    htmlFor="prechatIntro"
+                    hint="One line. Visitors give more when they know what it is for."
+                  >
+                    <Textarea
+                      rows={2}
+                      value={contact.prechatIntro}
+                      onChange={(e) => patchContact({ prechatIntro: e.target.value })}
+                    />
+                  </FormField>
+                  <FormField label="Button wording" htmlFor="prechatButtonLabel">
+                    <Input
+                      value={contact.prechatButtonLabel}
+                      onChange={(e) => patchContact({ prechatButtonLabel: e.target.value })}
+                      onKeyDown={blockEnterSubmit}
+                    />
+                  </FormField>
+                </>
+              ) : null}
+
+              <label className="flex items-center gap-2 rounded-md border p-2.5 text-sm">
+                <input
+                  type="checkbox"
+                  checked={contact.offlineEnabled}
+                  onChange={(e) => patchContact({ offlineEnabled: e.target.checked })}
+                  className="h-4 w-4"
+                />
+                Say you are closed outside your opening hours
+              </label>
+              {/* The hours themselves are not edited here — they are the ones in
+                  Business details, the same ones the SLA clock runs on. With
+                  none saved the widget behaves exactly as it does today. */}
+              <p className="-mt-1 text-xs text-muted-foreground">
+                Uses the opening hours from your business details. With no hours saved, the chat
+                behaves as normal at all times.
+              </p>
+
+              {contact.offlineEnabled ? (
+                <>
+                  <FormField
+                    label="What it says when you are closed"
+                    htmlFor="offlineMessage"
+                    hint="Shown as a note in the chat as soon as the visitor opens it."
+                  >
+                    <Textarea
+                      rows={2}
+                      value={contact.offlineMessage}
+                      onChange={(e) => patchContact({ offlineMessage: e.target.value })}
+                    />
+                  </FormField>
+                  <label className="flex items-center gap-2 rounded-md border p-2.5 text-sm">
+                    <input
+                      type="checkbox"
+                      checked={contact.offlineFormEnabled}
+                      onChange={(e) => patchContact({ offlineFormEnabled: e.target.checked })}
+                      className="h-4 w-4"
+                    />
+                    Offer to take a message
+                  </label>
+                  {contact.offlineFormEnabled ? (
+                    <FormField label="Wording on that button" htmlFor="offlineButtonLabel">
+                      <Input
+                        value={contact.offlineButtonLabel}
+                        onChange={(e) => patchContact({ offlineButtonLabel: e.target.value })}
+                        onKeyDown={blockEnterSubmit}
+                      />
+                    </FormField>
+                  ) : null}
+                </>
+              ) : null}
+
+              <div className="flex flex-wrap items-center gap-3">
+                <Button type="button" size="sm" onClick={saveContact} disabled={contactSaving}>
+                  {contactSaving ? 'Saving...' : 'Save contact settings'}
+                </Button>
+                <FormMessage state={contactState} okText="Saved. Live widget updated." />
+              </div>
+            </div>
+          </section>
         </div>
 
         <div className="space-y-4 xl:sticky xl:top-4 xl:self-start">
@@ -1102,7 +1377,7 @@ export function WidgetDesignStudio({
 
       <section className="rounded-md border bg-card p-4">
         <WidgetEmbedInstructions
-          embed={embed}
+          embed={asyncEmbed(embed)}
           domainAllowlist={bot.domainAllowlist}
           settingsHref={`/company/bots/${bot.id}/settings`}
         />

@@ -4,6 +4,8 @@ import { decryptSecret } from '@/lib/crypto';
 import { getChannelAdapter } from '@/lib/channels/registry';
 import { textBlocks, type ChannelKey, type ChannelSendContext } from '@/lib/channels/types';
 import { logger } from '@/lib/logger';
+import { getWhatsAppServiceWindow } from '@/lib/channels/whatsapp';
+import { serviceWindowRefusalReason } from '@/lib/channels/whatsapp-window';
 import {
   contactForChannel,
   evaluateConditions,
@@ -290,6 +292,21 @@ export async function dispatchDueAutomations(limit = 50): Promise<DispatchResult
               },
             }
           : ctx;
+
+      // An order update or abandoned-cart nudge is sent by the business, days
+      // after the customer last wrote — which is precisely the case Meta
+      // refuses. The reply path needs no such check (the customer has just
+      // messaged, so the window is open by definition); this one does.
+      if (rule.channel === 'whatsapp') {
+        const refusal = serviceWindowRefusalReason(
+          await getWhatsAppServiceWindow(ctx.companyId, to),
+        );
+        if (refusal) {
+          await finish(run.id, { status: 'failed', error: refusal });
+          result.failed += 1;
+          continue;
+        }
+      }
 
       const ok = await adapter.send(sendCtx, to, textBlocks(message));
       if (ok) {

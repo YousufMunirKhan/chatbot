@@ -1,6 +1,7 @@
 'use server';
 
 import { randomBytes } from 'crypto';
+import { encryptSecret } from '@/lib/crypto';
 import { revalidatePath } from 'next/cache';
 import { z } from 'zod';
 import { requireRole } from '@/lib/auth';
@@ -154,7 +155,14 @@ export async function issueStoreWebhookTokenAction(formData: FormData): Promise<
   const sb = createSupabaseServiceClient();
   await sb
     .from('integration_accounts')
-    .update({ webhook_token: randomBytes(24).toString('base64url') })
+    .update({
+      webhook_token: randomBytes(24).toString('base64url'),
+      // Issued together, because a URL without the matching secret cannot be
+      // verified. Each shop signs with its own key — a single platform-wide
+      // secret could only ever verify one customer, which is what migration
+      // 0070 was written to fix.
+      webhook_secret_encrypted: encryptSecret(randomBytes(32).toString('base64url')),
+    })
     .eq('company_id', companyId)
     .eq('id', id.data);
   revalidatePath(PATH);

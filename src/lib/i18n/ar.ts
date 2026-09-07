@@ -288,7 +288,7 @@ export const ar: Dictionary = {
   'settings.section.security.label': 'تسجيل الدخول والأمان',
   'settings.section.security.hint': 'الوصول والخصوصية ووسائل الحماية.',
   'settings.section.channels.label': 'القنوات',
-  'settings.section.channels.hint': 'واتساب وإنستغرام والبريد الإلكتروني والرسائل النصية.',
+  'settings.section.channels.hint': 'واتساب وإنستغرام وتيليجرام والبريد الإلكتروني.',
   'settings.section.broadcasts.label': 'الرسائل الجماعية',
   'settings.section.broadcasts.hint': 'أرسل رسالة إلى مجموعة من العملاء.',
   'settings.section.campaigns.label': 'الحملات',

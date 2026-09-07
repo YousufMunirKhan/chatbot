@@ -17,13 +17,12 @@ import {
 } from '@/components/ui/table';
 import { CopyButton } from '@/components/copy-button';
 import { listAgentInvites, listMembers, getCompanyId } from '@/modules/company/data';
-import { removeAgentAction } from '@/modules/company/actions';
 import { AgentInviteForm } from '@/modules/company/components/agent-invite-form';
 import { setAgentPresenceAction } from '@/modules/company/agent-presence-actions';
 import { createSupabaseServiceClient } from '@/lib/db/server';
 import { env } from '@/lib/env';
 import { formatDate } from '@/lib/format';
-import { ConfirmSubmit } from '@/components/confirm-submit';
+import { RemoveAgentForm } from '@/modules/company/components/remove-agent-form';
 
 export default async function AgentsPage() {
   await requireRole([ROLES.COMPANY_ADMIN]);
@@ -121,14 +120,10 @@ export default async function AgentsPage() {
                       </TableCell>
                       <TableCell className="text-end">
                         {m.role === 'agent' ? (
-                          <form action={removeAgentAction}>
-                            <input type="hidden" name="membershipId" value={m.membershipId} />
-                            <ConfirmSubmit
-                              label="Remove from the team"
-                              confirmLabel="Yes, remove them"
-                              question={`${m.fullName || m.email || 'This person'} is signed out immediately and can no longer open your inbox or see any customer details. Chats they already replied to are kept.`}
-                            />
-                          </form>
+                          <RemoveAgentForm
+                            membershipId={m.membershipId}
+                            personLabel={m.fullName || m.email || 'This person'}
+                          />
                         ) : null}
                       </TableCell>
                     </TableRow>

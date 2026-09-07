@@ -6,6 +6,15 @@
  * via the backend API (POST /api/chat SSE stream + GET /api/chat/realtime
  * realtime stream). All AI logic lives server-side.
  *
+ * The embed tag is `async`, so nothing here may assume it ran before the page
+ * finished parsing. Three things follow from that and must stay true:
+ *   - the script tag is found by `document.currentScript` (still set during a
+ *     classic async script) with a `[data-bot-id]` lookup as the fallback;
+ *   - `init()` handles both "still loading" and "already loaded", because an
+ *     async script can execute either side of DOMContentLoaded;
+ *   - nothing on the host page can call into the widget synchronously, since
+ *     there is no global API and no guaranteed execution order.
+ *
  * Configure via data-* attributes on the <script> tag:
  *   data-bot-id   (REQUIRED) public bot id
  *   data-api      API base URL (default: origin of this script's src)
@@ -35,6 +44,18 @@
     return;
   }
 
+  // An async tag makes double-embedding much easier to do by accident: a tag
+  // in the theme footer and another in a page builder block no longer race in a
+  // predictable order, and two copies would fight over the same localStorage
+  // conversation. First one mounted wins.
+  var alreadyMounted = false;
+  try {
+    // Attribute value comes from the host page's markup, so a stray quote would
+    // throw a selector SyntaxError rather than simply not matching.
+    alreadyMounted = !!document.querySelector('[data-aiba-host="' + String(botId).replace(/["\\]/g, '\\$&') + '"]');
+  } catch (e) {}
+  if (alreadyMounted) return;
+
   function deriveApiOrigin() {
     try {
       return new URL(script.src).origin;
@@ -58,12 +79,19 @@
   };
 
   // ---- Storage helpers ------------------------------------------------------
+  // Every access is wrapped: Safari private mode throws on setItem once the
+  // quota is zero, and a browser set to block site data throws on the property
+  // lookup itself, before any method is called. A widget that cannot remember a
+  // visitor still has to talk to them.
   var NS = 'aiba:' + cfg.botId + ':';
   function lsGet(key) {
     try { return window.localStorage.getItem(NS + key); } catch (e) { return null; }
   }
   function lsSet(key, val) {
     try { window.localStorage.setItem(NS + key, val); } catch (e) {}
+  }
+  function lsDel(key) {
+    try { window.localStorage.removeItem(NS + key); } catch (e) {}
   }
 
   function uuid() {
@@ -150,7 +178,34 @@
     csatRating: 0,
     // Proactive campaigns: behaviour-triggered nudges from the dashboard.
     proactiveRules: [],
-    proactiveTimer: null
+    proactiveTimer: null,
+    // Pre-chat form: ask for contact details before the first message. Off
+    // until the company turns it on, so nothing changes for existing sites.
+    prechat: {
+      enabled: false,
+      askName: true,
+      askEmail: true,
+      askPhone: false,
+      required: true,
+      allowSkip: true,
+      title: 'Before we start',
+      intro: 'Leave your details and we can pick this up again if we get cut off.',
+      buttonLabel: 'Start chat'
+    },
+    prechatDone: false,
+    // Opening hours. `isOpenNow === null` means the company never filled its
+    // hours in; that is "unknown", and unknown shows the ordinary chat.
+    hours: {
+      isOpenNow: null,
+      offlineEnabled: true,
+      offlineMessage: 'We are closed at the moment. Leave your details and we will reply as soon as we are back.',
+      offlineFormEnabled: true,
+      offlineButtonLabel: 'Leave a message'
+    },
+    offlineShown: false,
+    gateRow: null, // the pre-chat / leave-a-message card currently in the flow
+    composerLocked: false,
+    restored: false // transcript already fetched for this conversation
   };
 
   // ---- Styles ---------------------------------------------------------------
@@ -266,6 +321,13 @@
       '.' + P + 'inline-form{max-width:92%;width:100%;background:#fff;border:1px solid #e3e6ea;border-radius:14px;border-bottom-left-radius:4px;padding:12px;display:flex;flex-direction:column;gap:10px}',
       '.' + P + 'inline-form .' + P + 'form-title{font-size:14px}',
       '.' + P + 'chips{display:flex;flex-wrap:wrap;gap:6px;width:100%;max-width:92%}',
+      // Citations sit under an answer and must not compete with it: smaller
+      // than body text, muted, and wrapping rather than scrolling.
+      '.' + P + 'sources{display:flex;flex-direction:column;gap:4px;width:100%;max-width:92%;margin-top:-2px}',
+      '.' + P + 'sources-label{font-size:11px;font-weight:600;letter-spacing:.04em;text-transform:uppercase;opacity:.55}',
+      '.' + P + 'sources-list{display:flex;flex-wrap:wrap;gap:6px}',
+      '.' + P + 'source{font-size:12px;line-height:1.3;padding:3px 8px;border-radius:6px;background:rgba(0,0,0,.05);color:inherit;text-decoration:none;opacity:.8;max-width:100%;overflow-wrap:anywhere}',
+      'a.' + P + 'source:hover{opacity:1;text-decoration:underline}',
       '.' + P + 'chip{border:1px solid var(--aiba-color);color:var(--aiba-color);background:#fff;border-radius:999px;padding:7px 12px;font-size:13px;font-weight:500;cursor:pointer;line-height:1.25;max-width:100%;white-space:normal;text-align:left}',
       '.' + P + 'chip:hover{background:#f4f7ff}',
       '.' + P + 'cards{display:flex;flex-direction:column;gap:8px;width:100%;max-width:92%}',
@@ -299,6 +361,25 @@
       '.' + P + 'csat-submit{flex:1;border:none;background:var(--aiba-color);color:#fff;border-radius:8px;padding:10px 14px;font-size:14px;font-weight:700;cursor:pointer}',
       '.' + P + 'csat-submit:disabled{opacity:.5;cursor:not-allowed}',
       '.' + P + 'csat-skip{border:1px solid #d6d9de;background:#fff;color:#6b7280;border-radius:8px;padding:10px 14px;font-size:13px;cursor:pointer}',
+      // Pre-chat / out-of-hours card. Same shape as the CSAT card so the two
+      // moments the widget interrupts the conversation look like one thing.
+      '.' + P + 'gate{max-width:92%;width:100%;background:#fff;border:1px solid #e3e6ea;border-radius:14px;border-bottom-left-radius:4px;padding:13px;display:flex;flex-direction:column;gap:10px}',
+      '.' + P + 'gate-title{font-size:14px;font-weight:700;color:#172033}',
+      '.' + P + 'gate-intro{font-size:13px;line-height:1.45;color:#4b5563}',
+      '.' + P + 'gate-row{display:flex;gap:8px;flex-wrap:wrap}',
+      '.' + P + 'gate-submit{flex:1 1 auto;border:none;background:var(--aiba-color);color:#fff;border-radius:8px;padding:10px 14px;font-size:14px;font-weight:700;cursor:pointer}',
+      '.' + P + 'gate-submit:disabled{opacity:.5;cursor:not-allowed}',
+      '.' + P + 'gate-skip{border:1px solid #d6d9de;background:#fff;color:#6b7280;border-radius:8px;padding:10px 14px;font-size:13px;cursor:pointer}',
+      '.' + P + 'gate-error{font-size:12px;font-weight:600;color:#b42318}',
+      '.' + P + 'closed{max-width:92%;width:100%;background:#fff7ed;border:1px solid #fed7aa;border-radius:14px;border-bottom-left-radius:4px;padding:12px 13px;font-size:13px;line-height:1.45;color:#7c2d12}',
+      // Focus states. There were none: a keyboard visitor could tab through the
+      // whole chat with nothing on screen telling them where they were. Three
+      // rules because the three surfaces have different backgrounds — the white
+      // window, the brand-coloured header, and whatever the host page painted
+      // behind the launcher (hence the two-tone ring, visible on light or dark).
+      '.' + P + 'root :focus-visible{outline:3px solid var(--aiba-color);outline-offset:2px}',
+      '.' + P + 'header :focus-visible{outline:3px solid #fff;outline-offset:2px}',
+      '.' + P + 'launcher:focus-visible{outline:none;box-shadow:0 0 0 3px #fff,0 0 0 6px #0f172a,0 12px 34px rgba(17,24,39,.22)}',
       '@keyframes ' + P + 'blink{0%,80%,100%{opacity:.3}40%{opacity:1}}',
       '.' + P + 'window[dir="rtl"] .' + P + 'me .' + P + 'bubble{border-bottom-right-radius:14px;border-bottom-left-radius:4px}',
       '.' + P + 'window[dir="rtl"] .' + P + 'them .' + P + 'bubble{border-bottom-left-radius:14px;border-bottom-right-radius:4px}',
@@ -318,14 +399,29 @@
     var root = document.createElement('div');
     root.className = P + 'root';
 
+    var winId = P + 'win-' + Math.random().toString(36).slice(2, 9);
+    var titleId = winId + '-title';
+
     var launcher = document.createElement('button');
     launcher.type = 'button';
     launcher.className = P + 'launcher ' + P + 'pos-' + cfg.position;
     launcher.setAttribute('aria-label', cfg.title);
+    // The launcher is the button that opens a dialog, and it is the only thing
+    // announcing whether that dialog is currently open.
+    launcher.setAttribute('aria-haspopup', 'dialog');
+    launcher.setAttribute('aria-expanded', 'false');
+    launcher.setAttribute('aria-controls', winId);
     launcher.innerHTML = launcherMarkup();
 
     var win = document.createElement('div');
     win.className = P + 'window ' + P + 'pos-' + cfg.position;
+    win.id = winId;
+    win.setAttribute('role', 'dialog');
+    // Focus is trapped while the window is open (Escape is the way out), so the
+    // dialog has to be declared modal or a screen reader would keep offering
+    // page content the visitor can no longer reach.
+    win.setAttribute('aria-modal', 'true');
+    win.setAttribute('aria-labelledby', titleId);
     if (state.rtl) win.setAttribute('dir', 'rtl');
 
     var header = document.createElement('div');
@@ -334,18 +430,24 @@
     headLeft.className = P + 'head-left';
     var headAvatar = document.createElement('div');
     headAvatar.className = P + 'head-avatar';
+    headAvatar.setAttribute('aria-hidden', 'true');
     headAvatar.textContent = initials(cfg.title || state.agentLabel || 'AI');
     var h3 = document.createElement('h3');
+    h3.id = titleId;
     h3.textContent = cfg.title;
     var titleWrap = document.createElement('div');
     var status = document.createElement('div');
     status.className = P + 'status';
+    // The header line flips between "Team is replying" and "Replying soon" as
+    // the config loads and as opening hours change, so it has to announce.
+    status.setAttribute('role', 'status');
+    status.setAttribute('aria-live', 'polite');
     status.textContent = state.onlineLabel;
     var close = document.createElement('button');
     close.type = 'button';
     close.className = P + 'close';
-    close.setAttribute('aria-label', 'Close');
-    close.innerHTML = '&times;';
+    close.setAttribute('aria-label', 'Close chat');
+    close.innerHTML = '<span aria-hidden="true">&times;</span>';
     titleWrap.appendChild(h3);
     titleWrap.appendChild(status);
     headLeft.appendChild(headAvatar);
@@ -355,12 +457,21 @@
 
     var msgs = document.createElement('div');
     msgs.className = P + 'msgs';
+    // `log` is the role for a running transcript: additions are announced, and
+    // the reader is not dragged back to the top on every new message.
+    msgs.setAttribute('role', 'log');
+    msgs.setAttribute('aria-live', 'polite');
+    msgs.setAttribute('aria-relevant', 'additions');
+    msgs.setAttribute('aria-label', 'Conversation');
 
     var actions = document.createElement('div');
     actions.className = P + 'actions';
+    actions.setAttribute('role', 'group');
+    actions.setAttribute('aria-label', 'Suggested actions');
 
     var form = document.createElement('form');
     form.className = P + 'form';
+    form.setAttribute('aria-label', 'Enquiry form');
     var brand = document.createElement('div');
     brand.className = P + 'brand';
     brand.textContent = footerText();
@@ -368,6 +479,8 @@
 
     var footer = document.createElement('div');
     footer.className = P + 'footer';
+    footer.setAttribute('role', 'group');
+    footer.setAttribute('aria-label', 'Write a message');
     var input = document.createElement('input');
     input.className = P + 'input';
     input.type = 'text';
@@ -377,8 +490,8 @@
     var send = document.createElement('button');
     send.type = 'button';
     send.className = P + 'send';
-    send.setAttribute('aria-label', 'Send');
-    send.innerHTML = '<svg viewBox="0 0 24 24"><path d="M2 21l21-9L2 3v7l15 2-15 2z"/></svg>';
+    send.setAttribute('aria-label', 'Send message');
+    send.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M2 21l21-9L2 3v7l15 2-15 2z"/></svg>';
     footer.appendChild(input);
     footer.appendChild(send);
 
@@ -425,6 +538,64 @@
         onSend();
       }
     });
+
+    // Escape closes, and Tab is kept inside the open window. Both listeners sit
+    // on the window rather than on the document so a page that stops keyboard
+    // events at its own root cannot swallow them, and so nothing is intercepted
+    // while the chat is shut.
+    win.addEventListener('keydown', function (e) {
+      if (e.key === 'Escape' || e.key === 'Esc') {
+        e.preventDefault();
+        e.stopPropagation();
+        toggle();
+        return;
+      }
+      if (e.key === 'Tab') trapTab(e);
+    });
+  }
+
+  // Everything inside the window that a keyboard can land on, in DOM order and
+  // minus anything currently hidden (the takeover form hides the composer, the
+  // composer is disabled while a pre-chat form is up).
+  var FOCUSABLE =
+    'a[href],button:not([disabled]),input:not([disabled]),select:not([disabled]),textarea:not([disabled]),[tabindex]:not([tabindex="-1"])';
+  function focusables() {
+    if (!els.win) return [];
+    var all = els.win.querySelectorAll(FOCUSABLE);
+    var out = [];
+    for (var i = 0; i < all.length; i++) {
+      if (all[i].getClientRects().length) out.push(all[i]);
+    }
+    return out;
+  }
+
+  function trapTab(e) {
+    var list = focusables();
+    if (!list.length) return;
+    var first = list[0];
+    var last = list[list.length - 1];
+    // shadowRoot.activeElement, not document.activeElement: from the document's
+    // point of view focus is on the host element the whole time.
+    var current = shadow && shadow.activeElement;
+    if (e.shiftKey && (current === first || !current)) {
+      e.preventDefault();
+      last.focus();
+    } else if (!e.shiftKey && current === last) {
+      e.preventDefault();
+      first.focus();
+    }
+  }
+
+  // Put the caret where the visitor is meant to type. That is the pre-chat
+  // form's first field while the gate is up, and the message box otherwise.
+  function focusFirst() {
+    var target = null;
+    if (state.gateRow) target = state.gateRow.querySelector('input,textarea,select,button');
+    if (!target && els.input && !els.input.disabled) target = els.input;
+    if (!target) target = focusables()[0];
+    if (target) {
+      try { target.focus(); } catch (e) {}
+    }
   }
 
   // ---- Rendering ------------------------------------------------------------
@@ -438,6 +609,8 @@
     if (kind === 'them') {
       var avatar = document.createElement('div');
       avatar.className = P + 'avatar';
+      // Repeated on every reply, and says nothing the bubble does not.
+      avatar.setAttribute('aria-hidden', 'true');
       avatar.title = state.agentLabel || 'Assistant';
       if (state.avatarMode === 'image' && state.agentAvatarUrl) {
         var img = document.createElement('img');
@@ -574,6 +747,33 @@
           if (state.csatEnabled && conversationId && lsGet('csat:' + conversationId) === '1') {
             state.csatDone = true;
           }
+        }
+        if (data.prechat) {
+          state.prechat = {
+            enabled: Boolean(data.prechat.enabled),
+            askName: data.prechat.askName !== false,
+            askEmail: data.prechat.askEmail !== false,
+            askPhone: Boolean(data.prechat.askPhone),
+            required: data.prechat.required !== false,
+            allowSkip: data.prechat.allowSkip !== false,
+            title: data.prechat.title || state.prechat.title,
+            intro: data.prechat.intro || state.prechat.intro,
+            buttonLabel: data.prechat.buttonLabel || state.prechat.buttonLabel
+          };
+          if (conversationId && lsGet('prechat:' + conversationId) === '1') state.prechatDone = true;
+        }
+        if (data.hours) {
+          state.hours = {
+            // Left as null when the company has no opening hours on file. Only
+            // an explicit `false` is treated as closed anywhere below.
+            isOpenNow: data.hours.isOpenNow === true ? true : data.hours.isOpenNow === false ? false : null,
+            offlineEnabled: data.hours.offlineEnabled !== false,
+            offlineMessage: data.hours.offlineMessage || state.hours.offlineMessage,
+            offlineFormEnabled: data.hours.offlineFormEnabled !== false,
+            offlineButtonLabel: data.hours.offlineButtonLabel || state.hours.offlineButtonLabel
+          };
+        }
+        if (data.bot) {
           if (els.launcher) {
             // loadWidgetConfig runs after every answer; only touch the DOM when
             // the launcher actually changed so it never visibly flickers.
@@ -583,7 +783,7 @@
               state._launcherMarkup = markup;
             }
           }
-          if (els.status) els.status.textContent = state.onlineLabel;
+          if (els.status) els.status.textContent = statusText();
           if (els.headAvatar) renderHeaderAvatar();
           if (els.brand) {
             els.brand.textContent = footerText();
@@ -596,6 +796,10 @@
         scheduleProactiveCampaign();
         state.quickActions = data.quickActions || [];
         renderQuickActions();
+        // The window can be open before this response lands (auto-open, or a
+        // fast click), so the gate has to be checked again once the settings
+        // that decide whether there is one are finally known.
+        if (state.open) maybeRenderGate();
       })
       .catch(function (err) {
         state.configLoaded = true;
@@ -800,6 +1004,15 @@
     if (tw.bubble) tw.bubble.innerHTML = renderRichMarkdown(tw.full.slice(0, tw.shown));
   }
 
+  // The transcript is a live region, and a reply that rewrites itself twenty
+  // times a second would be read out twenty times. Marking the log busy while
+  // the typewriter runs holds the announcement back until the answer is whole.
+  function setLogBusy(on) {
+    if (!els.msgs) return;
+    if (on) els.msgs.setAttribute('aria-busy', 'true');
+    else els.msgs.removeAttribute('aria-busy');
+  }
+
   // Begin a fresh reveal for a new bot bubble. Finishes any previous one first
   // so nothing is ever left half-typed if a new answer starts.
   function twReset(bubble) {
@@ -807,6 +1020,7 @@
     tw.bubble = bubble;
     tw.full = '';
     tw.shown = 0;
+    setLogBusy(true);
   }
 
   // Feed newly-streamed text into the buffer and make sure the loop is running.
@@ -840,6 +1054,7 @@
     // Keep animating only while there is still buffered text to reveal. When it
     // catches up the loop stops; twPush() restarts it when more text arrives.
     if (tw.shown < tw.full.length) tw.frame = raf(twTick);
+    else setLogBusy(false);
   }
 
   // Reveal whatever is buffered immediately and stop animating. Used when the
@@ -852,6 +1067,7 @@
       scrollDown();
     }
     tw.bubble = null;
+    setLogBusy(false);
   }
 
   var typingRow = null;
@@ -859,8 +1075,11 @@
     if (typingRow) return;
     typingRow = document.createElement('div');
     typingRow.className = P + 'row ' + P + 'them';
+    // The label carries the meaning ("Searching…", "Team is typing"); the three
+    // bouncing dots are decoration and would otherwise be read as empty items.
+    typingRow.setAttribute('role', 'status');
     typingRow.innerHTML =
-      '<div><div class="' + P + 'typing-label">' + escapeHtml(state.typingLabel || 'Team is typing') + '</div><div class="' + P + 'typing"><span></span><span></span><span></span></div></div>';
+      '<div><div class="' + P + 'typing-label">' + escapeHtml(state.typingLabel || 'Team is typing') + '</div><div class="' + P + 'typing" aria-hidden="true"><span></span><span></span><span></span></div></div>';
     els.msgs.appendChild(typingRow);
     scrollDown();
   }
@@ -883,11 +1102,11 @@
   }
 
   function launcherSvg(kind) {
-    if (kind === 'headset') return '<svg viewBox="0 0 24 24"><path d="M12 3C7 3 3 7 3 12v4c0 1.7 1.3 3 3 3h2v-8H5.1C5.6 7.6 8.5 5 12 5s6.4 2.6 6.9 6H16v8h2.2c-.5 1.2-1.7 2-3.2 2h-2v2h2c3.3 0 6-2.7 6-6v-5c0-5-4-9-9-9z"/></svg>';
-    if (kind === 'spark') return '<svg viewBox="0 0 24 24"><path d="M12 2l2.4 6.4L21 11l-6.6 2.6L12 20l-2.4-6.4L3 11l6.6-2.6z"/></svg>';
-    if (kind === 'help') return '<svg viewBox="0 0 24 24"><path d="M11 18h2v-2h-2v2zm1-16C6.5 2 2 6 2 11h2c0-3.9 3.6-7 8-7s8 3.1 8 7-3.6 7-8 7v2c5.5 0 10-4 10-9S17.5 2 12 2zm0 4c-2.2 0-4 1.3-4 3h2c0-.6.9-1 2-1s2 .7 2 1.5c0 1.5-3 1.4-3 4.5h2c0-2 3-2.2 3-4.5C16 7.6 14.2 6 12 6z"/></svg>';
-    if (kind === 'question') return '<svg viewBox="0 0 24 24"><path d="M12 2a10 10 0 100 20 10 10 0 000-20zm0 17a1.25 1.25 0 110-2.5A1.25 1.25 0 0112 19zm1.2-5.1v.6h-2v-.8c0-1.2.7-1.9 1.5-2.5.8-.6 1.4-1.1 1.4-2 0-1-.8-1.7-2-1.7-1.1 0-2 .7-2.4 1.8l-1.8-.8C8.6 6.7 10.1 5.5 12 5.5c2.4 0 4.1 1.5 4.1 3.6 0 1.8-1.1 2.7-2 3.4-.6.5-.9.8-.9 1.4z"/></svg>';
-    return '<svg viewBox="0 0 24 24"><path d="M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2z"/></svg>';
+    if (kind === 'headset') return '<svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M12 3C7 3 3 7 3 12v4c0 1.7 1.3 3 3 3h2v-8H5.1C5.6 7.6 8.5 5 12 5s6.4 2.6 6.9 6H16v8h2.2c-.5 1.2-1.7 2-3.2 2h-2v2h2c3.3 0 6-2.7 6-6v-5c0-5-4-9-9-9z"/></svg>';
+    if (kind === 'spark') return '<svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M12 2l2.4 6.4L21 11l-6.6 2.6L12 20l-2.4-6.4L3 11l6.6-2.6z"/></svg>';
+    if (kind === 'help') return '<svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M11 18h2v-2h-2v2zm1-16C6.5 2 2 6 2 11h2c0-3.9 3.6-7 8-7s8 3.1 8 7-3.6 7-8 7v2c5.5 0 10-4 10-9S17.5 2 12 2zm0 4c-2.2 0-4 1.3-4 3h2c0-.6.9-1 2-1s2 .7 2 1.5c0 1.5-3 1.4-3 4.5h2c0-2 3-2.2 3-4.5C16 7.6 14.2 6 12 6z"/></svg>';
+    if (kind === 'question') return '<svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M12 2a10 10 0 100 20 10 10 0 000-20zm0 17a1.25 1.25 0 110-2.5A1.25 1.25 0 0112 19zm1.2-5.1v.6h-2v-.8c0-1.2.7-1.9 1.5-2.5.8-.6 1.4-1.1 1.4-2 0-1-.8-1.7-2-1.7-1.1 0-2 .7-2.4 1.8l-1.8-.8C8.6 6.7 10.1 5.5 12 5.5c2.4 0 4.1 1.5 4.1 3.6 0 1.8-1.1 2.7-2 3.4-.6.5-.9.8-.9 1.4z"/></svg>';
+    return '<svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2z"/></svg>';
   }
 
   function launcherMarkup() {
@@ -902,7 +1121,7 @@
     }
     var dot = state.launcherDotMode === 'hidden'
       ? ''
-      : '<span class="' + P + 'launcher-dot" style="background:' + escapeHtml(state.launcherDotColor || '#ef4444') + '"></span>';
+      : '<span class="' + P + 'launcher-dot" aria-hidden="true" style="background:' + escapeHtml(state.launcherDotColor || '#ef4444') + '"></span>';
     return icon + '<span class="' + P + 'launcher-label">' + escapeHtml(label) + '</span>' + dot;
   }
 
@@ -1219,24 +1438,42 @@
     state.hasOpened = true; // glow never returns once the chat has been opened
     els.root.classList.add(P + 'open');
     els.launcher.classList.remove(P + 'glow');
+    els.launcher.setAttribute('aria-expanded', 'true');
     els.win.classList.add(P + 'show');
     if (!state.configLoaded) loadWidgetConfig('initial');
-    if (!state.welcomed) {
-      addBubble('them', auto && state.proactiveMessage ? state.proactiveMessage : cfg.welcome);
-      state.welcomed = true;
-    }
-    // Only grab focus on a deliberate open — auto-open shouldn't pop the mobile
-    // keyboard or steal focus from the page.
-    if (!auto) els.input.focus();
-    connectRealtime();
+    // The greeting waits for the restore: a returning visitor's window has to
+    // fill with the conversation they were having, not with "Hi, how can I
+    // help?" printed over the top of it. With no stored conversation this calls
+    // back immediately and nothing is delayed.
+    restoreTranscript(function () {
+      if (!state.open) return;
+      if (!state.welcomed) {
+        addBubble('them', auto && state.proactiveMessage ? state.proactiveMessage : cfg.welcome);
+        state.welcomed = true;
+      }
+      maybeRenderGate();
+      connectRealtime();
+      // Only grab focus on a deliberate open — auto-open shouldn't pop the
+      // mobile keyboard or steal focus from the page.
+      if (!auto) focusFirst();
+    });
   }
 
   function closeWidget() {
     if (!state.open) return;
+    // Whether the keyboard is inside the window decides who gets focus back.
+    // An auto-open that never took focus must not snatch it away on close.
+    var hadFocus = !!(shadow && shadow.activeElement);
     state.open = false;
     els.root.classList.remove(P + 'open');
+    els.launcher.setAttribute('aria-expanded', 'false');
     els.win.classList.remove(P + 'show');
     disconnectRealtime();
+    // Focus was trapped inside a window that is now hidden, so hand it back to
+    // the control that opened it — the standard way out of a dialog.
+    if (hadFocus) {
+      try { els.launcher.focus(); } catch (e) {}
+    }
   }
 
   function scheduleAutoOpen() {
@@ -1481,15 +1718,373 @@
       .catch(function () { cb(false); });
   }
 
+  // ---- Opening hours, contact capture & transcript restore ------------------
+
+  // Only an explicit `false` counts as closed. `null` means the company never
+  // filled its opening hours in, and a blank form must never be the reason a
+  // visitor is told nobody is here.
+  function isClosedNow() {
+    return state.hours.isOpenNow === false;
+  }
+
+  function statusText() {
+    return isClosedNow()
+      ? state.offlineLabel || 'Replying soon'
+      : state.onlineLabel || 'Team is replying - live';
+  }
+
+  // While the pre-chat form is up the message box is disabled, so the form is
+  // the only way forward and there is no race between the two.
+  function setComposerLocked(on) {
+    state.composerLocked = on;
+    if (!els.input || !els.send) return;
+    els.input.disabled = on || state.sending;
+    els.send.disabled = on || state.sending;
+    var idle = state.rtl ? '...' : 'Type your message...';
+    var locked = state.rtl ? '...' : 'Fill in the short form above to start';
+    els.input.setAttribute('placeholder', on ? locked : idle);
+    // The quick action pills start conversations too, so a gate that only
+    // disabled the message box would be a gate with a door beside it.
+    if (els.actions) {
+      if (on) els.actions.style.display = 'none';
+      else renderQuickActions();
+    }
+  }
+
+  function maybeRenderGate() {
+    if (state.gateRow) return;
+    // Never before the transcript is back. The restore is what says whether
+    // this visitor already gave their details, and a gate rendered first would
+    // both sit above the history and lock the box for someone who has already
+    // answered it.
+    if (!state.restored) return;
+    if (state.prechat.enabled && !state.prechatDone && lsGet('prechatSkipped') !== '1') {
+      renderContactCard('prechat');
+      return;
+    }
+    setComposerLocked(false);
+    maybeShowOfflineNotice();
+  }
+
+  // Say the company is shut, then offer to take a message. Offering rather than
+  // opening the form outright: a visitor who only wanted the opening times has
+  // their answer and does not need a form in the way of it.
+  function maybeShowOfflineNotice() {
+    if (state.offlineShown || !isClosedNow() || !state.hours.offlineEnabled) return;
+    state.offlineShown = true;
+    if (els.status) els.status.textContent = statusText();
+
+    var box = document.createElement('div');
+    box.className = P + 'closed';
+    var text = document.createElement('div');
+    text.textContent = state.hours.offlineMessage;
+    box.appendChild(text);
+
+    if (state.hours.offlineFormEnabled) {
+      var row = document.createElement('div');
+      row.className = P + 'gate-row';
+      row.style.marginTop = '10px';
+      var open = document.createElement('button');
+      open.type = 'button';
+      open.className = P + 'gate-submit';
+      open.textContent = state.hours.offlineButtonLabel || 'Leave a message';
+      open.addEventListener('click', function () {
+        if (row.parentNode) row.parentNode.removeChild(row);
+        renderContactCard('offline');
+      });
+      row.appendChild(open);
+      box.appendChild(row);
+    }
+    appendRow('them', box);
+  }
+
+  function contactFields(mode) {
+    var fields = [];
+    if (mode === 'offline') {
+      // A message with no way to answer it is not a message. Name is optional,
+      // a reply address and the question itself are not.
+      fields.push({ name: 'name', label: 'Name', type: 'text', required: false });
+      fields.push({ name: 'email', label: 'Email', type: 'email', required: true });
+      fields.push({ name: 'message', label: 'Message', type: 'textarea', required: true });
+      return fields;
+    }
+    var must = state.prechat.required;
+    if (state.prechat.askName) fields.push({ name: 'name', label: 'Name', type: 'text', required: must });
+    if (state.prechat.askEmail) fields.push({ name: 'email', label: 'Email', type: 'email', required: must });
+    if (state.prechat.askPhone) fields.push({ name: 'phone', label: 'Phone', type: 'tel', required: must });
+    return fields;
+  }
+
+  var EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
+
+  // One card for both moments — the pre-chat gate and the out-of-hours message
+  // form. They ask for the same things and post to the same endpoint; the only
+  // real difference is whether the chat is blocked behind it.
+  function renderContactCard(mode) {
+    if (state.gateRow) return;
+    var isPrechat = mode === 'prechat';
+    var box = document.createElement('div');
+    box.className = P + 'gate';
+    var headingId = P + 'gate-' + Math.random().toString(36).slice(2, 9);
+    box.setAttribute('role', 'group');
+    box.setAttribute('aria-labelledby', headingId);
+
+    var title = document.createElement('div');
+    title.className = P + 'gate-title';
+    title.id = headingId;
+    title.textContent = isPrechat
+      ? state.prechat.title || 'Before we start'
+      : state.hours.offlineButtonLabel || 'Leave a message';
+    box.appendChild(title);
+
+    var intro = document.createElement('div');
+    intro.className = P + 'gate-intro';
+    intro.textContent = isPrechat
+      ? state.prechat.intro || ''
+      : 'Leave your details and your question, and we will reply when we are back.';
+    if (intro.textContent) box.appendChild(intro);
+
+    var inputs = [];
+    contactFields(mode).forEach(function (field) {
+      var wrap = createFieldRow(field);
+      box.appendChild(wrap);
+      var el = wrap.querySelector('input,textarea,select');
+      if (el) inputs.push({ name: field.name, el: el, required: field.required, label: field.label });
+    });
+
+    var err = document.createElement('div');
+    err.className = P + 'gate-error';
+    err.setAttribute('role', 'alert');
+    err.style.display = 'none';
+    box.appendChild(err);
+
+    var row = document.createElement('div');
+    row.className = P + 'gate-row';
+    var submit = document.createElement('button');
+    submit.type = 'button';
+    submit.className = P + 'gate-submit';
+    submit.textContent = isPrechat ? state.prechat.buttonLabel || 'Start chat' : 'Send message';
+    row.appendChild(submit);
+    var skip = null;
+    if (!isPrechat || state.prechat.allowSkip) {
+      skip = document.createElement('button');
+      skip.type = 'button';
+      skip.className = P + 'gate-skip';
+      skip.textContent = isPrechat ? 'Skip' : 'Cancel';
+      row.appendChild(skip);
+    }
+    box.appendChild(row);
+
+    state.gateRow = appendRow('them', box);
+    if (isPrechat) setComposerLocked(true);
+    scrollDown(true);
+
+    function showError(message) {
+      err.textContent = message;
+      err.style.display = 'block';
+    }
+
+    function dismiss() {
+      if (state.gateRow && state.gateRow.parentNode) state.gateRow.parentNode.removeChild(state.gateRow);
+      state.gateRow = null;
+      setComposerLocked(false);
+    }
+
+    function markPrechatSettled() {
+      state.prechatDone = true;
+      if (conversationId) lsSet('prechat:' + conversationId, '1');
+    }
+
+    function attempt() {
+      var values = {};
+      var missing = null;
+      for (var i = 0; i < inputs.length; i++) {
+        var value = String(inputs[i].el.value || '').trim();
+        if (!value) {
+          if (inputs[i].required && !missing) missing = inputs[i];
+          continue;
+        }
+        values[inputs[i].name] = value;
+      }
+      if (missing) {
+        showError('Please fill in ' + missing.label.toLowerCase() + '.');
+        try { missing.el.focus(); } catch (e) {}
+        return;
+      }
+      if (values.email && !EMAIL_RE.test(values.email)) {
+        showError('That email address does not look right.');
+        return;
+      }
+      err.style.display = 'none';
+      submit.disabled = true;
+      submitContact(mode, values, function (ok, message) {
+        submit.disabled = false;
+        if (!ok) {
+          showError(message || 'Sorry, we could not send that. Please try again.');
+          return;
+        }
+        dismiss();
+        if (isPrechat) {
+          markPrechatSettled();
+          maybeShowOfflineNotice();
+          if (els.input) els.input.focus();
+        } else {
+          addBubble('sys', message || 'Thanks. We have your message.');
+        }
+      });
+    }
+
+    if (skip) {
+      skip.addEventListener('click', function () {
+        dismiss();
+        if (isPrechat) {
+          markPrechatSettled();
+          // Remembered against the visitor, not the conversation: someone who
+          // has already declined once should not be asked again on their next
+          // question, and a skipped gate often has no conversation id yet.
+          lsSet('prechatSkipped', '1');
+          maybeShowOfflineNotice();
+        }
+        focusFirst();
+      });
+    }
+    submit.addEventListener('click', attempt);
+    inputs.forEach(function (field) {
+      field.el.addEventListener('keydown', function (e) {
+        if (e.key === 'Enter' && field.el.tagName !== 'TEXTAREA') {
+          e.preventDefault();
+          attempt();
+        }
+      });
+    });
+  }
+
+  function submitContact(mode, values, cb) {
+    fetch(cfg.api + '/api/widget/prechat', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        publicBotId: cfg.botId,
+        visitorId: visitorId,
+        conversationId: conversationId || undefined,
+        mode: mode,
+        name: values.name,
+        email: values.email,
+        phone: values.phone,
+        message: values.message,
+        pageUrl: window.location.href
+      })
+    })
+      .then(function (res) {
+        return res
+          .json()
+          .catch(function () { return {}; })
+          .then(function (data) { return { ok: res.ok, data: data || {} }; });
+      })
+      .then(function (result) {
+        if (result.ok && result.data.conversationId) {
+          conversationId = result.data.conversationId;
+          lsSet('conversationId', conversationId);
+          connectRealtime();
+        }
+        if (!result.ok) {
+          reportClientError('Widget contact capture rejected', {
+            error: result.data.error || 'unknown',
+            mode: mode
+          });
+        }
+        cb(result.ok, result.data.message || null);
+      })
+      .catch(function (err) {
+        reportClientError('Widget contact capture failed', {
+          error: err && err.message ? err.message : String(err),
+          mode: mode
+        });
+        cb(false, null);
+      });
+  }
+
+  // Put the conversation back after a refresh.
+  //
+  // Without this a reload showed an empty window with a live conversation id
+  // behind it — one customer filled the same enquiry form twice and created two
+  // conversations, because as far as they could see nothing had happened.
+  function restoreTranscript(cb) {
+    function finish() {
+      state.restored = true;
+      if (cb) cb();
+    }
+    if (state.restored || !conversationId) {
+      finish();
+      return;
+    }
+    var url =
+      cfg.api +
+      '/api/widget/transcript?publicBotId=' +
+      encodeURIComponent(cfg.botId) +
+      '&conversationId=' +
+      encodeURIComponent(conversationId) +
+      '&visitorId=' +
+      encodeURIComponent(visitorId);
+    fetch(url)
+      .then(function (res) {
+        if (res.status === 403 || res.status === 404) {
+          // The stored id no longer resolves — retention deleted the chat, or
+          // this browser profile belongs to someone else now. Forget it and
+          // start a fresh conversation rather than sitting on a dead one.
+          conversationId = null;
+          lsDel('conversationId');
+          lsDel('after');
+          return null;
+        }
+        if (!res.ok) throw new Error('transcript_' + res.status);
+        return res.json();
+      })
+      .then(function (data) {
+        if (!data) return;
+        if (data.contactCaptured) state.prechatDone = true;
+        var messages = data.messages || [];
+        for (var i = 0; i < messages.length; i++) {
+          var m = messages[i];
+          if (!m || state.seenIds[m.id]) continue;
+          state.seenIds[m.id] = true;
+          if (m.senderType === 'visitor') addBubble('me', m.text);
+          else if (m.senderType === 'system') addBubble('sys', m.text);
+          else {
+            addBubble('them', m.text);
+            state.botAnswered = true;
+          }
+        }
+        if (messages.length) {
+          // A conversation already under way must not be greeted again — the
+          // welcome would land underneath the answer it already gave.
+          state.welcomed = true;
+          scrollDown(true);
+        }
+        if (data.lastMessageAt) {
+          state.lastTimestamp = data.lastMessageAt;
+          lsSet('after', data.lastMessageAt);
+        }
+      })
+      .catch(function (err) {
+        reportClientError('Widget transcript restore failed', {
+          error: err && err.message ? err.message : String(err)
+        });
+      })
+      .then(finish);
+  }
+
   // ---- Send + SSE stream ----------------------------------------------------
   function setSending(on) {
     state.sending = on;
-    els.send.disabled = on;
-    els.input.disabled = on;
+    // The pre-chat gate outranks the send state: finishing a request must not
+    // re-enable a message box the form is still holding shut.
+    els.send.disabled = on || state.composerLocked;
+    els.input.disabled = on || state.composerLocked;
   }
 
   function onSend() {
-    if (state.sending) return;
+    if (state.sending || state.composerLocked) return;
     var text = (els.input.value || '').trim();
     if (!text) return;
     els.input.value = '';
@@ -1621,6 +2216,14 @@
         }
         twPush(evt.value != null ? evt.value : '');
         break;
+      case 'sources':
+        // Where the answer came from. Sent after the last token and before
+        // 'done', and only when the assistant actually answered from retrieved
+        // material — a "sorry, I don't know" never carries sources, because
+        // listing them under a non-answer implies they contained something.
+        twFlush();
+        try { renderSources(evt.sources); } catch (e) {}
+        break;
       case 'action':
         // The bot asked the widget to render a UI element (form / quick replies
         // / product cards / fallback CTA) inline in the conversation.
@@ -1740,6 +2343,47 @@
     });
     var first = form.querySelector('input,textarea,select');
     if (first) { try { first.focus(); } catch (e) {} }
+  }
+
+  /**
+   * The sources under an answer.
+   *
+   * Deliberately quiet: small, muted, and collapsed to the titles. It answers
+   * "where did that come from" for the one visitor in twenty who asks, without
+   * turning every reply into a bibliography. A source with a URL is a link; one
+   * from an uploaded file is plain text, because there is nothing to open.
+   */
+  function renderSources(sources) {
+    if (!sources || !sources.length) return;
+    var wrap = document.createElement('div');
+    wrap.className = P + 'sources';
+
+    var label = document.createElement('div');
+    label.className = P + 'sources-label';
+    label.textContent = state.rtl ? 'المصادر' : 'Based on';
+    wrap.appendChild(label);
+
+    var list = document.createElement('div');
+    list.className = P + 'sources-list';
+    sources.forEach(function (src) {
+      if (!src || !src.title) return;
+      var item;
+      if (src.url) {
+        item = document.createElement('a');
+        item.href = src.url;
+        item.target = '_blank';
+        item.rel = 'noopener noreferrer';
+      } else {
+        item = document.createElement('span');
+      }
+      item.className = P + 'source';
+      item.textContent = src.title;
+      if (src.snippet) item.title = src.snippet;
+      list.appendChild(item);
+    });
+    if (!list.childNodes.length) return;
+    wrap.appendChild(list);
+    appendRow('them', wrap);
   }
 
   function renderQuickReplyChips(payload) {

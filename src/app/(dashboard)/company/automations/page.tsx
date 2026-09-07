@@ -345,9 +345,34 @@ export default async function AutomationsPage({
                         {labelFor(PROVIDER_LABELS, hook.provider, hook.name)}
                       </p>
                       {hook.url ? (
-                        <code className="mt-1 block break-all rounded bg-muted px-1.5 py-1 text-xs">
-                          {hook.url}
-                        </code>
+                        <>
+                          <p className="mt-2 text-xs font-medium text-muted-foreground">
+                            Address
+                          </p>
+                          <code className="mt-1 block break-all rounded bg-muted px-1.5 py-1 text-xs">
+                            {hook.url}
+                          </code>
+                          {/* Both halves matter. The address says which account a
+                              webhook belongs to; the secret is what proves the
+                              message really came from that shop. A shop set up
+                              with only the address is unverified, and in
+                              production the webhook is refused. */}
+                          {hook.secret ? (
+                            <>
+                              <p className="mt-2 text-xs font-medium text-muted-foreground">
+                                Secret — paste this into the same webhook screen in your shop
+                              </p>
+                              <code className="mt-1 block break-all rounded bg-muted px-1.5 py-1 text-xs">
+                                {hook.secret}
+                              </code>
+                            </>
+                          ) : (
+                            <p className="mt-2 text-xs text-muted-foreground">
+                              This address has no secret yet. Press the button to reissue both —
+                              until then your shop&rsquo;s messages cannot be verified.
+                            </p>
+                          )}
+                        </>
                       ) : (
                         <p className="text-sm text-muted-foreground">
                           No address yet — press the button to create one.

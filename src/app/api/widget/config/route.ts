@@ -1,8 +1,10 @@
 import { z } from 'zod';
 import { loadBotByPublicId, isOriginAllowed } from '@/lib/ai/engine';
+import { isCompanyOpenNow } from '@/lib/business-hours';
 import { createSupabaseServiceClient } from '@/lib/db/server';
 import { loadPublicQuickActions } from '@/lib/quick-actions';
 import { getActiveWebProactiveRules } from '@/modules/company/campaigns-data';
+import { loadWidgetPrechatSettings } from '../prechat-settings';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -64,7 +66,7 @@ export async function GET(req: Request) {
     .eq('company_id', bot.companyId)
     .maybeSingle();
   const appearance = (data?.appearance_json as Record<string, unknown> | null) ?? {};
-  const [quickActions, proactiveRules] = await Promise.all([
+  const [quickActions, proactiveRules, prechat, isOpenNow] = await Promise.all([
     loadPublicQuickActions({
       companyId: bot.companyId,
       botId: bot.id,
@@ -79,6 +81,11 @@ export async function GET(req: Request) {
       },
     }),
     getActiveWebProactiveRules(bot.companyId, bot.id),
+    loadWidgetPrechatSettings(bot.companyId),
+    // `null` means the company never filled its opening hours in. The widget
+    // must read that as "open" and show the ordinary chat — telling a visitor
+    // the shop is shut because a form was left blank is the worse failure.
+    isCompanyOpenNow(bot.companyId),
   ]);
 
   return json(
@@ -141,6 +148,27 @@ export async function GET(req: Request) {
       },
       quickActions,
       proactiveRules,
+      // Flattened for the widget: it only ever deals with one pre-chat form, so
+      // carrying the `prechat` prefix through to the browser would just make
+      // every read there say the word twice.
+      prechat: {
+        enabled: prechat.prechatEnabled,
+        askName: prechat.prechatAskName,
+        askEmail: prechat.prechatAskEmail,
+        askPhone: prechat.prechatAskPhone,
+        required: prechat.prechatRequired,
+        allowSkip: prechat.prechatAllowSkip,
+        title: prechat.prechatTitle,
+        intro: prechat.prechatIntro,
+        buttonLabel: prechat.prechatButtonLabel,
+      },
+      hours: {
+        isOpenNow,
+        offlineEnabled: prechat.offlineEnabled,
+        offlineMessage: prechat.offlineMessage,
+        offlineFormEnabled: prechat.offlineFormEnabled,
+        offlineButtonLabel: prechat.offlineButtonLabel,
+      },
     },
     200,
     headers,

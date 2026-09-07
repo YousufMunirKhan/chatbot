@@ -1,4 +1,5 @@
 import { createSupabaseServiceClient } from '@/lib/db/server';
+import { decryptSecret } from '@/lib/crypto';
 import { env } from '@/lib/env';
 import type { AutomationEvent } from '@/lib/commerce/automation-templates';
 import { getCompanyId } from './data';
@@ -41,6 +42,12 @@ export interface StoreWebhookRow {
   status: string;
   token: string | null;
   url: string | null;
+  /**
+   * The signing secret for THIS shop, in plain text, because the person reading
+   * the page has to paste it into their own store's webhook settings. It is
+   * theirs, it is stored encrypted, and it is shown only to a company admin.
+   */
+  secret: string | null;
 }
 
 export async function listAutomationRules(): Promise<AutomationRuleRow[]> {
@@ -130,7 +137,7 @@ export async function listStoreWebhooks(): Promise<StoreWebhookRow[]> {
   const sb = createSupabaseServiceClient();
   const { data } = await sb
     .from('integration_accounts')
-    .select('id,provider,name,status,webhook_token')
+    .select('id,provider,name,status,webhook_token,webhook_secret_encrypted')
     .eq('company_id', companyId)
     .in('provider', ['shopify', 'woocommerce'])
     .order('created_at', { ascending: false })
@@ -139,6 +146,17 @@ export async function listStoreWebhooks(): Promise<StoreWebhookRow[]> {
   const base = env.NEXT_PUBLIC_APP_URL.replace(/\/+$/, '');
   return ((data ?? []) as Array<Record<string, unknown>>).map((x) => {
     const token = (x.webhook_token as string) ?? null;
+    let secret: string | null = null;
+    const enc = x.webhook_secret_encrypted as string | null;
+    if (enc) {
+      // An account whose secret will not decrypt still has a usable URL, so the
+      // row is worth showing — it just cannot display the secret.
+      try {
+        secret = decryptSecret(enc) || null;
+      } catch {
+        secret = null;
+      }
+    }
     return {
       id: x.id as string,
       provider: x.provider as string,
@@ -146,6 +164,7 @@ export async function listStoreWebhooks(): Promise<StoreWebhookRow[]> {
       status: x.status as string,
       token,
       url: token ? `${base}/api/webhooks/store/${x.provider as string}?t=${token}` : null,
+      secret,
     };
   });
 }

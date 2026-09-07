@@ -3,6 +3,8 @@ import { decryptSecret } from '@/lib/crypto';
 import { getChannelAdapter, isChannelKey } from '@/lib/channels/registry';
 import { textBlocks, type ChannelSendContext } from '@/lib/channels/types';
 import { logger } from '@/lib/logger';
+import { getWhatsAppServiceWindow } from '@/lib/channels/whatsapp';
+import { serviceWindowRefusalReason } from '@/lib/channels/whatsapp-window';
 
 /**
  * Outbound delivery for `POST /api/v1/messages`.
@@ -82,6 +84,15 @@ export async function deliverApiMessage(params: {
     secret,
     settings: row.settings_json ?? {},
   };
+
+  // A message pushed through the public API is initiated by the customer's own
+  // system, so nothing guarantees the recipient wrote to them recently.
+  if (adapter.key === 'whatsapp') {
+    const refusal = serviceWindowRefusalReason(
+      await getWhatsAppServiceWindow(params.companyId, params.to),
+    );
+    if (refusal) return { delivered: false, transport: 'channel', reason: refusal };
+  }
 
   try {
     const sent = await adapter.send(ctx, params.to, textBlocks(params.text));

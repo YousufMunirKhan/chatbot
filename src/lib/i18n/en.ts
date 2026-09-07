@@ -302,7 +302,7 @@ export const en = {
   'settings.section.security.label': 'Sign-in & security',
   'settings.section.security.hint': 'Two-step sign-in, and recent activity on your account.',
   'settings.section.channels.label': 'Channels',
-  'settings.section.channels.hint': 'WhatsApp, Instagram, email, and SMS.',
+  'settings.section.channels.hint': 'WhatsApp, Instagram, Telegram, and email.',
   'settings.section.broadcasts.label': 'Broadcasts',
   'settings.section.broadcasts.hint': 'Send a message to a group of customers.',
   'settings.section.campaigns.label': 'Campaigns',

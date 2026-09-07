@@ -13,6 +13,26 @@ export interface RetrievedChunk {
   language: string | null;
 }
 
+/**
+ * One retrieved excerpt, named well enough to show a reader.
+ *
+ * `index` is the same number `formatContext` stamped on the excerpt in the
+ * prompt, so `[2]` in an answer and citation 2 in this list are the same piece
+ * of text. Every field here is copied off a row we actually retrieved — a
+ * citation is never assembled from anything the model said, because a model
+ * that invents a source is exactly the failure citations exist to rule out.
+ */
+export interface Citation {
+  index: number;
+  chunkId: string;
+  documentId: string;
+  title: string;
+  sourceType: string;
+  url: string | null;
+  snippet: string;
+  score: number;
+}
+
 // Small additive boost for chunks whose language matches the visitor's, so a
 // multilingual KB prefers same-language content without hard-excluding fallback.
 const LANGUAGE_MATCH_BOOST = 0.06;
@@ -193,4 +213,107 @@ export async function retrieveContext(
 
 function formatContext(chunks: RetrievedChunk[]): string {
   return chunks.map((c, i) => `[${i + 1}] ${c.text}`).join('\n\n');
+}
+
+// Long enough for a reader to recognise the passage the answer came from,
+// short enough that the citation list stays a footnote rather than a document.
+const SNIPPET_LENGTH = 240;
+
+function snippetOf(text: string): string {
+  const flat = text.replace(/\s+/g, ' ').trim();
+  return flat.length <= SNIPPET_LENGTH ? flat : `${flat.slice(0, SNIPPET_LENGTH).trimEnd()}…`;
+}
+
+/**
+ * Name the chunks that were retrieved, so the answer can show its working.
+ *
+ * Deliberately a separate call rather than part of `retrieveContext`: the
+ * numbering costs nothing but the title/URL lookup is two more round trips, and
+ * the chat route only needs them once the answer has finished streaming. Kick
+ * this off next to retrieval and await it late.
+ *
+ * The `documents` read is filtered by `company_id` even though the chunks came
+ * from a company-scoped RPC. `document_sources` carries no tenant column of its
+ * own, so it is reachable only through the ids that survived that filter — a
+ * chunk whose document belongs to another company yields no citation at all
+ * rather than a titled one.
+ */
+export async function resolveCitations(
+  companyId: string,
+  chunks: RetrievedChunk[],
+): Promise<Citation[]> {
+  if (chunks.length === 0) return [];
+  const documentIds = [...new Set(chunks.map((c) => c.documentId))];
+  const sb = createSupabaseServiceClient();
+
+  const { data: documentRows, error: documentError } = await sb
+    .from('documents')
+    .select('id,title,source_type')
+    .eq('company_id', companyId)
+    .in('id', documentIds);
+  if (documentError) {
+    logger.warn('Citation lookup failed', { companyId, error: documentError.message });
+    return [];
+  }
+
+  const documents = new Map<string, { title: string; sourceType: string }>();
+  for (const row of (documentRows ?? []) as Array<Record<string, unknown>>) {
+    documents.set(row.id as string, {
+      title: ((row.title as string) || 'Untitled').trim(),
+      sourceType: (row.source_type as string) ?? 'text',
+    });
+  }
+  if (documents.size === 0) return [];
+
+  // Only documents that passed the tenant filter above are looked up here.
+  const urls = new Map<string, string>();
+  const { data: sourceRows } = await sb
+    .from('document_sources')
+    .select('document_id,url')
+    .in('document_id', [...documents.keys()]);
+  for (const row of (sourceRows ?? []) as Array<Record<string, unknown>>) {
+    const url = (row.url as string | null)?.trim();
+    const documentId = row.document_id as string;
+    if (url && !urls.has(documentId)) urls.set(documentId, url);
+  }
+
+  const citations: Citation[] = [];
+  chunks.forEach((chunk, i) => {
+    const document = documents.get(chunk.documentId);
+    if (!document) return;
+    citations.push({
+      index: i + 1,
+      chunkId: chunk.id,
+      documentId: chunk.documentId,
+      title: document.title,
+      sourceType: document.sourceType,
+      url: urls.get(chunk.documentId) ?? null,
+      snippet: snippetOf(chunk.text),
+      score: Math.round(chunk.score * 1000) / 1000,
+    });
+  });
+  return citations;
+}
+
+/**
+ * The citation fields safe to hand a visitor: no chunk id, no retrieval score.
+ * Both are internal plumbing, and a relevance number next to a source reads as
+ * a confidence claim about the answer, which it is not.
+ */
+export function publicCitation(citation: Citation): {
+  index: number;
+  documentId: string;
+  title: string;
+  sourceType: string;
+  url: string | null;
+  snippet: string;
+} {
+  return {
+    index: citation.index,
+    documentId: citation.documentId,
+    title: citation.title,
+    sourceType: citation.sourceType,
+    url: citation.url,
+    snippet: citation.snippet,
+  };
 }

@@ -4,6 +4,7 @@ import { redirect } from 'next/navigation';
 import { revalidatePath } from 'next/cache';
 import { z } from 'zod';
 import { requireRole } from '@/lib/auth';
+import { revokeSessionsIfAccessEnded } from '@/lib/auth/revoke';
 import { ASSISTANT_AUDIENCES, ROLES } from '@/lib/constants';
 import { createSupabaseServiceClient } from '@/lib/db/server';
 import { BOT_CAPABILITIES, BOT_TYPES } from '@/lib/constants';
@@ -424,27 +425,99 @@ export async function inviteAgentAction(_prev: ActionState, formData: FormData):
 
 const removeSchema = z.object({ membershipId: z.string().uuid() });
 
-export async function removeAgentAction(formData: FormData): Promise<void> {
+/**
+ * Take a teammate off the team and end the session they are signed in on.
+ *
+ * The membership row going away is the half that has to happen: it is what
+ * every permission check in the app reads. Signing them out is the half that
+ * makes it immediate, and it depends on the auth service answering, so it runs
+ * after the delete and its failure is reported rather than allowed to roll back
+ * a removal the admin has already been told is done. The Team page promises the
+ * person "is signed out immediately"; before this it was only true once their
+ * token expired on its own.
+ */
+async function removeAgent(membershipId: string): Promise<ActionState> {
   const admin = await requireRole([ROLES.COMPANY_ADMIN]);
   const companyId = await getCompanyId();
-  const v = removeSchema.parse(Object.fromEntries(formData));
   const sb = createSupabaseServiceClient();
 
-  // Only allow removing an AGENT membership in THIS company (never an admin/self).
+  // Read before deleting: the membership row holds the only pointer to the
+  // login whose sessions have to go. The filters are the same three as the
+  // delete below — an AGENT membership in THIS company — so an admin, another
+  // tenant's member, and the caller themselves are all out of reach. Self
+  // removal cannot happen through here at all: one person holds at most one row
+  // per company, and whoever passed `requireRole` above holds the admin one.
+  const { data: membership } = await sb
+    .from('company_users')
+    .select('user_id')
+    .eq('id', membershipId)
+    .eq('company_id', companyId)
+    .eq('role', ROLES.AGENT)
+    .maybeSingle();
+
   const { error } = await sb
     .from('company_users')
     .delete()
-    .eq('id', v.membershipId)
+    .eq('id', membershipId)
     .eq('company_id', companyId)
     .eq('role', ROLES.AGENT);
-  if (!error) {
-    await sb.from('audit_logs').insert({
-      company_id: companyId,
-      actor_user_id: admin.userId,
-      action: 'agent.removed',
-      target_type: 'membership',
-      target_id: v.membershipId,
-    });
+  if (error) {
+    revalidatePath('/company/agents');
+    return { error: `Could not remove them from the team: ${error.message}` };
   }
+
+  const userId = (membership as { user_id?: string } | null)?.user_id ?? null;
+  if (!userId) {
+    // Nothing matched those filters, so nothing was deleted and there is no
+    // session to end — the row was already gone, or it was never this
+    // company's to remove. Either way the team list is now what was asked for.
+    revalidatePath('/company/agents');
+    return { ok: true };
+  }
+
+  const revocation = await revokeSessionsIfAccessEnded(sb, userId, companyId, ROLES.AGENT);
+
+  await sb.from('audit_logs').insert({
+    company_id: companyId,
+    actor_user_id: admin.userId,
+    action: 'agent.removed',
+    target_type: 'membership',
+    target_id: membershipId,
+    // The outcome is on the audit entry because "we removed them but could not
+    // sign them out" is the fact a security review needs months later, long
+    // after the message below has been dismissed.
+    metadata_json: { userId, revocation },
+  });
+
   revalidatePath('/company/agents');
+
+  if (revocation.status === 'failed') {
+    return {
+      error:
+        'Removed from the team, but they could not be signed out of a browser they are already using — ' +
+        `that session lasts until it expires. Reason: ${revocation.reason}`,
+    };
+  }
+  return { ok: true };
+}
+
+/**
+ * The Team page submits this straight from `<form action={...}>`, which has
+ * nowhere to put a returned message. A revocation failure still reaches an
+ * operator through the server log and the audit entry; the message needs the
+ * `useFormState` variant below.
+ */
+export async function removeAgentAction(formData: FormData): Promise<void> {
+  const v = removeSchema.parse(Object.fromEntries(formData));
+  await removeAgent(v.membershipId);
+}
+
+/** The same removal in the shape a `useFormState` form can show the result of. */
+export async function removeAgentWithFeedbackAction(
+  _prev: ActionState,
+  formData: FormData,
+): Promise<ActionState> {
+  const parsed = removeSchema.safeParse(Object.fromEntries(formData));
+  if (!parsed.success) return { error: parsed.error.issues[0]?.message ?? 'Invalid input' };
+  return removeAgent(parsed.data.membershipId);
 }

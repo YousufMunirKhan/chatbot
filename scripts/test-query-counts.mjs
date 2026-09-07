@@ -174,6 +174,18 @@ const stubs = {
   '@/lib/company/company-core': `export * from './src__lib__company__company-core.mjs';`,
   '@/lib/constants': `
     export const ROLES = { SUPER_ADMIN: 'super_admin', COMPANY_ADMIN: 'company_admin', AGENT: 'agent' };
+    // setup-data.ts reads its step titles from here, so the stub has to carry
+    // the same keys — the real list lives in src/lib/constants.ts.
+    export const SETUP_STEPS = [
+      { key: 'purpose', title: '', description: '' },
+      { key: 'capabilities', title: '', description: '' },
+      { key: 'required-data', title: '', description: '' },
+      { key: 'test', title: '', description: '' },
+      { key: 'install', title: '', description: '' },
+    ];
+    export const SETUP_STEP_COPY = Object.fromEntries(
+      SETUP_STEPS.map((s) => [s.key, { title: s.title, description: s.description }]),
+    );
   `,
   '@/lib/impersonation': `export const IMPERSONATION_COOKIE = 'aiba_impersonation_session';`,
   '@/lib/errors': `

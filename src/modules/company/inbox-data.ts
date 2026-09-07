@@ -31,6 +31,8 @@ export interface ConversationRow {
   priority: string;
   tags: string[];
   state: Record<string, unknown>;
+  /** Set while the conversation is put aside; in the past means it is back. */
+  snoozedUntil: string | null;
   /** First ~120 characters of the most recent message. */
   lastMessagePreview: string | null;
   /** 'visitor' | 'ai' | 'agent' | 'system' — who wrote the preview. */
@@ -75,6 +77,11 @@ export interface ConversationDetail {
   aiEnabled: boolean;
   assignedAgentId: string | null;
   assignedAgentName: string | null;
+  /** When the current assignment was made, and by whom — never the assignee. */
+  assignedAt: string | null;
+  assignedByName: string | null;
+  snoozedUntil: string | null;
+  snoozedByName: string | null;
   priority: string;
   tags: string[];
   state: Record<string, unknown>;
@@ -82,6 +89,8 @@ export interface ConversationDetail {
   csatComment: string | null;
   leadName: string | null;
   leadContact: string | null;
+  /** The company's members, for the assign control. */
+  assignableMembers: InboxMemberOption[];
   messages: InboxMessage[];
   /** True when older messages exist above the loaded window. */
   hasEarlierMessages: boolean;
@@ -92,7 +101,7 @@ export interface ConversationDetail {
 }
 
 const CONVERSATION_COLUMNS =
-  'id,status,channel,language,visitor_id,unread_count,started_at,last_message_at,closed_at,ai_enabled,assigned_agent_id,first_agent_reply_at,csat_rating,priority,tags,state_json';
+  'id,status,channel,language,visitor_id,unread_count,started_at,last_message_at,closed_at,ai_enabled,assigned_agent_id,first_agent_reply_at,csat_rating,priority,tags,state_json,snoozed_until';
 
 export const INBOX_PAGE_SIZE = 25;
 export const DEFAULT_MESSAGE_WINDOW = 50;
@@ -102,7 +111,7 @@ export const DEFAULT_MESSAGE_WINDOW = 50;
  * shared `status` param, and the shared Pagination control drops `status=all` as
  * a no-op — which would silently bounce the agent back to the default queue.
  */
-export type InboxQueue = 'waiting' | 'mine' | 'everything' | 'urgent' | 'poor' | 'closed';
+export type InboxQueue = 'waiting' | 'mine' | 'everything' | 'urgent' | 'poor' | 'closed' | 'snoozed';
 
 export const INBOX_QUEUES: ReadonlyArray<{ key: InboxQueue; label: string }> = [
   { key: 'waiting', label: 'Waiting for you' },
@@ -110,8 +119,17 @@ export const INBOX_QUEUES: ReadonlyArray<{ key: InboxQueue; label: string }> = [
   { key: 'everything', label: 'Everything' },
   { key: 'urgent', label: 'Urgent' },
   { key: 'poor', label: 'Rated poorly' },
+  { key: 'snoozed', label: 'Snoozed' },
   { key: 'closed', label: 'Closed' },
 ];
+
+/**
+ * The queues a snoozed conversation drops out of. Not `everything` — that queue
+ * means what it says, and an agent looking for a chat they put aside should
+ * find it there rather than conclude it was deleted. Not `poor` or `closed`
+ * either: those are records of what happened, not work waiting to be done.
+ */
+const OPEN_QUEUES: ReadonlySet<InboxQueue> = new Set<InboxQueue>(['waiting', 'mine', 'urgent']);
 
 export type InboxQueueCounts = Record<InboxQueue, number>;
 
@@ -125,6 +143,167 @@ export interface ConversationPage {
 
 export function normalizeQueue(value: string | undefined): InboxQueue {
   return INBOX_QUEUES.some((q) => q.key === value) ? (value as InboxQueue) : 'waiting';
+}
+
+/**
+ * The filters that narrow a queue, rather than replacing it.
+ *
+ * A queue answers "what kind of work is this" and a filter answers "whose, from
+ * where, about what, and when" — so they compose: `waiting` with
+ * `channel=whatsapp` is the WhatsApp share of the waiting queue, and every one
+ * of the seven queues accepts all four. They travel in the URL so a filtered
+ * queue is a link an agent can bookmark or paste to a colleague.
+ */
+export interface InboxFilters {
+  channel?: string;
+  /** A member's user id, or the two pseudo-values `unassigned` and `me`. */
+  assignee?: string;
+  tag?: string;
+  /** Inclusive `yyyy-mm-dd` bounds on the last message, read in UTC. */
+  from?: string;
+  to?: string;
+}
+
+export const INBOX_ASSIGNEE_UNASSIGNED = 'unassigned';
+export const INBOX_ASSIGNEE_ME = 'me';
+
+const DATE_ONLY = /^\d{4}-\d{2}-\d{2}$/;
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+/**
+ * The shape of a channel key, not the list of them. The list lives in the
+ * column's own check constraint, which is the thing that decides what a channel
+ * IS, and this value is only ever used as an equality test — so a channel that
+ * does not exist returns an empty queue, which is the honest answer to a filter
+ * for a channel nobody uses. What matters here is that nothing but a bare key
+ * reaches the filter expression.
+ */
+const CHANNEL_KEY = /^[a-z][a-z_]{1,23}$/;
+
+/**
+ * Whatever arrived in the query string, reduced to something safe to hand to
+ * PostgREST. Every value here ends up inside a filter expression, so anything
+ * that is not a bare channel key, a uuid, a plain date or a short tag is
+ * dropped rather than escaped — a filter nobody can express is better than one
+ * that half-parses. The tag loses the characters PostgREST reads as array and
+ * logical-tree punctuation for the same reason.
+ */
+export function parseInboxFilters(params?: {
+  channel?: string;
+  assignee?: string;
+  tag?: string;
+  from?: string;
+  to?: string;
+}): InboxFilters {
+  const filters: InboxFilters = {};
+  if (params?.channel && CHANNEL_KEY.test(params.channel)) filters.channel = params.channel;
+  const assignee = params?.assignee?.trim();
+  if (
+    assignee &&
+    (assignee === INBOX_ASSIGNEE_UNASSIGNED || assignee === INBOX_ASSIGNEE_ME || UUID.test(assignee))
+  ) {
+    filters.assignee = assignee;
+  }
+  const tag = params?.tag?.trim().toLowerCase().replace(/[,(){}"\\]/g, '');
+  if (tag) filters.tag = tag.slice(0, 60);
+  if (params?.from && DATE_ONLY.test(params.from)) filters.from = params.from;
+  if (params?.to && DATE_ONLY.test(params.to)) filters.to = params.to;
+  return filters;
+}
+
+export function hasInboxFilters(filters: InboxFilters): boolean {
+  return Object.values(filters).some(Boolean);
+}
+
+/**
+ * One place that turns a queue, a search and a set of filters back into a URL,
+ * so the rail, the filter bar and the pager cannot each remember a different
+ * subset of the state and quietly drop the rest. The shared `Pagination`
+ * control only knows about `q`, `status` and `page`, which is why the inbox
+ * builds its own links.
+ */
+export function inboxHref(state: {
+  queue?: InboxQueue;
+  search?: string;
+  filters?: InboxFilters;
+  page?: number;
+}): string {
+  const params = new URLSearchParams();
+  if (state.queue && state.queue !== 'waiting') params.set('status', state.queue);
+  if (state.search) params.set('q', state.search);
+  const filters = state.filters ?? {};
+  if (filters.channel) params.set('channel', filters.channel);
+  if (filters.assignee) params.set('assignee', filters.assignee);
+  if (filters.tag) params.set('tag', filters.tag);
+  if (filters.from) params.set('from', filters.from);
+  if (filters.to) params.set('to', filters.to);
+  if (state.page && state.page > 1) params.set('page', String(state.page));
+  const qs = params.toString();
+  return qs ? `/company/inbox?${qs}` : '/company/inbox';
+}
+
+export interface InboxMemberOption {
+  userId: string;
+  name: string;
+  role: string;
+}
+
+export interface InboxFilterOptions {
+  members: InboxMemberOption[];
+  /** Tags this company has actually used. Empty is a valid answer. */
+  tags: string[];
+}
+
+/**
+ * The member list for the assign control and the assignee filter, plus the tags
+ * in use — one round trip, because the inbox page is held to a round-trip
+ * budget (scripts/test-query-counts.mjs) and two lists that are always needed
+ * together should not cost two.
+ *
+ * Without migration 0069 the function is missing, so this falls back to the
+ * member query on its own: the assign control and the assignee filter still
+ * work, and the tag box degrades from "suggests your tags" to "type a tag",
+ * which is the failure mode worth having.
+ */
+export async function listInboxFilterOptions(): Promise<InboxFilterOptions> {
+  const companyId = await getCompanyId();
+  const sb = createSupabaseServiceClient();
+
+  const { data, error } = await sb.rpc('inbox_filter_options', {
+    p_company_id: companyId, // tenant scope lives inside the function too
+  });
+
+  if (!error && data && typeof data === 'object') {
+    const payload = data as { members?: unknown; tags?: unknown };
+    const members = Array.isArray(payload.members) ? payload.members : [];
+    const tags = Array.isArray(payload.tags) ? payload.tags : [];
+    return {
+      members: members.map((m) => {
+        const x = m as Record<string, unknown>;
+        return {
+          userId: x.user_id as string,
+          name: ((x.name as string) || 'Teammate').trim(),
+          role: (x.role as string) ?? '',
+        };
+      }),
+      tags: tags.filter((tag): tag is string => typeof tag === 'string' && tag.length > 0),
+    };
+  }
+
+  const { data: memberRows } = await sb
+    .from('company_users')
+    .select('user_id,role,users(full_name,email)')
+    .eq('company_id', companyId) // scope prevents cross-company access
+    .limit(200);
+
+  const members = ((memberRows ?? []) as Array<Record<string, unknown>>).map((row) => {
+    const user = row.users as { full_name?: string; email?: string } | null;
+    return {
+      userId: row.user_id as string,
+      name: (user?.full_name || user?.email || 'Teammate').trim(),
+      role: (row.role as string) ?? '',
+    };
+  });
+  return { members, tags: [] };
 }
 
 export async function listCannedResponses(): Promise<CannedResponse[]> {
@@ -161,6 +340,7 @@ function mapConversationRow(row: unknown): ConversationRow {
     priority: (c.priority as string) ?? 'normal',
     tags: (c.tags as string[]) ?? [],
     state: c.state_json && typeof c.state_json === 'object' ? (c.state_json as Record<string, unknown>) : {},
+    snoozedUntil: (c.snoozed_until as string) ?? null,
     lastMessagePreview: null,
     lastMessageSender: null,
     assignedAgentName: null,
@@ -366,11 +546,17 @@ async function searchConversationIds(companyId: string, search: string): Promise
   return [...ids].slice(0, 500);
 }
 
+/** The id no user has, so `mine` with nobody signed in matches nothing. */
+const NO_USER = '00000000-0000-0000-0000-000000000000';
+
 interface QueueScope {
   companyId: string;
   queue: InboxQueue;
   userId: string | null;
   ids?: string[];
+  filters?: InboxFilters;
+  /** One clock for the whole request, so the count and the rows agree. */
+  now?: string;
 }
 
 /**
@@ -394,7 +580,7 @@ function queueQuery(scope: QueueScope, options: { head: boolean }) {
       // No signed-in user id means no personal queue; match nothing rather than
       // quietly falling back to everyone's work.
       query = query
-        .eq('assigned_agent_id', scope.userId ?? '00000000-0000-0000-0000-000000000000')
+        .eq('assigned_agent_id', scope.userId ?? NO_USER)
         .not('status', 'in', '(closed,expired)');
       break;
     case 'urgent':
@@ -406,10 +592,41 @@ function queueQuery(scope: QueueScope, options: { head: boolean }) {
     case 'closed':
       query = query.eq('status', 'closed');
       break;
+    case 'snoozed':
     case 'everything':
     default:
       break;
   }
+
+  // Snooze is a property of the row, not a status, so it is applied after the
+  // queue rather than inside it. A timestamp in the past is not a snooze: the
+  // conversation is due and belongs back in its queue whether or not the sweep
+  // in /api/cron/snooze has got to it yet.
+  const now = scope.now ?? new Date().toISOString();
+  if (scope.queue === 'snoozed') {
+    query = query.gt('snoozed_until', now);
+  } else if (OPEN_QUEUES.has(scope.queue)) {
+    query = query.or(`snoozed_until.is.null,snoozed_until.lte.${now}`);
+  }
+
+  const filters = scope.filters;
+  if (filters?.channel) query = query.eq('channel', filters.channel);
+  if (filters?.assignee === INBOX_ASSIGNEE_UNASSIGNED) {
+    query = query.is('assigned_agent_id', null);
+  } else if (filters?.assignee) {
+    query = query.eq(
+      'assigned_agent_id',
+      filters.assignee === INBOX_ASSIGNEE_ME ? scope.userId ?? NO_USER : filters.assignee,
+    );
+  }
+  // Containment rather than equality: `tags` is an array and the filter asks
+  // "carries this one", not "carries only this one".
+  if (filters?.tag) query = query.contains('tags', [filters.tag]);
+  // Both bounds are whole days in UTC. The `to` day is included, which is what
+  // someone picking today as the end of a range means by it.
+  if (filters?.from) query = query.gte('last_message_at', `${filters.from}T00:00:00.000Z`);
+  if (filters?.to) query = query.lte('last_message_at', `${filters.to}T23:59:59.999Z`);
+
   return query;
 }
 
@@ -420,17 +637,22 @@ const EMPTY_QUEUE_COUNTS: InboxQueueCounts = {
   urgent: 0,
   poor: 0,
   closed: 0,
+  snoozed: 0,
 };
 
 /**
- * The six numbers on the queue rail.
+ * The numbers on the queue rail.
  *
- * Was six `head: true, count: exact` requests — six round trips, ~1.4 s here,
- * to produce six integers over the same set of rows. `inbox_queue_counts`
- * (migration 0062) counts all six in one pass with the filters copied from
- * {@link queueQuery}, so the rail still cannot disagree with the list.
+ * Was one `head: true, count: exact` request per queue — one round trip each,
+ * ~1.4 s here, to produce a handful of integers over the same set of rows.
+ * `inbox_queue_counts` (migrations 0062 and 0069) counts them all in one pass
+ * with the filters copied from {@link queueQuery}, so the rail still cannot
+ * disagree with the list.
  *
- * The six counts remain as the fallback for an environment without 0062.
+ * The per-queue counts remain as the fallback for an environment without 0062.
+ * Deliberately company-wide: like the search box, the channel/assignee/tag/date
+ * filters do not narrow these, so an agent working a filtered view can still
+ * see how much work the filter is hiding from them.
  */
 export async function getInboxQueueCounts(): Promise<InboxQueueCounts> {
   const [companyId, user] = await Promise.all([getCompanyId(), getSessionUser()]);
@@ -453,6 +675,7 @@ export async function getInboxQueueCounts(): Promise<InboxQueueCounts> {
         urgent: Number(row.urgent ?? 0),
         poor: Number(row.poor ?? 0),
         closed: Number(row.closed ?? 0),
+        snoozed: Number(row.snoozed ?? 0),
       };
     }
     return EMPTY_QUEUE_COUNTS;
@@ -472,6 +695,7 @@ export async function listConversationsPaged(options?: {
   page?: number;
   queue?: InboxQueue;
   search?: string;
+  filters?: InboxFilters;
   pageSize?: number;
 }): Promise<ConversationPage> {
   const pageSize = options?.pageSize ?? INBOX_PAGE_SIZE;
@@ -487,7 +711,16 @@ export async function listConversationsPaged(options?: {
     }
   }
 
-  const scope: QueueScope = { companyId, queue, userId: user?.userId ?? null, ids };
+  // The filters narrow the same query the queue already built rather than
+  // adding one of their own, so filtering costs no extra round trip at all.
+  const scope: QueueScope = {
+    companyId,
+    queue,
+    userId: user?.userId ?? null,
+    ids,
+    filters: options?.filters,
+    now: new Date().toISOString(),
+  };
   const requestedPage = Math.max(1, options?.page ?? 1);
   const rowsFor = (index: number) =>
     queueQuery(scope, { head: false })
@@ -540,6 +773,17 @@ export function isConversationOverdue(c: ConversationRow, slaMinutes: number): b
   return Date.now() - new Date(c.lastMessageAt).getTime() > slaMinutes * 60 * 1000;
 }
 
+/**
+ * Put aside, and not yet due. The same test the queue query runs in SQL, so a
+ * row cannot be listed in a queue and captioned "snoozed" at the same time.
+ */
+export function isSnoozed(
+  c: Pick<ConversationRow, 'snoozedUntil'>,
+  now: Date = new Date(),
+): boolean {
+  return Boolean(c.snoozedUntil && new Date(c.snoozedUntil).getTime() > now.getTime());
+}
+
 export function conversationSource(c: Pick<ConversationRow, 'channel' | 'visitorId' | 'tags' | 'state'>): 'customer' | 'helpdesk' | 'connector' | 'manual' {
   const source = typeof c.state.source === 'string' ? c.state.source : '';
   if (source.includes('connector')) return 'connector';
@@ -589,7 +833,7 @@ export async function getConversationDetail(
 
   const { data: convo, error } = await sb
     .from('conversations')
-    .select('id,company_id,status,channel,language,visitor_id,started_at,last_message_at,closed_at,ai_enabled,assigned_agent_id,priority,tags,state_json,csat_rating,csat_comment')
+    .select('id,company_id,status,channel,language,visitor_id,started_at,last_message_at,closed_at,ai_enabled,assigned_agent_id,assigned_at,assigned_by,snoozed_until,snoozed_by,priority,tags,state_json,csat_rating,csat_comment')
     .eq('company_id', companyId) // scope prevents cross-company access
     .eq('id', id)
     .maybeSingle();
@@ -599,13 +843,20 @@ export async function getConversationDetail(
   const c = convo as Record<string, unknown>;
   if ((c.company_id as string) !== companyId) return null;
   const assignedAgentId = (c.assigned_agent_id as string) ?? null;
+  const assignedById = (c.assigned_by as string) ?? null;
+  const snoozedById = (c.snoozed_by as string) ?? null;
+  // The assignee, whoever assigned them and whoever snoozed it are three names
+  // from one table, so they are one lookup rather than three. All three ids came
+  // off a row that was already scoped to this company.
+  const peopleIds = [...new Set([assignedAgentId, assignedById, snoozedById].filter(Boolean))] as string[];
 
   const [
     { data: messageRows, error: mErr },
     { count: messageCount },
     { data: noteRows },
     { data: leadRows },
-    { data: agentRow },
+    { data: peopleRows },
+    filterOptions,
     cannedResponses,
   ] = await Promise.all([
     sb
@@ -633,12 +884,18 @@ export async function getConversationDetail(
       .eq('conversation_id', id)
       .order('created_at', { ascending: false })
       .limit(1),
-    assignedAgentId
-      ? sb.from('users').select('full_name,email').eq('id', assignedAgentId).maybeSingle()
-      : Promise.resolve({ data: null }),
+    peopleIds.length
+      ? sb.from('users').select('id,full_name,email').in('id', peopleIds)
+      : Promise.resolve({ data: [] as unknown[] }),
+    listInboxFilterOptions(),
     listCannedResponses(),
   ]);
   if (mErr) throw mErr;
+
+  const nameById = new Map<string, string>();
+  for (const row of (peopleRows ?? []) as Array<Record<string, unknown>>) {
+    nameById.set(row.id as string, ((row.full_name as string) || (row.email as string) || 'Agent') as string);
+  }
 
   const notes: InternalNote[] = (noteRows ?? []).map((n) => {
     const x = n as Record<string, unknown>;
@@ -652,7 +909,6 @@ export async function getConversationDetail(
   });
 
   const lead = (leadRows ?? [])[0] as Record<string, unknown> | undefined;
-  const agent = agentRow as Record<string, unknown> | null;
   const totalMessages = messageCount ?? (messageRows ?? []).length;
 
   return {
@@ -666,7 +922,11 @@ export async function getConversationDetail(
     closedAt: (c.closed_at as string) ?? null,
     aiEnabled: Boolean(c.ai_enabled),
     assignedAgentId,
-    assignedAgentName: agent ? ((agent.full_name as string) || (agent.email as string) || 'Agent') : null,
+    assignedAgentName: assignedAgentId ? nameById.get(assignedAgentId) ?? 'Agent' : null,
+    assignedAt: (c.assigned_at as string) ?? null,
+    assignedByName: assignedById ? nameById.get(assignedById) ?? 'Agent' : null,
+    snoozedUntil: (c.snoozed_until as string) ?? null,
+    snoozedByName: snoozedById ? nameById.get(snoozedById) ?? 'Agent' : null,
     priority: (c.priority as string) ?? 'normal',
     tags: (c.tags as string[]) ?? [],
     state: c.state_json && typeof c.state_json === 'object' ? (c.state_json as Record<string, unknown>) : {},
@@ -674,6 +934,7 @@ export async function getConversationDetail(
     csatComment: (c.csat_comment as string) ?? null,
     leadName: ((lead?.name as string) ?? '').trim() || null,
     leadContact: (((lead?.email as string) ?? (lead?.phone as string)) ?? '').trim() || null,
+    assignableMembers: filterOptions.members,
     // Fetched newest-first so the limit keeps the RECENT end of the thread;
     // reversed here so the transcript still reads oldest → newest.
     messages: (messageRows ?? [])

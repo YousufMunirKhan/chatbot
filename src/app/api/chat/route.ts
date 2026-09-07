@@ -13,7 +13,7 @@ import {
   isOriginAllowed,
 } from '@/lib/ai/engine';
 import { detectConversationLanguage } from '@/lib/ai/lang';
-import { retrieveContext } from '@/lib/ai/rag';
+import { publicCitation, resolveCitations, retrieveContext, type Citation } from '@/lib/ai/rag';
 import { needsRewrite, rewriteQuery } from '@/lib/ai/query-rewrite';
 import { getChatProviderAsync, getFallbackChatProviderAsync } from '@/lib/ai/providers';
 import { getPlatformAiSettings } from '@/lib/platform-settings';
@@ -381,6 +381,15 @@ export async function POST(req: Request) {
           replyLanguage,
         );
         const helpdeskActionCatalog = formatHelpdeskActionCatalog(helpdeskActions);
+
+        // Naming the retrieved excerpts needs two more reads, and nothing is
+        // shown until the answer is finished anyway — so start it here and
+        // collect it after the stream rather than delaying the first token.
+        const citationsPromise: Promise<Citation[]> =
+          chunks.length > 0 && bot.appearance.showAnswerSources !== false
+            ? resolveCitations(bot.companyId, chunks).catch(() => [])
+            : Promise.resolve([]);
+
         send({ type: 'status', value: statusText('thinking', replyLanguage) });
 
         const messages = buildMessages({
@@ -547,6 +556,32 @@ export async function POST(req: Request) {
           sourceTypes,
           failureReason,
         });
+
+        // Show the visitor what the answer stood on. Suppressed when the bot
+        // just said it did not know: listing sources under a non-answer implies
+        // those sources contained something, which is the opposite of true.
+        const citations = await citationsPromise;
+        const answeredFromKnowledge =
+          citations.length > 0 && failureReason !== 'missing_info' && failureReason !== 'weak_retrieval';
+        if (answeredFromKnowledge) {
+          send({ type: 'sources', sources: citations.map(publicCitation) });
+          // Kept on the message so the citations survive a page reload and the
+          // inbox can show an agent what the bot answered from. metadata_json
+          // defaults to {} and nothing else writes it on a widget AI message.
+          if (assistantMessageId) {
+            const { error: citationError } = await createSupabaseServiceClient()
+              .from('messages')
+              .update({ metadata_json: { citations } })
+              .eq('id', assistantMessageId)
+              .eq('company_id', bot.companyId);
+            if (citationError) {
+              logger.warn('Could not store answer citations', {
+                conversationId: convo.id,
+                error: citationError.message,
+              });
+            }
+          }
+        }
 
         // Fallback CTA: when the bot couldn't answer and hasn't already offered a
         // form this turn, don't dead-end — offer to capture a lead or hand off.

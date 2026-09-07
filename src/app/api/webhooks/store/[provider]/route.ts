@@ -1,5 +1,6 @@
 import { createSupabaseServiceClient } from '@/lib/db/server';
 import { serverEnv } from '@/lib/env';
+import { decryptSecret } from '@/lib/crypto';
 import { logger } from '@/lib/logger';
 import { queueAutomations } from '@/lib/commerce/automations';
 import {
@@ -48,9 +49,23 @@ function json(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json' } });
 }
 
-function providerSecret(provider: StoreProvider): string | null {
+/**
+ * The signing secret for THIS shop.
+ *
+ * Every customer connects their own shop, and each shop signs its webhooks with
+ * a secret that shop generated, so a single platform-wide secret can only ever
+ * verify one customer. Migration 0070 stores the real one per account; the env
+ * values remain as a fallback so an installation that only ever had one shop
+ * keeps working.
+ */
+function platformSecret(provider: StoreProvider): string | null {
   const e = serverEnv();
   return (provider === 'shopify' ? e.SHOPIFY_WEBHOOK_SECRET : e.WOOCOMMERCE_WEBHOOK_SECRET) ?? null;
+}
+
+function accountSecret(account: ResolvedAccount | null, provider: StoreProvider): string | null {
+  if (account?.webhookSecret) return account.webhookSecret;
+  return platformSecret(provider);
 }
 
 /** `mystore.myshopify.com` / `https://shop.com/` → a comparable host. */
@@ -62,21 +77,47 @@ function hostOf(value: unknown): string {
     .replace(/\/.*$/, '');
 }
 
-async function resolveCompany(
+/**
+ * Which tenant a webhook belongs to, and the secret it should be verified with.
+ *
+ * Resolving before verifying looks backwards, but it is the only order that can
+ * work once the secret is per shop: you cannot check the signature until you
+ * know whose shop it is. Nothing is trusted by resolving — `?t=` is itself an
+ * unguessable per-account token, and every write below still sits behind the
+ * signature check.
+ */
+type ResolvedAccount = { companyId: string; webhookSecret: string | null };
+
+function decodeSecret(value: unknown): string | null {
+  const raw = typeof value === 'string' ? value.trim() : '';
+  if (!raw) return null;
+  try {
+    return decryptSecret(raw) || null;
+  } catch {
+    // A secret we cannot decrypt must not silently fall back to the platform
+    // one — that would verify this shop against another shop's key.
+    logger.error('Could not decrypt a store webhook secret', { module: 'commerce' });
+    return null;
+  }
+}
+
+async function resolveAccount(
   provider: StoreProvider,
   token: string | null,
   shopDomain: string,
-): Promise<string | null> {
+): Promise<ResolvedAccount | null> {
   const sb = createSupabaseServiceClient();
 
   if (token) {
     const { data } = await sb
       .from('integration_accounts')
-      .select('company_id')
+      .select('company_id,webhook_secret_encrypted')
       .eq('webhook_token', token)
       .maybeSingle();
-    const companyId = (data as { company_id?: string } | null)?.company_id ?? null;
-    if (companyId) return companyId;
+    const row = data as { company_id?: string; webhook_secret_encrypted?: string | null } | null;
+    if (row?.company_id) {
+      return { companyId: row.company_id, webhookSecret: decodeSecret(row.webhook_secret_encrypted) };
+    }
   }
 
   if (!shopDomain) return null;
@@ -84,13 +125,19 @@ async function resolveCompany(
   // non-secret settings are searched — credentials stay encrypted at rest.
   const { data } = await sb
     .from('integration_accounts')
-    .select('company_id,settings_json')
+    .select('company_id,settings_json,webhook_secret_encrypted')
     .eq('provider', provider)
     .limit(500);
-  for (const row of (data ?? []) as Array<{ company_id: string; settings_json: Row | null }>) {
+  for (const row of (data ?? []) as Array<{
+    company_id: string;
+    settings_json: Row | null;
+    webhook_secret_encrypted: string | null;
+  }>) {
     const s = row.settings_json ?? {};
     const candidates = [s.shop, s.shop_domain, s.domain, s.base_url, s.store_url].map(hostOf).filter(Boolean);
-    if (candidates.includes(shopDomain)) return row.company_id;
+    if (candidates.includes(shopDomain)) {
+      return { companyId: row.company_id, webhookSecret: decodeSecret(row.webhook_secret_encrypted) };
+    }
   }
   return null;
 }
@@ -378,12 +425,26 @@ export async function POST(req: Request, { params }: { params: { provider: strin
   }
 
   const raw = await req.text();
-  const secret = providerSecret(provider);
   const signature = req.headers.get(STORE_SIGNATURE_HEADERS[provider]);
+
+  // Which shop this is has to be settled first, because the secret that
+  // verifies it belongs to that shop. See resolveAccount for why that order is
+  // safe.
+  const url = new URL(req.url);
+  const shopDomain = hostOf(
+    req.headers.get('x-shopify-shop-domain') ?? req.headers.get('x-wc-webhook-source') ?? '',
+  );
+  const account = await resolveAccount(provider, url.searchParams.get('t'), shopDomain);
+  const secret = accountSecret(account, provider);
 
   if (secret) {
     if (!verifyStoreSignature(raw, signature, secret)) {
-      logger.warn('Store webhook signature rejected', { provider });
+      logger.warn('Store webhook signature rejected', {
+        provider,
+        // Which of the two keys was tried, so a mismatch is diagnosable without
+        // anybody having to guess.
+        keySource: account?.webhookSecret ? 'account' : 'platform',
+      });
       return json({ error: 'bad_signature' }, 401);
     }
   } else if (serverEnv().APP_ENV === 'production') {
@@ -393,11 +454,7 @@ export async function POST(req: Request, { params }: { params: { provider: strin
     logger.warn('Store webhook accepted without signature verification (secret not set)', { provider });
   }
 
-  const url = new URL(req.url);
-  const shopDomain = hostOf(
-    req.headers.get('x-shopify-shop-domain') ?? req.headers.get('x-wc-webhook-source') ?? '',
-  );
-  const companyId = await resolveCompany(provider, url.searchParams.get('t'), shopDomain);
+  const companyId = account?.companyId ?? null;
   if (!companyId) return json({ error: 'unknown_store' }, 404);
 
   const topic = req.headers.get(provider === 'shopify' ? 'x-shopify-topic' : 'x-wc-webhook-topic') ?? '';

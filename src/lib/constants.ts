@@ -19,6 +19,7 @@ export const CHANNELS = [
   'line',
   'tiktok',
   'youtube',
+  'sms',
   'phone',
   'api',
 ] as const;
@@ -37,6 +38,7 @@ export const CHANNEL_LABELS: Record<string, string> = {
   line: 'LINE',
   tiktok: 'TikTok',
   youtube: 'YouTube',
+  sms: 'SMS',
   phone: 'Phone',
   api: 'API',
 };
@@ -465,3 +467,55 @@ export const LEAD_STATUS_LABELS: Record<string, string> = {
   converted: 'Became a customer',
   closed: 'Closed',
 };
+
+/**
+ * The setup journey, in order.
+ *
+ * Only the parts that never change live here — the key, the title and the
+ * sentence explaining the step. Everything situational (`href`, `complete`,
+ * `detail`) is computed per company by `getCompanySetupProgress()`.
+ *
+ * It is shared because it was being written twice: `setup-data.ts` had these
+ * five, and the public `/customer-onboarding` page had its own retyped four,
+ * which had already drifted — the marketing page merged "try it" and "install"
+ * into one step and told visitors a different story from the product. A list
+ * describing the same journey in two places will always end up describing two
+ * journeys.
+ */
+export const SETUP_STEPS = [
+  {
+    key: 'purpose',
+    title: 'Choose what it does',
+    description: 'Say whether this one helps customers on your website, or helps your own staff.',
+  },
+  {
+    key: 'capabilities',
+    title: 'Pick the jobs it handles',
+    description:
+      'Tick the things it should do for you: answer questions, take bookings, take details, or take orders.',
+  },
+  {
+    key: 'required-data',
+    title: 'Add your business details',
+    description:
+      'Give it the facts it needs to answer: how to reach you, what you sell, your opening hours, and your usual answers.',
+  },
+  {
+    key: 'test',
+    title: 'Try it yourself',
+    description:
+      'Ask it the questions your customers ask. Check it says it does not know instead of guessing.',
+  },
+  {
+    key: 'install',
+    title: 'Put it on your website',
+    description:
+      'Tell us your web address and copy one line of code onto your site. Then it is live for customers.',
+  },
+] as const;
+
+export type SetupStepKey = (typeof SETUP_STEPS)[number]['key'];
+
+/** Look up one step's fixed copy by key. */
+export const SETUP_STEP_COPY: Record<string, { title: string; description: string }> =
+  Object.fromEntries(SETUP_STEPS.map((s) => [s.key, { title: s.title, description: s.description }]));

@@ -1,13 +1,13 @@
 import Image from 'next/image';
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
+import { SETUP_STEPS } from '@/lib/constants';
 
-const journey = [
-  ['Choose purpose', 'Customer-facing website assistant or internal help desk.'],
-  ['Pick capabilities', 'Sales, booking, support, leads, orders, stock, or human handoff.'],
-  ['Add only needed data', 'Forms, small files, URLs, CSV, or integrations. No wasteful AI setup calls.'],
-  ['Test and install', 'Preview answers, add your domain, paste one script, and go live.'],
-];
+// The journey shown here is the journey the product actually runs. It used to
+// be a retyped copy that had already drifted — four steps against the product's
+// five, with "try it" and "install" merged — so a visitor was promised one
+// thing and given another.
+const journey = SETUP_STEPS.map((step) => [step.title, step.description] as const);
 
 const integrations = [
   ['Website', 'Paste the widget snippet into any site builder or custom site.'],
@@ -34,11 +34,14 @@ export default function CustomerOnboardingPage() {
                 A guided setup asks what the assistant should do, collects only the required business data, then gives a simple website install path.
               </p>
               <div className="mt-8 flex flex-wrap gap-3">
+                {/* This page describes the setup journey and then, until
+                    self-serve signup existed, sent the reader to a login form
+                    they had no way past. */}
                 <Button asChild size="lg" className="bg-white text-slate-950 hover:bg-blue-50">
-                  <Link href="/login">Open dashboard</Link>
+                  <Link href="/signup">Start free</Link>
                 </Button>
                 <Button asChild size="lg" variant="outline" className="border-white/35 bg-white/10 text-white hover:bg-white/15">
-                  <Link href="/company/setup">View setup journey</Link>
+                  <Link href="/login">I already have an account</Link>
                 </Button>
               </div>
             </div>

@@ -1,14 +1,17 @@
 'use server';
 
 import { redirect } from 'next/navigation';
-import { cookies } from 'next/headers';
+import { revalidatePath } from 'next/cache';
+import { cookies, headers } from 'next/headers';
 import { z } from 'zod';
 import { createSupabaseServerClient } from '@/lib/db/server';
 import { getSessionUser, homePathFor } from '@/lib/auth';
 import { createSupabaseServiceClient } from '@/lib/db/server';
 import { hashSecurityCode, logSecurityEvent, sendTwoFactorCode } from '@/lib/security';
 import { IMPERSONATION_COOKIE } from '@/lib/impersonation';
+import { rateLimitDistributed } from '@/lib/ratelimit';
 import { env } from '@/lib/env';
+import { provisionCompany } from '@/modules/onboarding/provision';
 
 const loginSchema = z.object({
   email: z.string().email(),
@@ -52,6 +55,120 @@ export async function signInAction(_prev: LoginState, formData: FormData): Promi
     );
   }
   redirect(user ? homePathFor(user) : '/dashboard');
+}
+
+const signUpSchema = z.object({
+  name: z.string().trim().min(2, 'Enter your name.').max(120, 'That name is too long.'),
+  email: z
+    .string()
+    .trim()
+    .toLowerCase()
+    .email('Enter a valid work email address.')
+    .max(254, 'That email address is too long.'),
+  // The upper bound is GoTrue's, not ours: it hashes with bcrypt, which reads
+  // only the first 72 bytes and rejects anything longer outright. Catching it
+  // here turns a raw auth error into a sentence about the field they typed in.
+  password: z
+    .string()
+    .min(8, 'Choose a password of at least 8 characters.')
+    .max(72, 'Choose a password of 72 characters or fewer.'),
+  companyName: z
+    .string()
+    .trim()
+    .min(2, 'Enter your business name.')
+    .max(120, 'That business name is too long.'),
+});
+
+export type SignUpState = { error?: string };
+
+/**
+ * Self-serve signup: account, company, free trial, and straight into the
+ * dashboard.
+ *
+ * Everything that makes the tenant lives in `provisionCompany`, which runs the
+ * same sequence as super-admin onboarding and unwinds itself if any step fails,
+ * so this action is only the two things that are specific to a stranger doing
+ * it themselves: throttling, and turning the new credentials into a session.
+ */
+export async function signUpAction(_prev: SignUpState, formData: FormData): Promise<SignUpState> {
+  const parsed = signUpSchema.safeParse(Object.fromEntries(formData));
+  if (!parsed.success) return { error: parsed.error.issues[0]?.message ?? 'Check the form and try again.' };
+  const v = parsed.data;
+
+  // This is the only unauthenticated endpoint in the product that writes a
+  // company, a subscription, a credit wallet and an auth user, so it is
+  // throttled on both axes that matter. The address limit stops one script
+  // opening tenants in bulk; the email limit stops the form being used to probe
+  // which addresses already have accounts, which the "already has an account"
+  // message would otherwise answer as fast as it could be asked.
+  const requestHeaders = headers();
+  const ip =
+    requestHeaders.get('x-forwarded-for')?.split(',')[0]?.trim() ??
+    requestHeaders.get('x-real-ip') ??
+    'unknown';
+  const hour = 60 * 60 * 1000;
+  const [byAddress, byEmail] = await Promise.all([
+    rateLimitDistributed(`signup:ip:${ip}`, 5, hour),
+    rateLimitDistributed(`signup:email:${v.email}`, 5, hour),
+  ]);
+  if (!byAddress.ok || !byEmail.ok) {
+    return {
+      error: 'Too many sign-up attempts from this connection. Wait an hour and try again, or contact support if you are stuck.',
+    };
+  }
+
+  const provisioned = await provisionCompany({
+    companyName: v.companyName,
+    plan: 'free_trial',
+    signupSource: 'self_serve',
+    adminEmail: v.email,
+    adminPassword: v.password,
+    adminName: v.name,
+    auditAction: 'company.self_serve_signup',
+    auditMetadata: { signupIp: ip },
+  });
+  if (!provisioned.ok) return { error: provisioned.error };
+
+  // Signing in with the credentials they just chose, rather than minting a
+  // session by hand, because this is the one path that writes the auth cookies
+  // every server component in the app reads.
+  const supabase = createSupabaseServerClient();
+  const { error: signInError } = await supabase.auth.signInWithPassword({
+    email: v.email,
+    password: v.password,
+  });
+  if (signInError) {
+    // The account is complete and correct; only the session failed. Deleting it
+    // to keep this function tidy would throw away a working account, so the
+    // message sends them one step sideways instead.
+    return {
+      error: 'Your account is ready, but signing you in did not work. Please sign in with the email and password you just chose.',
+    };
+  }
+
+  const sb = createSupabaseServiceClient();
+  await sb.from('user_security_settings').upsert(
+    {
+      user_id: provisioned.userId,
+      last_login_at: new Date().toISOString(),
+      two_factor_verified_at: new Date().toISOString(),
+    },
+    { onConflict: 'user_id' },
+  );
+  await logSecurityEvent({
+    userId: provisioned.userId,
+    companyId: provisioned.companyId,
+    eventType: 'signup.self_serve',
+    ip,
+    userAgent: requestHeaders.get('user-agent'),
+  });
+
+  // The operator's company list is a cached server render, so without this the
+  // new tenant is invisible to support until something unrelated writes.
+  revalidatePath('/super-admin/companies');
+
+  const user = await getSessionUser({ skipTwoFactorCheck: true });
+  redirect(user ? homePathFor(user) : '/company');
 }
 
 const forgotPasswordSchema = z.object({

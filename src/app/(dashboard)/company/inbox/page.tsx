@@ -12,19 +12,26 @@ import { getRequestDictionary } from '@/lib/i18n/server';
 import { getCompanyId } from '@/modules/company/data';
 import { InboxRealtime } from '@/modules/company/components/inbox-realtime';
 import { PushInboxPrompt } from '@/modules/company/components/push-inbox-prompt';
-import { Pagination } from '@/modules/company/components/list-controls';
+import { InboxFilterBar, InboxPagination } from '@/modules/company/components/inbox-filters';
 import {
   conversationDisplayName,
   conversationSource,
   getInboxQueueCounts,
+  hasInboxFilters,
+  inboxHref,
   INBOX_QUEUES,
   isConversationOverdue,
+  isSnoozed,
   listConversationsPaged,
+  listInboxFilterOptions,
   normalizeQueue,
+  parseInboxFilters,
   type ConversationRow,
+  type InboxFilters,
   type InboxQueue,
 } from '@/modules/company/inbox-data';
 import { getSupportSettings } from '@/modules/company/support-settings-data';
+import { timeUntilLabel } from '@/modules/company/components/inbox-snooze-presets';
 
 /**
  * The inbox is a queue, not a report.
@@ -44,15 +51,17 @@ import { getSupportSettings } from '@/modules/company/support-settings-data';
 type BadgeVariant = 'default' | 'secondary' | 'success' | 'warning' | 'destructive' | 'outline';
 type Chip = { label: string; variant: BadgeVariant };
 
-const searchInputCls =
-  'flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring sm:w-72';
-
 /**
  * Exceptions only, most urgent first — the first two win. A chat the assistant
  * is quietly handling produces nothing, which is the point.
  */
-function rowChips(c: ConversationRow, slaMinutes: number, dict: Dictionary): Chip[] {
+function rowChips(c: ConversationRow, slaMinutes: number, dict: Dictionary, now: Date): Chip[] {
   const chips: Chip[] = [];
+  // First, because it explains why a row that looks like work is not: it is in
+  // "Everything" or in a filtered view, put aside until a time someone chose.
+  if (isSnoozed(c, now)) {
+    chips.push({ label: `Back in ${timeUntilLabel(c.snoozedUntil, now)}`, variant: 'secondary' });
+  }
   if (isConversationOverdue(c, slaMinutes))
     chips.push({ label: t(dict, 'inbox.chip.overdue'), variant: 'destructive' });
   else if (c.status === 'needs_human')
@@ -79,28 +88,35 @@ function previewPrefix(sender: string | null, dict: Dictionary): string {
   return '';
 }
 
-function queueHref(queue: InboxQueue, search?: string): string {
-  const params = new URLSearchParams();
-  if (queue !== 'waiting') params.set('status', queue);
-  if (search) params.set('q', search);
-  const qs = params.toString();
-  return qs ? `/company/inbox?${qs}` : '/company/inbox';
-}
-
 export default async function InboxPage({
   searchParams,
 }: {
-  searchParams?: { status?: string; q?: string; page?: string };
+  searchParams?: {
+    status?: string;
+    q?: string;
+    page?: string;
+    channel?: string;
+    assignee?: string;
+    tag?: string;
+    from?: string;
+    to?: string;
+  };
 }) {
   await requireRole([ROLES.COMPANY_ADMIN, ROLES.AGENT]);
   const queue = normalizeQueue(searchParams?.status);
   const search = searchParams?.q?.trim() || undefined;
+  const filters: InboxFilters = parseInboxFilters(searchParams);
   const requestedPage = Number(searchParams?.page) || 1;
 
-  const [{ rows, total, page, pageCount, pageSize }, counts, companyId, support, dict] =
+  // The filter options are one extra round trip and buy both halves of the
+  // filter bar; the filters themselves ride along inside the queue's own query,
+  // so narrowing the list costs nothing. The page's budget is asserted by
+  // scripts/test-query-counts.mjs.
+  const [{ rows, total, page, pageCount, pageSize }, counts, filterOptions, companyId, support, dict] =
     await Promise.all([
-      listConversationsPaged({ page: requestedPage, queue, search }),
+      listConversationsPaged({ page: requestedPage, queue, search, filters }),
       getInboxQueueCounts(),
+      listInboxFilterOptions(),
       getCompanyId(),
       getSupportSettings(),
       getRequestDictionary(),
@@ -114,6 +130,7 @@ export default async function InboxPage({
       ? (INBOX_QUEUES.find((q) => q.key === key)?.label ?? key)
       : t(dict, `inbox.queue.${key}`);
   const activeQueueLabel = queueLabel(queue);
+  const filtered = hasInboxFilters(filters);
   let lastGroup = '';
 
   return (
@@ -137,8 +154,12 @@ export default async function InboxPage({
           long unbroken message preview stretched the column to 672px on a
           375px phone and pulled the queue rail out with it. */}
       <div className="grid gap-4 lg:grid-cols-[220px_minmax(0,1fr)] [&>*]:min-w-0">
-        {/* Queue rail. Counts are company-wide, not page-wide, so the rail and
-            the list beneath it can never disagree. */}
+        {/* Queue rail. Counts are company-wide, not page-wide: the search box
+            never narrowed them and neither do the filters, so the rail keeps
+            telling an agent working a filtered view how much work is really
+            sitting in each queue. Switching queue carries the search and the
+            filters with it, because "the same slice, different queue" is what
+            the rail is for. */}
         <nav aria-label={t(dict, 'inbox.queues.label')}>
           <ul className="space-y-1">
             {INBOX_QUEUES.map(({ key }) => {
@@ -146,7 +167,7 @@ export default async function InboxPage({
               return (
                 <li key={key}>
                   <Link
-                    href={queueHref(key, search)}
+                    href={inboxHref({ queue: key, search, filters })}
                     aria-current={isActive ? 'page' : undefined}
                     className={[
                       'flex items-center justify-between gap-2 rounded-md px-3 py-2 text-sm',
@@ -163,28 +184,7 @@ export default async function InboxPage({
         </nav>
 
         <div className="space-y-3">
-          <form method="get" action="/company/inbox" className="flex flex-wrap items-center gap-2">
-            {queue !== 'waiting' ? <input type="hidden" name="status" value={queue} /> : null}
-            <label htmlFor="inbox-search" className="sr-only">
-              {t(dict, 'inbox.search.label')}
-            </label>
-            <input
-              id="inbox-search"
-              type="search"
-              name="q"
-              defaultValue={search ?? ''}
-              placeholder={t(dict, 'inbox.search.placeholder')}
-              className={searchInputCls}
-            />
-            <Button type="submit" variant="outline" size="sm">
-              {t(dict, 'common.search')}
-            </Button>
-            {search ? (
-              <Button asChild variant="ghost" size="sm">
-                <Link href={queueHref(queue)}>{t(dict, 'common.clear')}</Link>
-              </Button>
-            ) : null}
-          </form>
+          <InboxFilterBar queue={queue} search={search} filters={filters} options={filterOptions} />
 
           <Card>
             <CardContent className="p-0">
@@ -195,7 +195,20 @@ export default async function InboxPage({
                     body={t(dict, 'inbox.empty.search.body')}
                     action={
                       <Button asChild size="sm" variant="outline">
-                        <Link href={queueHref(queue)}>{t(dict, 'inbox.empty.search.cta')}</Link>
+                        <Link href={inboxHref({ queue })}>{t(dict, 'inbox.empty.search.cta')}</Link>
+                      </Button>
+                    }
+                  />
+                ) : filtered ? (
+                  // Its own state, because "nothing here" and "nothing here
+                  // that matches what you asked for" are different facts and
+                  // the second one has an obvious next move.
+                  <EmptyState
+                    title="Nothing matches those filters"
+                    body={`${activeQueueLabel} has ${counts[queue]} chat${counts[queue] === 1 ? '' : 's'} in it, but none of them match the filters you set.`}
+                    action={
+                      <Button asChild size="sm" variant="outline">
+                        <Link href={inboxHref({ queue })}>Clear the filters</Link>
                       </Button>
                     }
                   />
@@ -215,7 +228,7 @@ export default async function InboxPage({
                     body={t(dict, 'inbox.empty.waiting.body')}
                     action={
                       <Button asChild size="sm" variant="outline">
-                        <Link href={queueHref('everything')}>{t(dict, 'inbox.empty.see_all')}</Link>
+                        <Link href={inboxHref({ queue: 'everything' })}>{t(dict, 'inbox.empty.see_all')}</Link>
                       </Button>
                     }
                   />
@@ -225,7 +238,7 @@ export default async function InboxPage({
                     body={t(dict, 'inbox.empty.queue.body', { count: counts.everything })}
                     action={
                       <Button asChild size="sm" variant="outline">
-                        <Link href={queueHref('everything')}>{t(dict, 'inbox.empty.see_all')}</Link>
+                        <Link href={inboxHref({ queue: 'everything' })}>{t(dict, 'inbox.empty.see_all')}</Link>
                       </Button>
                     }
                   />
@@ -237,7 +250,7 @@ export default async function InboxPage({
                     const showHeader = group !== lastGroup;
                     lastGroup = group;
                     const { label, suffix } = conversationDisplayName(c);
-                    const chips = rowChips(c, support.slaResponseMinutes, dict);
+                    const chips = rowChips(c, support.slaResponseMinutes, dict, now);
                     const unread = c.unreadCount > 0;
 
                     return (
@@ -294,14 +307,14 @@ export default async function InboxPage({
               )}
 
               {total > pageSize ? (
-                <Pagination
-                  basePath="/company/inbox"
+                <InboxPagination
+                  queue={queue}
+                  search={search}
+                  filters={filters}
                   page={page}
                   pageCount={pageCount}
                   total={total}
                   pageSize={pageSize}
-                  search={search}
-                  status={queue}
                 />
               ) : null}
             </CardContent>

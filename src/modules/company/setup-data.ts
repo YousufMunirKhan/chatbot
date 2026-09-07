@@ -2,6 +2,7 @@ import { listDocuments } from './knowledge-data';
 import { getBusinessMemory } from './business-profile-data';
 import { getCurrentCompany, listBots, listMembers } from './data';
 import { catalogCounts } from './integrations-data';
+import { SETUP_STEP_COPY } from '@/lib/constants';
 
 export interface SetupStep {
   key: string;
@@ -240,24 +241,21 @@ export async function getCompanySetupProgress(): Promise<CompanySetupProgress> {
   const steps: SetupStep[] = [
     {
       key: 'purpose',
-      title: 'Choose what it does',
-      description: 'Say whether this one helps customers on your website, or helps your own staff.',
+      ...SETUP_STEP_COPY['purpose']!,
       href: hasAssistant ? '/company/bots' : '/company/bots/new',
       complete: hasAssistant,
       detail: hasAssistant ? `${bots.length} assistant${bots.length === 1 ? '' : 's'} created` : 'You have not made one yet',
     },
     {
       key: 'capabilities',
-      title: 'Pick the jobs it handles',
-      description: 'Tick the things it should do for you: answer questions, take bookings, take details, or take orders.',
+      ...SETUP_STEP_COPY['capabilities']!,
       href: hasAssistant ? '/company/bots' : '/company/bots/new',
       complete: hasCapabilities,
       detail: hasCapabilities ? 'Jobs picked' : 'Nothing picked yet',
     },
     {
       key: 'required-data',
-      title: 'Add your business details',
-      description: 'Give it the facts it needs to answer: how to reach you, what you sell, your opening hours, and your usual answers.',
+      ...SETUP_STEP_COPY['required-data']!,
       href: '/company/business-data',
       complete: hasRequiredData,
       detail: hasRequiredData
@@ -268,16 +266,14 @@ export async function getCompanySetupProgress(): Promise<CompanySetupProgress> {
       key: 'test',
       // Anchored at the live "Test your assistant" tool. The design preview on
       // this page is a mock, so linking at the page alone left the step untestable.
-      title: 'Try it yourself',
-      description: 'Ask it the questions your customers ask. Check it says it does not know instead of guessing.',
+      ...SETUP_STEP_COPY['test']!,
       href: '/company/widget#test-assistant',
       complete: canTest,
       detail: canTest ? 'Ready — ask it something' : 'Finish the three steps above first',
     },
     {
       key: 'install',
-      title: 'Put it on your website',
-      description: 'Tell us your web address and copy one line of code onto your site. Then it is live for customers.',
+      ...SETUP_STEP_COPY['install']!,
       href: '/company/widget',
       complete: widgetInstalled,
       detail: widgetInstalled ? 'Your website is connected' : 'Not on your website yet',

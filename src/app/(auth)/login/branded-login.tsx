@@ -87,6 +87,15 @@ export function BrandedLogin({
               See onboarding
             </Link>
           </div>
+          {/* Until self-serve signup existed there was nowhere to send somebody
+              who had not got an account, so this page quietly assumed everyone
+              arriving already had one. */}
+          <p className="mt-5 border-t pt-5 text-center text-sm text-slate-600">
+            New here?{' '}
+            <Link href="/signup" className="font-medium text-primary hover:underline">
+              Create an account
+            </Link>
+          </p>
           <p className="mt-8 text-center text-xs text-slate-500">{branding.productName} - AI Assistant Platform &copy; 2026</p>
         </div>
       </section>

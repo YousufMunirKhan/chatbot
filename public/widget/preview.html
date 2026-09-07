@@ -31,6 +31,9 @@
         return;
       }
       var s = document.createElement('script');
+      // Matches the real embed: dynamically inserted scripts default to async
+      // anyway, and saying so keeps the preview honest about how it loads.
+      s.async = true;
       s.src = location.origin + '/widget/widget.js';
       s.setAttribute('data-bot-id', bot);
       s.setAttribute('data-api', location.origin);

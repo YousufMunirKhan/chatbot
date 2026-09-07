@@ -44,6 +44,10 @@
     {
       "path": "/api/cron?task=improvement_emails",
       "schedule": "0 7 * * 1"
+    },
+    {
+      "path": "/api/cron/snooze",
+      "schedule": "*/5 * * * *"
     }
   ]
 }

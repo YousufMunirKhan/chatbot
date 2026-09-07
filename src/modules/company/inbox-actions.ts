@@ -9,6 +9,7 @@ import { sendEmail } from '@/lib/email';
 import { notify } from '@/lib/notify';
 import { markFirstResponse, markResolved } from '@/lib/sla';
 import { getCompanyId } from './data';
+import { MAX_SNOOZE_DAYS, snoozePresetMinutes } from './components/inbox-snooze-presets';
 
 export type ActionState = { error?: string; ok?: boolean };
 
@@ -252,6 +253,210 @@ export async function resolveTicketAction(
   revalidatePath('/company/notifications');
   revalidatePath('/company/webhooks');
   return { ok: true };
+}
+
+// ---- Assignment ----------------------------------------------------------
+
+/**
+ * `unassigned` rather than an empty string: an empty `<option>` value and a
+ * missing field are the same thing in a FormData, so "put this back in the
+ * unassigned pile" would be indistinguishable from a form that failed to
+ * serialise.
+ */
+const UNASSIGNED = 'unassigned';
+
+const assignSchema = z.object({
+  conversationId: z.string().uuid(),
+  assigneeId: z.union([z.string().uuid(), z.literal(UNASSIGNED)]),
+});
+
+/**
+ * Hand a conversation to a colleague, or put it back in the unassigned pile.
+ *
+ * Until now the only assignment was the implicit one in `sendAgentReplyAction`:
+ * whoever replied got the conversation, and nobody could pass it on. This is
+ * the explicit version, and it records who did it — `assigned_by` and
+ * `assigned_at` on the row so the panel can say so without a join, and an audit
+ * row so the trail survives the next reassignment.
+ *
+ * The assignee is checked against `company_users` for THIS company before the
+ * update. The service-role client bypasses row-level security, so without that
+ * check a crafted form could park another tenant's conversation on a stranger.
+ */
+export async function assignConversationAction(
+  _prev: ActionState,
+  formData: FormData,
+): Promise<ActionState> {
+  await requireRole([ROLES.COMPANY_ADMIN, ROLES.AGENT]);
+  const companyId = await getCompanyId();
+  const user = await getSessionUser();
+  if (!user) return { error: 'Not signed in' };
+
+  const parsed = assignSchema.safeParse(Object.fromEntries(formData));
+  if (!parsed.success) return { error: 'Pick who this should go to' };
+  const { conversationId, assigneeId } = parsed.data;
+
+  const sb = createSupabaseServiceClient();
+  if (!(await ownsConversation(sb, companyId, conversationId))) {
+    return { error: 'Conversation not found' };
+  }
+
+  const assignee = assigneeId === UNASSIGNED ? null : assigneeId;
+  if (assignee) {
+    const { data: membership } = await sb
+      .from('company_users')
+      .select('user_id')
+      .eq('company_id', companyId)
+      .eq('user_id', assignee)
+      .maybeSingle();
+    if (!membership) return { error: 'That person is not on your team' };
+  }
+
+  const now = new Date().toISOString();
+  const { error } = await sb
+    .from('conversations')
+    .update({
+      assigned_agent_id: assignee,
+      assigned_at: assignee ? now : null,
+      assigned_by: assignee ? user.userId : null,
+    })
+    .eq('company_id', companyId)
+    .eq('id', conversationId);
+  if (error) return { error: error.message };
+
+  await sb.from('audit_logs').insert({
+    company_id: companyId,
+    actor_user_id: user.userId,
+    action: assignee ? 'conversation.assigned' : 'conversation.unassigned',
+    target_type: 'conversation',
+    target_id: conversationId,
+    metadata_json: { assigneeUserId: assignee, self: assignee === user.userId },
+  });
+
+  revalidateInbox(conversationId);
+  return { ok: true };
+}
+
+// ---- Snooze --------------------------------------------------------------
+
+const snoozeSchema = z.object({
+  conversationId: z.string().uuid(),
+  /** One of SNOOZE_PRESETS, or empty when the agent picked an exact time. */
+  preset: z.string().max(8).optional(),
+  /** A `datetime-local` value: `2026-09-09T14:30`, in the agent's own clock. */
+  until: z.string().max(32).optional(),
+  /** `Date.prototype.getTimezoneOffset()` from that same clock. */
+  tzOffsetMinutes: z.string().max(6).optional(),
+});
+
+const LOCAL_DATETIME = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/;
+
+/**
+ * Turn what the form said into an instant, or into the reason it could not be.
+ *
+ * A preset is a duration, so it needs no timezone. A picked time is a wall
+ * clock reading with no zone attached, which is why the control sends the
+ * browser's offset alongside it: `getTimezoneOffset()` is UTC minus local in
+ * minutes, so adding it to the value read as UTC gives the instant the agent
+ * actually meant. Without that, an agent in Dubai asking for 2pm would be
+ * snoozing until 6pm.
+ */
+function resolveSnoozeUntil(input: {
+  preset?: string;
+  until?: string;
+  tzOffsetMinutes?: string;
+}): { at: Date } | { error: string } {
+  const minutes = snoozePresetMinutes(input.preset);
+  if (minutes) return { at: new Date(Date.now() + minutes * 60_000) };
+
+  const picked = (input.until ?? '').trim();
+  if (!picked) return { error: 'Choose how long to put this aside for' };
+  if (!LOCAL_DATETIME.test(picked)) return { error: 'That is not a time we can read' };
+
+  const offset = Number(input.tzOffsetMinutes ?? '0');
+  if (!Number.isFinite(offset) || Math.abs(offset) > 24 * 60) {
+    return { error: 'That is not a time we can read' };
+  }
+  const at = new Date(Date.parse(`${picked}:00.000Z`) + offset * 60_000);
+  if (Number.isNaN(at.getTime())) return { error: 'That is not a time we can read' };
+  if (at.getTime() <= Date.now()) return { error: 'Pick a time in the future' };
+  if (at.getTime() > Date.now() + MAX_SNOOZE_DAYS * 24 * 60 * 60_000) {
+    return { error: `Pick a time within the next ${MAX_SNOOZE_DAYS} days` };
+  }
+  return { at };
+}
+
+/**
+ * Put a conversation aside until a chosen time.
+ *
+ * Nothing about the conversation changes except `snoozed_until`: the status,
+ * the assignment and the assistant setting are all left exactly as they were,
+ * so waking up is nothing more than the timestamp falling into the past. The
+ * queues test that timestamp against `now()` themselves, which is why a
+ * conversation comes back on time even if the sweep in /api/cron/snooze has
+ * stopped running.
+ */
+export async function snoozeConversationAction(
+  _prev: ActionState,
+  formData: FormData,
+): Promise<ActionState> {
+  await requireRole([ROLES.COMPANY_ADMIN, ROLES.AGENT]);
+  const companyId = await getCompanyId();
+  const user = await getSessionUser();
+  if (!user) return { error: 'Not signed in' };
+
+  const parsed = snoozeSchema.safeParse(Object.fromEntries(formData));
+  if (!parsed.success) return { error: parsed.error.issues[0]?.message ?? 'Invalid input' };
+
+  const resolved = resolveSnoozeUntil(parsed.data);
+  if ('error' in resolved) return { error: resolved.error };
+
+  const sb = createSupabaseServiceClient();
+  if (!(await ownsConversation(sb, companyId, parsed.data.conversationId))) {
+    return { error: 'Conversation not found' };
+  }
+
+  const until = resolved.at.toISOString();
+  const { error } = await sb
+    .from('conversations')
+    .update({ snoozed_until: until, snoozed_by: user.userId })
+    .eq('company_id', companyId)
+    .eq('id', parsed.data.conversationId);
+  if (error) return { error: error.message };
+
+  await sb.from('audit_logs').insert({
+    company_id: companyId,
+    actor_user_id: user.userId,
+    action: 'conversation.snoozed',
+    target_type: 'conversation',
+    target_id: parsed.data.conversationId,
+    metadata_json: { until },
+  });
+
+  revalidateInbox(parsed.data.conversationId);
+  return { ok: true };
+}
+
+/** Bring a snoozed conversation back now, before it is due. */
+export async function wakeConversationAction(formData: FormData): Promise<ActionState> {
+  const { conversationId } = conversationIdSchema.parse(Object.fromEntries(formData));
+  const result = await updateConversationState({
+    conversationId,
+    values: { snoozed_until: null, snoozed_by: null },
+  });
+  if (!result.ok) return result;
+
+  const user = await getSessionUser();
+  const sb = createSupabaseServiceClient();
+  await sb.from('audit_logs').insert({
+    company_id: await getCompanyId(),
+    actor_user_id: user?.userId ?? null,
+    action: 'conversation.woken',
+    target_type: 'conversation',
+    target_id: conversationId,
+    metadata_json: {},
+  });
+  return result;
 }
 
 // ---- Ticketing: priority, tags, internal notes, canned responses ----------

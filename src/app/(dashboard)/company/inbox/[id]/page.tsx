@@ -17,10 +17,13 @@ import {
 } from '@/modules/company/inbox-data';
 import { AgentReplyForm } from '@/modules/company/components/agent-reply-form';
 import { ConversationAiToggle } from '@/modules/company/components/conversation-ai-toggle';
+import { ConversationAssign } from '@/modules/company/components/conversation-assign';
+import { ConversationSnooze } from '@/modules/company/components/conversation-snooze';
 import { InboxRealtime } from '@/modules/company/components/inbox-realtime';
 import { ChatAutoScroll } from '@/modules/company/components/chat-auto-scroll';
 import { TicketPanel } from '@/modules/company/components/ticket-panel';
 import { ConversationPresence } from '@/modules/company/components/conversation-presence';
+import { timeUntilLabel } from '@/modules/company/components/inbox-snooze-presets';
 
 /**
  * One conversation.
@@ -45,7 +48,13 @@ import { ConversationPresence } from '@/modules/company/components/conversation-
 type BadgeVariant = 'default' | 'secondary' | 'success' | 'warning' | 'destructive' | 'outline';
 type Chip = { label: string; variant: BadgeVariant };
 
-function statusChip(convo: ConversationDetail): Chip | null {
+function statusChip(convo: ConversationDetail, now: Date): Chip | null {
+  // A live snooze outranks the status. The conversation may well still be
+  // "waiting for you", but not until Tuesday, and that is the fact that decides
+  // whether the reader does anything about it now.
+  if (convo.snoozedUntil && new Date(convo.snoozedUntil).getTime() > now.getTime()) {
+    return { label: `Snoozed · back in ${timeUntilLabel(convo.snoozedUntil, now)}`, variant: 'secondary' };
+  }
   if (convo.status === 'needs_human') return { label: 'Waiting for you', variant: 'warning' };
   if (convo.status === 'closed') return { label: 'Sorted', variant: 'outline' };
   if (convo.status === 'expired') return { label: 'Went quiet', variant: 'outline' };
@@ -134,14 +143,14 @@ export default async function ConversationPage({
   params: { id: string };
   searchParams?: { msgs?: string };
 }) {
-  await requireRole([ROLES.COMPANY_ADMIN, ROLES.AGENT]);
+  const session = await requireRole([ROLES.COMPANY_ADMIN, ROLES.AGENT]);
   const messageLimit = Number(searchParams?.msgs) || DEFAULT_MESSAGE_WINDOW;
   const convo = await getConversationDetail(params.id, { messageLimit });
   if (!convo) notFound();
 
   const now = new Date();
   const { label: name, suffix } = conversationDisplayName(convo);
-  const chips = [statusChip(convo), exceptionChip(convo)].filter((chip): chip is Chip => chip !== null);
+  const chips = [statusChip(convo, now), exceptionChip(convo)].filter((chip): chip is Chip => chip !== null);
   const ticketNumber = conversationTicketNumber(convo);
   const contactLine = [convo.leadName ? convo.leadContact : null, convo.assignedAgentName ? `Assigned to ${convo.assignedAgentName}` : null]
     .filter(Boolean)
@@ -237,6 +246,29 @@ export default async function ConversationPage({
             </CardContent>
           </Card>
         ) : null}
+        {/* Who has it and when it is due back, above the ticket panel: both
+            answer "is anyone dealing with this", which is the first question
+            asked on opening a conversation someone else was in. */}
+        <Card>
+          <CardContent className="space-y-4 p-4">
+            <ConversationAssign
+              key={`assign-${convo.id}`}
+              conversationId={convo.id}
+              members={convo.assignableMembers}
+              currentUserId={session.userId}
+              assignedAgentId={convo.assignedAgentId}
+              assignedAgentName={convo.assignedAgentName}
+              assignedByName={convo.assignedByName}
+              assignedAt={convo.assignedAt}
+            />
+            <ConversationSnooze
+              key={`snooze-${convo.id}`}
+              conversationId={convo.id}
+              snoozedUntil={convo.snoozedUntil}
+              snoozedByName={convo.snoozedByName}
+            />
+          </CardContent>
+        </Card>
         <Card>
           <CardContent className="p-4">
             <TicketPanel

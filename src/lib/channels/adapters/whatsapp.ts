@@ -99,6 +99,9 @@ export const whatsappAdapter: ChannelAdapter = {
 
   async send(ctx, to, blocks): Promise<boolean> {
     if (!ctx.secret) return false;
+    // The 24-hour service window is enforced in `handleInboundEvent`, not here.
+    // Adapters are pure request-shaping — pulling the database lookup into this
+    // module dragged `next/headers` in with it and broke every adapter test.
     let delivered = false;
     for (const block of blocks) {
       for (const message of whatsappMessages(block)) {
