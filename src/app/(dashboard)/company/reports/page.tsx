@@ -19,12 +19,28 @@ import {
 } from '@/components/ui/table';
 import { TabLinks } from '@/components/ui/tabs';
 import {
+  MAX_RANGE_DAYS,
+  RANGE_PRESETS,
+  REPORT_TABS,
+  SCHEDULE_FREQUENCIES,
+  WEEKDAY_NAMES,
   getAssistantReport,
+  getCompanyRangeOffset,
   getCustomersReport,
+  getReportScheduling,
   getReportsSnapshot,
   getSalesReport,
   getTeamReport,
+  rangeRequestFrom,
+  resolveRange,
+  type ReportRange,
 } from '@/modules/company/reports-data';
+import {
+  deleteReportScheduleAction,
+  sendReportNowAction,
+  toggleReportScheduleAction,
+} from '@/modules/company/reports-actions';
+import { ReportScheduleForm } from '@/modules/company/components/report-schedule-form';
 import {
   DAY_LABELS,
   describeHeatmapCell,
@@ -32,8 +48,6 @@ import {
 } from '@/modules/company/reports-metrics';
 
 export const dynamic = 'force-dynamic';
-
-const RANGES = [7, 30, 90];
 
 const TABS = [
   {
@@ -61,6 +75,11 @@ const TABS = [
     label: 'Sales & campaigns',
     helper: 'Orders that started in chat, cart recovery, broadcasts and automations.',
   },
+  {
+    key: 'scheduled',
+    label: 'Scheduled',
+    helper: 'Have any of these arrive by email, and see what was actually sent.',
+  },
 ] as const;
 
 type TabKey = (typeof TABS)[number]['key'];
@@ -69,7 +88,25 @@ function isTab(value: string | undefined): value is TabKey {
   return TABS.some((t) => t.key === value);
 }
 
-const href = (tab: TabKey, days: number) => `/company/reports?tab=${tab}&days=${days}`;
+/**
+ * The URL contract, in one place.
+ *
+ * `?range=` names the window and `?from=`/`?to=` carry a custom one, so a link
+ * to a report is a link to the SAME report when it is pasted into a chat or
+ * bookmarked. Only `custom` carries dates; everything else resolves itself
+ * fresh, which is what makes "this month" still mean this month next month.
+ */
+function href(tab: TabKey, range: ReportRange): string {
+  const params = new URLSearchParams({ tab, range: range.key });
+  if (range.key === 'custom') {
+    params.set('from', range.dayKeys[0] ?? '');
+    params.set('to', range.dayKeys[range.dayKeys.length - 1] ?? '');
+  }
+  return `/company/reports?${params.toString()}`;
+}
+
+/** The same query string, for a preset the reader has not selected yet. */
+const presetHref = (tab: TabKey, key: string) => `/company/reports?tab=${tab}&range=${key}`;
 
 /**
  * A dependency-free sparkline. A charting library would be several hundred
@@ -191,8 +228,8 @@ const money = (value: number, currency: string) =>
 // Panels
 // ===========================================================================
 
-async function OverviewPanel({ days }: { days: number }) {
-  const snapshot = await getReportsSnapshot(days);
+async function OverviewPanel({ range }: { range: ReportRange }) {
+  const snapshot = await getReportsSnapshot(range);
   const maxConversations = Math.max(...snapshot.channels.map((c) => c.conversations), 1);
 
   return (
@@ -407,8 +444,8 @@ async function OverviewPanel({ days }: { days: number }) {
   );
 }
 
-async function TeamPanel({ days }: { days: number }) {
-  const report = await getTeamReport(days);
+async function TeamPanel({ range }: { range: ReportRange }) {
+  const report = await getTeamReport(range);
   const withActivity = report.agents.filter(
     (a) => a.conversations > 0 || a.messagesSent > 0 || a.openLoad > 0,
   );
@@ -519,8 +556,8 @@ async function TeamPanel({ days }: { days: number }) {
   );
 }
 
-async function CustomersPanel({ days }: { days: number }) {
-  const report = await getCustomersReport(days);
+async function CustomersPanel({ range }: { range: ReportRange }) {
+  const report = await getCustomersReport(range);
   const start = report.funnel[0]?.count ?? 0;
 
   return (
@@ -733,8 +770,8 @@ async function CustomersPanel({ days }: { days: number }) {
   );
 }
 
-async function AssistantPanel({ days }: { days: number }) {
-  const report = await getAssistantReport(days);
+async function AssistantPanel({ range }: { range: ReportRange }) {
+  const report = await getAssistantReport(range);
 
   return (
     <div className="space-y-6">
@@ -860,8 +897,8 @@ async function AssistantPanel({ days }: { days: number }) {
   );
 }
 
-async function SalesPanel({ days }: { days: number }) {
-  const report = await getSalesReport(days);
+async function SalesPanel({ range }: { range: ReportRange }) {
+  const report = await getSalesReport(range);
 
   return (
     <div className="space-y-6">
@@ -1077,18 +1114,341 @@ async function SalesPanel({ days }: { days: number }) {
 }
 
 // ===========================================================================
+// Scheduled
+// ===========================================================================
+
+const STATUS_TONE = {
+  sent: 'success',
+  skipped: 'warning',
+  failed: 'destructive',
+} as const;
+
+const when = (value: string | null) => {
+  if (!value) return '—';
+  const d = new Date(value);
+  if (Number.isNaN(d.getTime())) return '—';
+  return d.toLocaleString('en-US', {
+    year: 'numeric',
+    month: 'short',
+    day: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+  });
+};
+
+/**
+ * Scheduled reports, and the record of what was actually sent.
+ *
+ * The two tables belong together on purpose. A schedule on its own says what
+ * somebody intended; the delivery list underneath says what happened, including
+ * the runs that sent nothing and why. A product that only shows the first one
+ * lets a report stop arriving for a month before anybody notices.
+ */
+async function ScheduledPanel({ editId }: { editId?: string }) {
+  const view = await getReportScheduling();
+  const editing = editId ? view.schedules.find((s) => s.id === editId) : undefined;
+
+  return (
+    <div className="space-y-6">
+      {!view.emailConfigured ? (
+        <Alert tone="warning" title="No email provider is configured">
+          Schedules save and keep their place in the queue, but nothing can be delivered until this
+          platform has an email provider set up. Every run that has to be skipped is listed under
+          Recent sends with that reason, so a gap here is never silent.
+        </Alert>
+      ) : null}
+
+      <Card>
+        <CardHeader>
+          <CardTitle>{editing ? `Editing “${editing.name}”` : 'Send a report by email'}</CardTitle>
+          <CardDescription>
+            Pick a section, a period and how often it should arrive. The period is worked out again
+            on every send, so “last month” is always the month that has just finished.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <ReportScheduleForm
+            tabs={REPORT_TABS.map((t) => ({ value: t.key, label: t.label }))}
+            ranges={RANGE_PRESETS.map((r) => ({ value: r.key, label: r.label }))}
+            frequencies={SCHEDULE_FREQUENCIES.map((f) => ({ value: f.key, label: f.label }))}
+            weekdays={WEEKDAY_NAMES.map((d, i) => ({ value: String(i), label: d }))}
+            schedule={editing}
+            emailConfigured={view.emailConfigured}
+            timeZoneLabel={view.timeZone ?? 'UTC — set your timezone in Settings to change this'}
+          />
+          {editing ? (
+            <Button asChild size="sm" variant="outline">
+              <a href="/company/reports?tab=scheduled">Cancel and start a new one</a>
+            </Button>
+          ) : null}
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Your schedules</CardTitle>
+          <CardDescription>Times are in your own timezone.</CardDescription>
+        </CardHeader>
+        <CardContent className="p-0">
+          {view.schedules.length === 0 ? (
+            <EmptyState
+              title="Nothing is scheduled yet"
+              body="Set one up above and it will arrive without anyone having to remember to open this page."
+            />
+          ) : (
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Report</TableHead>
+                  <TableHead>Covering</TableHead>
+                  <TableHead>When</TableHead>
+                  <TableHead>Sent to</TableHead>
+                  <TableHead>Next</TableHead>
+                  <TableHead>
+                    <span className="sr-only">Actions</span>
+                  </TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {view.schedules.map((s) => (
+                  <TableRow key={s.id}>
+                    <TableCell>
+                      <span className="font-medium">{s.name}</span>
+                      <span className="block text-xs text-muted-foreground">{s.tabLabel}</span>
+                    </TableCell>
+                    <TableCell>
+                      <Badge variant="outline">{s.rangeLabel}</Badge>
+                    </TableCell>
+                    <TableCell className="text-sm">{s.cadence}</TableCell>
+                    <TableCell className="text-xs text-muted-foreground">
+                      {s.recipients.join(', ')}
+                    </TableCell>
+                    <TableCell className="text-sm">
+                      {s.isActive ? (
+                        when(s.nextRunAt)
+                      ) : (
+                        <Badge variant="secondary">Paused</Badge>
+                      )}
+                      {s.lastRunAt ? (
+                        <span className="block text-xs text-muted-foreground">
+                          Last: {when(s.lastRunAt)}
+                        </span>
+                      ) : null}
+                    </TableCell>
+                    <TableCell>
+                      {/*
+                        Sibling forms rather than one form with several submit
+                        buttons: each posts to a different server action, and
+                        forms cannot be nested.
+                      */}
+                      <div className="flex flex-wrap items-center gap-2">
+                        <Button asChild size="sm" variant="outline">
+                          <a href={`/company/reports?tab=scheduled&edit=${s.id}`}>Edit</a>
+                        </Button>
+                        <form action={sendReportNowAction}>
+                          <input type="hidden" name="id" value={s.id} />
+                          <Button type="submit" size="sm" variant="outline">
+                            Send now
+                          </Button>
+                        </form>
+                        <form action={toggleReportScheduleAction}>
+                          <input type="hidden" name="id" value={s.id} />
+                          <input type="hidden" name="active" value={s.isActive ? 'false' : 'true'} />
+                          <Button type="submit" size="sm" variant="outline">
+                            {s.isActive ? 'Pause' : 'Resume'}
+                          </Button>
+                        </form>
+                        <form action={deleteReportScheduleAction}>
+                          <input type="hidden" name="id" value={s.id} />
+                          <Button type="submit" size="sm" variant="outline">
+                            Delete
+                          </Button>
+                        </form>
+                      </div>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          )}
+        </CardContent>
+        {view.schedules.length > 0 ? (
+          <Note>
+            “Send now” does not use up the next scheduled send — it is a test copy, and the result
+            appears in Recent sends below. Deleting a schedule keeps its delivery history.
+          </Note>
+        ) : null}
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Recent sends</CardTitle>
+          <CardDescription>
+            Every attempt, including the ones that sent nothing and the reason why.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="p-0">
+          {view.deliveries.length === 0 ? (
+            <EmptyState
+              title="Nothing has been sent yet"
+              body="Once a schedule runs — or you press “Send now” — every attempt is recorded here."
+            />
+          ) : (
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>When</TableHead>
+                  <TableHead>Report</TableHead>
+                  <TableHead>Covering</TableHead>
+                  <TableHead>Result</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {view.deliveries.map((d) => (
+                  <TableRow key={d.id}>
+                    <TableCell className="whitespace-nowrap text-sm">{when(d.createdAt)}</TableCell>
+                    <TableCell>
+                      <span className="font-medium">{d.scheduleName}</span>
+                      <span className="block text-xs text-muted-foreground">{d.tabLabel}</span>
+                    </TableCell>
+                    <TableCell className="text-sm">{d.rangeLabel}</TableCell>
+                    <TableCell>
+                      <Badge variant={STATUS_TONE[d.status]}>
+                        {d.status === 'sent'
+                          ? `Sent to ${d.recipients.length}`
+                          : d.status === 'skipped'
+                            ? 'Not sent'
+                            : 'Failed'}
+                      </Badge>
+                      {d.reasonLabel ? (
+                        <span className="mt-1 block max-w-md text-xs text-muted-foreground">
+                          {d.reasonLabel}
+                        </span>
+                      ) : null}
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          )}
+        </CardContent>
+      </Card>
+    </div>
+  );
+}
+
+// ===========================================================================
+// Range picker
+// ===========================================================================
+
+/**
+ * The window control.
+ *
+ * Presets are anchors, and the custom form is a plain GET form, so the whole
+ * control works with no JavaScript and every state it can be in has its own
+ * URL. The date inputs carry `max` so the calendar itself refuses tomorrow —
+ * but `resolveRange` on the server is what actually decides, because a `max`
+ * attribute is a hint to a browser and this endpoint is reachable without one.
+ */
+function RangePicker({ tab, range, todayKey }: { tab: TabKey; range: ReportRange; todayKey: string }) {
+  const from = range.key === 'custom' ? (range.dayKeys[0] ?? '') : '';
+  const to = range.key === 'custom' ? (range.dayKeys[range.dayKeys.length - 1] ?? '') : '';
+
+  return (
+    <div className="space-y-3">
+      <div className="flex flex-wrap gap-2">
+        {RANGE_PRESETS.map((preset) => (
+          <Button
+            key={preset.key}
+            asChild
+            size="sm"
+            variant={preset.key === range.key ? 'default' : 'outline'}
+          >
+            <a href={presetHref(tab, preset.key)}>{preset.label}</a>
+          </Button>
+        ))}
+      </div>
+
+      <form
+        action="/company/reports"
+        method="get"
+        className="flex flex-wrap items-end gap-3 rounded-md border bg-muted/30 p-3"
+      >
+        <input type="hidden" name="tab" value={tab} />
+        <input type="hidden" name="range" value="custom" />
+        <div className="space-y-1">
+          <label htmlFor="range-from" className="block text-xs font-medium">
+            From
+          </label>
+          <input
+            id="range-from"
+            name="from"
+            type="date"
+            defaultValue={from}
+            max={todayKey}
+            required
+            className="h-9 rounded-md border border-input bg-background px-3 text-sm"
+          />
+        </div>
+        <div className="space-y-1">
+          <label htmlFor="range-to" className="block text-xs font-medium">
+            To
+          </label>
+          <input
+            id="range-to"
+            name="to"
+            type="date"
+            defaultValue={to}
+            max={todayKey}
+            required
+            className="h-9 rounded-md border border-input bg-background px-3 text-sm"
+          />
+        </div>
+        <Button type="submit" size="sm" variant={range.key === 'custom' ? 'default' : 'outline'}>
+          Use these dates
+        </Button>
+        <p className="text-xs text-muted-foreground">
+          Up to {MAX_RANGE_DAYS} days. Longer than that and the report would have to read more of
+          your history than it can finish in one page load, so it is trimmed to the most recent{' '}
+          {MAX_RANGE_DAYS} days and says so.
+        </p>
+      </form>
+    </div>
+  );
+}
+
+// ===========================================================================
 // Page
 // ===========================================================================
 
 export default async function ReportsPage({
   searchParams,
 }: {
-  searchParams?: { days?: string; tab?: string };
+  searchParams?: {
+    range?: string;
+    /** The old three-button contract. Still honoured — see `rangeRequestFrom`. */
+    days?: string;
+    from?: string;
+    to?: string;
+    tab?: string;
+    edit?: string;
+  };
 }) {
   await requireRole([ROLES.COMPANY_ADMIN]);
-  const requested = Number(searchParams?.days);
-  const days = RANGES.includes(requested) ? requested : 30;
   const tab: TabKey = isTab(searchParams?.tab) ? searchParams.tab : 'overview';
+
+  // The offset rides on `getCompanyCoreRow()`, which the dashboard layout has
+  // already read this request, so asking where the company's day starts costs
+  // no extra round trip.
+  const offsetMinutes = await getCompanyRangeOffset();
+  const range = resolveRange(rangeRequestFrom(searchParams ?? {}), offsetMinutes);
+  const todayKey = resolveRange({ key: 'last_7' }, offsetMinutes).dayKeys.at(-1) ?? '';
+
+  const exportParams = new URLSearchParams({ tab, range: range.key });
+  if (range.key === 'custom') {
+    exportParams.set('from', range.dayKeys[0] ?? '');
+    exportParams.set('to', range.dayKeys[range.dayKeys.length - 1] ?? '');
+  }
 
   return (
     <div className="mx-auto max-w-7xl space-y-6">
@@ -1096,21 +1456,30 @@ export default async function ReportsPage({
         title="Reports"
         description="Where your chats come from, how many your assistant finished without you, who on your team is carrying them, and what any of it earned."
         actions={
-          <Button asChild size="sm" variant="outline">
-            <a href={`/api/company/reports/export?tab=${tab}&days=${days}`}>
-              Export this tab (CSV)
-            </a>
-          </Button>
+          tab === 'scheduled' ? null : (
+            <Button asChild size="sm" variant="outline">
+              <a href={`/api/company/reports/export?${exportParams.toString()}`}>
+                Export this tab (CSV)
+              </a>
+            </Button>
+          )
         }
       />
 
-      <div className="flex flex-wrap gap-2">
-        {RANGES.map((r) => (
-          <Button key={r} asChild size="sm" variant={r === days ? 'default' : 'outline'}>
-            <a href={href(tab, r)}>Last {r} days</a>
-          </Button>
-        ))}
-      </div>
+      {tab === 'scheduled' ? null : (
+        <>
+          <RangePicker tab={tab} range={range} todayKey={todayKey} />
+          {range.notice ? (
+            <Alert tone="warning" title="That range was adjusted">
+              {range.notice}
+            </Alert>
+          ) : null}
+          <p className="text-sm text-muted-foreground">
+            Showing <span className="font-medium text-foreground">{range.label}</span> —{' '}
+            {range.days} day{range.days === 1 ? '' : 's'}.
+          </p>
+        </>
+      )}
 
       <TabLinks
         label="Report sections"
@@ -1119,14 +1488,15 @@ export default async function ReportsPage({
           key: t.key,
           label: t.label,
           helper: t.helper,
-          href: href(t.key, days),
+          href: t.key === 'scheduled' ? '/company/reports?tab=scheduled' : href(t.key, range),
         }))}
       >
-        {tab === 'overview' ? <OverviewPanel days={days} /> : null}
-        {tab === 'team' ? <TeamPanel days={days} /> : null}
-        {tab === 'customers' ? <CustomersPanel days={days} /> : null}
-        {tab === 'assistant' ? <AssistantPanel days={days} /> : null}
-        {tab === 'sales' ? <SalesPanel days={days} /> : null}
+        {tab === 'overview' ? <OverviewPanel range={range} /> : null}
+        {tab === 'team' ? <TeamPanel range={range} /> : null}
+        {tab === 'customers' ? <CustomersPanel range={range} /> : null}
+        {tab === 'assistant' ? <AssistantPanel range={range} /> : null}
+        {tab === 'sales' ? <SalesPanel range={range} /> : null}
+        {tab === 'scheduled' ? <ScheduledPanel editId={searchParams?.edit} /> : null}
       </TabLinks>
     </div>
   );

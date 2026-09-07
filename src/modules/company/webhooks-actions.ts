@@ -55,7 +55,12 @@ export async function createWebhookAction(
   const { count } = await sb
     .from('webhook_endpoints')
     .select('id', { count: 'exact', head: true })
-    .eq('company_id', companyId);
+    .eq('company_id', companyId)
+    // A Zapier subscription writes a row here too. Counting those against the
+    // plan's endpoint limit means a customer with a few Zaps is locked out of
+    // adding a webhook of their own, for reasons they cannot see. Those
+    // subscriptions are capped separately in src/lib/api/hooks.ts.
+    .neq('kind', 'rest_hook');
   if ((count ?? 0) >= limits.maxEndpoints) {
     return { error: `Your plan allows up to ${limits.maxEndpoints} webhook endpoint(s).` };
   }

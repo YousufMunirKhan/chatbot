@@ -1,0 +1,20 @@
+{
+  "name": "ai-assistant-zapier",
+  "version": "1.0.0",
+  "description": "Zapier integration for the AI Assistant platform — REST hook triggers for enquiries, conversations and orders, plus actions to send a message and create an enquiry. Push with the Zapier CLI; see docs/ZAPIER.md.",
+  "main": "index.js",
+  "private": true,
+  "scripts": {
+    "test": "node --test \"test/*.test.js\""
+  },
+  "engines": {
+    "node": ">=18",
+    "npm": ">=8"
+  },
+  "dependencies": {
+    "zapier-platform-core": "^15.0.0"
+  },
+  "zapier": {
+    "convertedByCLIVersion": "manual"
+  }
+}

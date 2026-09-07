@@ -106,6 +106,16 @@
     try { window.localStorage.removeItem(NS + key); } catch (e) {}
   }
 
+  // Session-scoped twins. Anything that should reset when the visitor comes back
+  // tomorrow belongs here rather than in localStorage — a chat invite is the
+  // example that made the difference obvious.
+  function ssGet(key) {
+    try { return window.sessionStorage.getItem(NS + key); } catch (e) { return null; }
+  }
+  function ssSet(key, val) {
+    try { window.sessionStorage.setItem(NS + key, val); } catch (e) {}
+  }
+
   function uuid() {
     if (window.crypto && window.crypto.randomUUID) {
       try { return window.crypto.randomUUID(); } catch (e) {}
@@ -1758,23 +1768,44 @@
   // Behaviour-triggered proactive nudge: pick the first active rule whose URL
   // pattern matches this page and, after its delay, open the chat with that
   // message. Shown at most once per session so visitors aren't nagged.
+  /**
+   * One flag per invite, held for the session.
+   *
+   * This used to be a single `proactiveShown` in localStorage, which meant two
+   * things nobody intended. localStorage never expires, so a visitor saw one
+   * invite in their life and never another; and the flag was shared by every
+   * invite on the bot, so whichever fired first permanently silenced the rest —
+   * a pricing nudge would switch off the checkout nudge for that person for
+   * good. Keyed by invite id and kept in sessionStorage, each invite gets one
+   * showing per visit, which is what the original comment said it did.
+   */
+  function proactiveKey(rule) {
+    // Fall back to the message when an older cached config has no id, so a
+    // widget that has not reloaded still tracks invites separately.
+    return 'proactiveShown:' + (rule.id || rule.message);
+  }
+
   function scheduleProactiveCampaign() {
     if (state.proactiveTimer || state.open) return;
     if (!state.proactiveRules || !state.proactiveRules.length) return;
-    if (lsGet('proactiveShown') === '1') return;
     var href = window.location.href;
     var rule = null;
     for (var i = 0; i < state.proactiveRules.length; i++) {
       var r = state.proactiveRules[i];
       if (!r || !r.message) continue;
-      if (!r.matchUrl || href.indexOf(r.matchUrl) !== -1) { rule = r; break; }
+      if (r.matchUrl && href.indexOf(r.matchUrl) === -1) continue;
+      // Already shown this visit — try the next match rather than giving up,
+      // so a second invite on the same page still gets its turn.
+      if (ssGet(proactiveKey(r)) === '1') continue;
+      rule = r;
+      break;
     }
     if (!rule) return;
     var delay = Math.max(0, Number(rule.delaySeconds || 0)) * 1000;
     state.proactiveTimer = setTimeout(function () {
       state.proactiveTimer = null;
       if (state.open) return;
-      lsSet('proactiveShown', '1');
+      ssSet(proactiveKey(rule), '1');
       state.proactiveMessage = rule.message;
       openWidget(true); // welcome bubble uses proactiveMessage on auto-open
     }, delay);

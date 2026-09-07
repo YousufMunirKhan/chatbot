@@ -3,9 +3,21 @@
 import { redirect } from 'next/navigation';
 import { revalidatePath } from 'next/cache';
 import { z } from 'zod';
-import { requireRole } from '@/lib/auth';
+import { requireRole, type SessionUser } from '@/lib/auth';
 import { revokeSessionsIfAccessEnded } from '@/lib/auth/revoke';
-import { ASSISTANT_AUDIENCES, ROLES } from '@/lib/constants';
+import { ASSISTANT_AUDIENCES, ROLES, type Role } from '@/lib/constants';
+import {
+  describePermissions,
+  getEffectivePermissions,
+  hasPermission,
+  overridesFrom,
+  parsePermissionList,
+  permissionDenied,
+  permissionsBeyond,
+  resolvePermissions,
+  roleRank,
+  type Permission,
+} from '@/lib/permissions';
 import { createSupabaseServiceClient } from '@/lib/db/server';
 import { BOT_CAPABILITIES, BOT_TYPES } from '@/lib/constants';
 import { getCompanyId } from './data';
@@ -21,6 +33,28 @@ export type ActionState = { error?: string; ok?: boolean };
 
 const optText = z.preprocess((x) => (x === '' || x == null ? undefined : x), z.string().optional());
 const optEnabled = z.preprocess((x) => (x == null ? true : x === 'on'), z.boolean());
+
+/**
+ * The gate every write in this file now runs (migration 0080).
+ *
+ * It replaces `requireRole([ROLES.COMPANY_ADMIN])`, which was the right rule
+ * spelled as the wrong thing: it said "owners only" when what it meant was
+ * "whoever may configure the assistant". An owner holds every permission by
+ * default, so nothing changes for them; a team member an owner has explicitly
+ * trusted with one area can now do that one thing and still nothing else.
+ *
+ * The role check that remains is only "is this person a member of a company" —
+ * the decision itself is the permission.
+ *
+ * Returns the refusal instead of throwing it. These are all `useFormState`
+ * actions, and a thrown error inside one of those reaches the error boundary
+ * rather than the message the person is standing there reading.
+ */
+async function guard(permission: Permission): Promise<{ error: string } | null> {
+  await requireRole([ROLES.COMPANY_ADMIN, ROLES.AGENT]);
+  if (!(await hasPermission(permission))) return { error: permissionDenied(permission) };
+  return null;
+}
 
 /**
  * Copy/colour seed for a BRAND-NEW assistant only (Issue #38). Everything else in
@@ -88,7 +122,8 @@ const profileSchema = z.object({
 });
 
 export async function updateProfileAction(_prev: ActionState, formData: FormData): Promise<ActionState> {
-  await requireRole([ROLES.COMPANY_ADMIN]);
+  const denied = await guard('settings.manage');
+  if (denied) return denied;
   const companyId = await getCompanyId();
   const parsed = profileSchema.safeParse(Object.fromEntries(formData));
   if (!parsed.success) return { error: parsed.error.issues[0]?.message ?? 'Invalid input' };
@@ -188,7 +223,8 @@ async function requestHelpdeskConnectorResync(companyId: string, reason: string)
 }
 
 export async function createBotAction(_prev: ActionState, formData: FormData): Promise<ActionState> {
-  await requireRole([ROLES.COMPANY_ADMIN]);
+  const denied = await guard('bots.manage');
+  if (denied) return denied;
   const companyId = await getCompanyId();
   const fields = readBotFields(formData);
   if ('error' in fields) return { error: fields.error };
@@ -252,7 +288,8 @@ export async function createBotAction(_prev: ActionState, formData: FormData): P
 const updateBotSchema = z.object({ botId: z.string().uuid(), aiEnabled: optText });
 
 export async function updateBotAction(_prev: ActionState, formData: FormData): Promise<ActionState> {
-  await requireRole([ROLES.COMPANY_ADMIN]);
+  const denied = await guard('bots.manage');
+  if (denied) return denied;
   const companyId = await getCompanyId();
   const meta = updateBotSchema.safeParse(Object.fromEntries(formData));
   if (!meta.success) return { error: 'Invalid request' };
@@ -325,7 +362,9 @@ export async function updatePromptConfigAction(
   _prev: ActionState,
   formData: FormData,
 ): Promise<ActionState> {
-  const admin = await requireRole([ROLES.COMPANY_ADMIN]);
+  const denied = await guard('bots.manage');
+  if (denied) return denied;
+  const admin = await requireRole([ROLES.COMPANY_ADMIN, ROLES.AGENT]);
   const companyId = await getCompanyId();
   const parsed = promptConfigSchema.safeParse(Object.fromEntries(formData));
   if (!parsed.success) return { error: parsed.error.issues[0]?.message ?? 'Invalid input' };
@@ -364,21 +403,155 @@ export async function updatePromptConfigAction(
 }
 
 // ---------------------------------------------------------------------------
-// Team / agents
+// Team / agents — roles and permissions (migration 0080)
+//
+// Everything below shares one rule, and it is the reason the feature exists at
+// all rather than being a nicer invite form: NOBODY MAY RAISE THEIR OWN ROLE OR
+// HAND OUT ACCESS THEY DO NOT THEMSELVES HOLD. It is enforced in `checkGrant`
+// and in the two target checks each write does before it touches a row, never
+// by what the page chose to render — a client form component imports these
+// actions directly, so a hidden control stops nobody.
 // ---------------------------------------------------------------------------
+
+/** The roles a company may hand out. `super_admin` is a platform flag, never a membership. */
+const ASSIGNABLE_ROLE_VALUES = [ROLES.COMPANY_ADMIN, ROLES.AGENT] as const;
+
+/**
+ * One error map rather than zod's own wording. A missing value and a value
+ * outside the list are different codes in zod and would otherwise surface as
+ * "Required" and "Invalid enum value, expected 'company_admin' | 'agent'" — the
+ * second of which shows an owner two internal identifiers and tells them nothing
+ * about what to do next.
+ */
+const roleField = z.enum(ASSIGNABLE_ROLE_VALUES, {
+  errorMap: () => ({ message: 'Choose a role for this person' }),
+});
+
+interface TeamManager {
+  actor: SessionUser;
+  companyId: string;
+  /** What the CALLER can do. The ceiling on everything they may grant. */
+  held: Set<Permission>;
+}
+
+/**
+ * The caller, if they may manage the team at all.
+ *
+ * Deliberately not `requireRole([ROLES.COMPANY_ADMIN])` any more. That was the
+ * old rule spelled as a role, and it is now spelled as the permission it always
+ * meant: an owner holds `agents.manage` by default and nothing changes for them,
+ * while a team member an owner has explicitly trusted with the team can now do
+ * this too. The role check that remains is only "is this person a member of a
+ * company at all".
+ *
+ * Returns the refusal rather than throwing it — every caller here is a
+ * `useFormState` action, and a thrown error in one of those reaches the error
+ * boundary instead of the message the person is reading.
+ */
+async function requireTeamManager(): Promise<TeamManager | { error: string }> {
+  const actor = await requireRole([ROLES.COMPANY_ADMIN, ROLES.AGENT]);
+  const companyId = await getCompanyId();
+  const held = await getEffectivePermissions();
+  if (!held.has('agents.manage')) return { error: permissionDenied('agents.manage') };
+  return { actor, companyId, held };
+}
+
+/**
+ * May this manager hand out this role with these permissions?
+ *
+ * Two rules, and both are needed.
+ *
+ * The permission rule — you may grant any subset of what you hold and nothing
+ * else — is the one that does the real work. An owner holds everything, so it
+ * never fires for them; a team member trusted with `agents.manage` cannot use it
+ * to mint themselves a colleague who can read the billing page and then sign in
+ * as them.
+ *
+ * The role rule is not implied by the first one. A person could hold all
+ * nineteen permissions through overrides and still be a team member, and roles
+ * are read directly by `requireRole()` in dozens of places this module does not
+ * own. Letting them create an owner would hand out authority the permission set
+ * does not describe, so a role is only ever assignable downwards from your own.
+ *
+ * Returns the wording for the refusal, or null when the grant is allowed.
+ */
+function checkGrant(manager: TeamManager, role: Role, wanted: readonly Permission[]): string | null {
+  if (roleRank(role) > roleRank(manager.actor.role)) {
+    return 'You cannot give somebody a role with more authority than your own.';
+  }
+  const excess = permissionsBeyond(manager.held, wanted);
+  if (excess.length) {
+    return `You cannot give somebody access you do not have yourself: ${describePermissions(excess)}.`;
+  }
+  return null;
+}
+
+/**
+ * May this manager act on this member at all?
+ *
+ * The mirror of `checkGrant`, pointed at the person being changed rather than at
+ * the change. Without it a team member trusted with `agents.manage` could strip
+ * the owner of the account down to nothing, or remove them outright — taking
+ * away authority is an escalation just as surely as granting it is.
+ */
+function checkTarget(
+  manager: TeamManager,
+  target: { user_id?: unknown; role?: unknown; permissions_json?: unknown },
+  verb: string,
+): string | null {
+  if (target.user_id === manager.actor.userId) {
+    return `You cannot ${verb} your own access. Ask another owner of this account to do it.`;
+  }
+  const theirs = resolvePermissions(target.role as string, target.permissions_json);
+  if (roleRank(target.role as string) > roleRank(manager.actor.role) || permissionsBeyond(manager.held, theirs).length) {
+    return `You cannot ${verb} the access of somebody who can do more than you can.`;
+  }
+  return null;
+}
+
+/**
+ * Would this leave the account with nobody who can administer it?
+ *
+ * An owner demoting or removing the last other owner locks the company out of
+ * its own billing, settings and this very page, and nothing but a support ticket
+ * gets it back. Cheap to check, so it is checked.
+ */
+async function wouldStrandCompany(
+  sb: ReturnType<typeof createSupabaseServiceClient>,
+  companyId: string,
+  currentRole: unknown,
+  nextRole: Role | null,
+): Promise<boolean> {
+  if (currentRole !== ROLES.COMPANY_ADMIN || nextRole === ROLES.COMPANY_ADMIN) return false;
+  const { count } = await sb
+    .from('company_users')
+    .select('id', { count: 'exact', head: true })
+    .eq('company_id', companyId)
+    .eq('role', ROLES.COMPANY_ADMIN);
+  return (count ?? 0) <= 1;
+}
+
 const inviteSchema = z.object({
   email: z.string().email('Valid email required'),
   fullName: optText,
+  role: roleField,
 });
 
 export async function inviteAgentAction(_prev: ActionState, formData: FormData): Promise<ActionState> {
-  const admin = await requireRole([ROLES.COMPANY_ADMIN]);
-  const companyId = await getCompanyId();
+  const manager = await requireTeamManager();
+  if ('error' in manager) return manager;
+  const { actor, companyId } = manager;
   const parsed = inviteSchema.safeParse(Object.fromEntries(formData));
   if (!parsed.success) return { error: parsed.error.issues[0]?.message ?? 'Invalid input' };
   const v = parsed.data;
+  const wanted = parsePermissionList(formData.getAll('permissions'));
+  const denial = checkGrant(manager, v.role, wanted);
+  if (denial) return { error: denial };
   const sb = createSupabaseServiceClient();
 
+  // A seat is a seat whatever the role is called. Charging for team members and
+  // not for owners would make "invite everybody as an owner" the way around the
+  // plan limit, which is the same hole with better manners.
   try {
     await assertWithinPlan(companyId, 'create_agent');
   } catch (e) {
@@ -393,9 +566,12 @@ export async function inviteAgentAction(_prev: ActionState, formData: FormData):
       company_id: companyId,
       email: v.email.toLowerCase(),
       full_name: v.fullName ?? null,
-      role: ROLES.AGENT,
+      role: v.role,
+      // Only the differences from the role's defaults, so an invitation that
+      // was not customised stores `{}` and the person simply follows their role.
+      permissions_json: overridesFrom(v.role, wanted),
       token_hash: hashInviteToken(token),
-      invited_by: admin.userId,
+      invited_by: actor.userId,
       expires_at: expiresAt,
       last_sent_at: new Date().toISOString(),
     })
@@ -403,20 +579,100 @@ export async function inviteAgentAction(_prev: ActionState, formData: FormData):
     .single();
   if (iErr || !invite) return { error: 'Could not create invite: ' + (iErr?.message ?? '') };
 
+  const asOwner = v.role === ROLES.COMPANY_ADMIN;
   const inviteUrl = `${env.NEXT_PUBLIC_APP_URL.replace(/\/+$/, '')}/agent-invite/${token}`;
   const emailResult = await sendEmail({
     to: v.email,
-    subject: 'You have been invited as a chat agent',
-    html: `<p>You have been invited to join the chat agent team.</p><p><a href="${inviteUrl}">Set your password</a></p><p>This link expires in 7 days.</p>`,
+    // The email now has to say which door they are being given, because the two
+    // are not the same job: one works the inbox, the other can change the bill.
+    subject: asOwner ? 'You have been invited as an owner' : 'You have been invited as a chat agent',
+    html: asOwner
+      ? `<p>You have been invited to help run this account. You will be able to change settings, billing and the team.</p><p><a href="${inviteUrl}">Set your password</a></p><p>This link expires in 7 days.</p>`
+      : `<p>You have been invited to join the chat agent team.</p><p><a href="${inviteUrl}">Set your password</a></p><p>This link expires in 7 days.</p>`,
   });
 
   await sb.from('audit_logs').insert({
     company_id: companyId,
-    actor_user_id: admin.userId,
+    actor_user_id: actor.userId,
     action: 'agent.invited',
     target_type: 'agent_invite',
     target_id: invite.id,
-    metadata_json: { email: v.email, emailSent: emailResult.sent },
+    // The role and the resolved permission set are on the audit entry because
+    // "who let this person near billing" is the question asked months later,
+    // long after the invitation row itself has been accepted and overwritten.
+    metadata_json: { email: v.email, role: v.role, permissions: wanted, emailSent: emailResult.sent },
+  });
+
+  revalidatePath('/company/agents');
+  return { ok: true };
+}
+
+const memberAccessSchema = z.object({
+  membershipId: z.string().uuid(),
+  role: roleField,
+});
+
+/**
+ * Change what somebody already on the team can do.
+ *
+ * Takes effect on their very next request: `getSessionUser()` re-reads the
+ * membership row every request and only memoises it for the render it is in, so
+ * there is no session to end and nothing to invalidate. A person who loses the
+ * inbox loses it while looking at it.
+ */
+export async function updateMemberAccessAction(
+  _prev: ActionState,
+  formData: FormData,
+): Promise<ActionState> {
+  const manager = await requireTeamManager();
+  if ('error' in manager) return manager;
+  const { actor, companyId } = manager;
+  const parsed = memberAccessSchema.safeParse(Object.fromEntries(formData));
+  if (!parsed.success) return { error: parsed.error.issues[0]?.message ?? 'Invalid input' };
+  const wanted = parsePermissionList(formData.getAll('permissions'));
+  const sb = createSupabaseServiceClient();
+
+  // The company filter is the tenant boundary — the service client bypasses RLS,
+  // and `companyId` comes off the session while `membershipId` comes off the
+  // form. Without it a posted id from another tenant would resolve.
+  const { data: member } = await sb
+    .from('company_users')
+    .select('user_id, role, permissions_json')
+    .eq('id', parsed.data.membershipId)
+    .eq('company_id', companyId)
+    .maybeSingle();
+  if (!member) return { error: 'That person is not on your team.' };
+
+  const targetDenial = checkTarget(manager, member, 'change');
+  if (targetDenial) return { error: targetDenial };
+  const grantDenial = checkGrant(manager, parsed.data.role, wanted);
+  if (grantDenial) return { error: grantDenial };
+
+  if (await wouldStrandCompany(sb, companyId, member.role, parsed.data.role)) {
+    return {
+      error:
+        'This is the only owner of the account. Make somebody else an owner first, or nobody will be able to reach billing, settings or this page.',
+    };
+  }
+
+  const { error } = await sb
+    .from('company_users')
+    .update({ role: parsed.data.role, permissions_json: overridesFrom(parsed.data.role, wanted) })
+    .eq('id', parsed.data.membershipId)
+    .eq('company_id', companyId); // scope guard, repeated on the write
+  if (error) return { error: `Could not save their access: ${error.message}` };
+
+  await sb.from('audit_logs').insert({
+    company_id: companyId,
+    actor_user_id: actor.userId,
+    action: 'agent.access_changed',
+    target_type: 'membership',
+    target_id: parsed.data.membershipId,
+    metadata_json: {
+      userId: member.user_id,
+      from: { role: member.role, permissions: [...resolvePermissions(member.role as string, member.permissions_json)] },
+      to: { role: parsed.data.role, permissions: wanted },
+    },
   });
 
   revalidatePath('/company/agents');
@@ -435,58 +691,85 @@ const removeSchema = z.object({ membershipId: z.string().uuid() });
  * a removal the admin has already been told is done. The Team page promises the
  * person "is signed out immediately"; before this it was only true once their
  * token expired on its own.
+ *
+ * WHY THE `role = 'agent'` FILTER IS GONE
+ * ---------------------------------------
+ * A company can hold more than one owner now, so "remove from the team" has to
+ * be able to reach one — otherwise the only way to take an owner's access away
+ * is a support ticket. That filter was also carrying two safety properties on
+ * its own, and both are now stated outright instead: `checkTarget` refuses the
+ * caller's own row and anybody who can do more than they can, and
+ * `wouldStrandCompany` refuses the last owner. Losing the filter without those
+ * would have turned this into "any manager can delete the owner".
  */
 async function removeAgent(membershipId: string): Promise<ActionState> {
-  const admin = await requireRole([ROLES.COMPANY_ADMIN]);
-  const companyId = await getCompanyId();
+  const manager = await requireTeamManager();
+  if ('error' in manager) return manager;
+  const { actor, companyId } = manager;
   const sb = createSupabaseServiceClient();
 
   // Read before deleting: the membership row holds the only pointer to the
-  // login whose sessions have to go. The filters are the same three as the
-  // delete below — an AGENT membership in THIS company — so an admin, another
-  // tenant's member, and the caller themselves are all out of reach. Self
-  // removal cannot happen through here at all: one person holds at most one row
-  // per company, and whoever passed `requireRole` above holds the admin one.
+  // login whose sessions have to go, and its role decides both whether this is
+  // allowed and what `revokeSessionsIfAccessEnded` is told. The company filter
+  // is the tenant boundary — `membershipId` came off a form.
   const { data: membership } = await sb
     .from('company_users')
-    .select('user_id')
+    .select('user_id, role, permissions_json')
     .eq('id', membershipId)
     .eq('company_id', companyId)
-    .eq('role', ROLES.AGENT)
     .maybeSingle();
 
+  if (!membership) {
+    // Nothing matched, so nothing is there to delete and there is no session to
+    // end — the row was already gone, or it was never this company's to remove.
+    // Either way the team list is now what was asked for.
+    revalidatePath('/company/agents');
+    return { ok: true };
+  }
+
+  const targetDenial = checkTarget(manager, membership, 'remove');
+  if (targetDenial) return { error: targetDenial };
+
+  if (await wouldStrandCompany(sb, companyId, membership.role, null)) {
+    return {
+      error:
+        'This is the only owner of the account. Make somebody else an owner first, or nobody will be able to reach billing, settings or this page.',
+    };
+  }
+
+  const memberRole = membership.role as string;
   const { error } = await sb
     .from('company_users')
     .delete()
     .eq('id', membershipId)
     .eq('company_id', companyId)
-    .eq('role', ROLES.AGENT);
+    // The role the checks above were run against. If it changed between the read
+    // and this write, the decision was made about a different person's access
+    // than the one being deleted, and the delete matches nothing.
+    .eq('role', memberRole);
   if (error) {
     revalidatePath('/company/agents');
     return { error: `Could not remove them from the team: ${error.message}` };
   }
 
-  const userId = (membership as { user_id?: string } | null)?.user_id ?? null;
+  const userId = (membership as { user_id?: string }).user_id ?? null;
   if (!userId) {
-    // Nothing matched those filters, so nothing was deleted and there is no
-    // session to end — the row was already gone, or it was never this
-    // company's to remove. Either way the team list is now what was asked for.
     revalidatePath('/company/agents');
     return { ok: true };
   }
 
-  const revocation = await revokeSessionsIfAccessEnded(sb, userId, companyId, ROLES.AGENT);
+  const revocation = await revokeSessionsIfAccessEnded(sb, userId, companyId, memberRole);
 
   await sb.from('audit_logs').insert({
     company_id: companyId,
-    actor_user_id: admin.userId,
+    actor_user_id: actor.userId,
     action: 'agent.removed',
     target_type: 'membership',
     target_id: membershipId,
     // The outcome is on the audit entry because "we removed them but could not
     // sign them out" is the fact a security review needs months later, long
     // after the message below has been dismissed.
-    metadata_json: { userId, revocation },
+    metadata_json: { userId, role: memberRole, revocation },
   });
 
   revalidatePath('/company/agents');

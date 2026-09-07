@@ -9,6 +9,7 @@ import { PageHeader } from '@/components/ui/page-header';
 import { getCompanySetupProgress, type CompanySetupProgress, type SetupStep } from '@/modules/company/setup-data';
 import { TestAssistant } from '@/modules/company/components/test-assistant';
 import { WebsiteOnboardingForm } from '@/modules/company/components/website-onboarding-form';
+import { formatDate } from '@/lib/format';
 
 /**
  * "What do I do next?" — the whole page.
@@ -199,15 +200,45 @@ export default async function CompanySetupPage() {
         </CardContent>
       </Card>
 
+      {/* Once the import has happened this stops being an instruction and becomes
+          a record of it. Asking for the website address again, on the same page
+          that already says "Your website is connected", reads as a job still
+          outstanding — which is the one thing this page exists not to do. */}
       <Card>
         <CardHeader>
-          <CardTitle>The quick way to do step 3</CardTitle>
+          <CardTitle>
+            {setup.websiteImport ? 'Your website has been read' : 'The quick way to do step 3'}
+          </CardTitle>
           <p className="mt-1 text-sm text-muted-foreground">
-            If you already have a website, give us the address and we will read your pages for you — your services,
-            your prices, your opening hours, your policies. Then you only have to fill in what is missing.
+            {setup.websiteImport ? (
+              <>
+                We read your pages on {formatDate(setup.websiteImport.importedAt)} and saved what we
+                found as knowledge your assistant can use. Import it again whenever the site changes
+                — it updates what is there rather than adding a second copy.
+              </>
+            ) : (
+              <>
+                If you already have a website, give us the address and we will read your pages for
+                you — your services, your prices, your opening hours, your policies. Then you only
+                have to fill in what is missing.
+              </>
+            )}
           </p>
         </CardHeader>
         <CardContent className="space-y-5">
+          {setup.websiteImport ? (
+            <div className="flex flex-wrap items-center justify-between gap-3 rounded-md border bg-muted/40 p-3">
+              <div className="min-w-0">
+                <p className="text-sm font-medium">{setup.websiteImport.title}</p>
+                <p className="text-xs text-muted-foreground">
+                  Read {formatDate(setup.websiteImport.importedAt)}
+                </p>
+              </div>
+              <Button asChild size="sm" variant="outline">
+                <Link href="/company/business-data?tab=knowledge">See what it found</Link>
+              </Button>
+            </div>
+          ) : null}
           <WebsiteOnboardingForm />
           <div className="grid gap-3 md:grid-cols-3">
             <div className="rounded-md border p-3 text-sm">

@@ -188,6 +188,18 @@ const stubs = {
     );
   `,
   '@/lib/impersonation': `export const IMPERSONATION_COOKIE = 'aiba_impersonation_session';`,
+  // `data.ts` resolves each member's effective permissions now. The real module
+  // reads no database, so the stub only has to satisfy the shape the callers
+  // spread and count — grant everything, so nothing this test measures is
+  // filtered out by a permission it was never about.
+  '@/lib/permissions': `
+    export const PERMISSIONS = ['inbox.read'];
+    export const ROLE_PERMISSIONS = {};
+    export function resolvePermissions() { return new Set(PERMISSIONS); }
+    export function normalizePermissionOverrides() { return {}; }
+    export function roleRank() { return 0; }
+    export function isAssignableRole() { return true; }
+  `,
   '@/lib/errors': `
     export class AppError extends Error {}
     export class UnauthorizedError extends AppError {}

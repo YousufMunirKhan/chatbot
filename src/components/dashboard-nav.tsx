@@ -1,9 +1,9 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
-import { usePathname } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation';
 import { cn } from '@/lib/utils';
 import {
   Sheet,
@@ -198,30 +198,54 @@ function BrandMark({
   );
 }
 
+/**
+ * Which menu belongs on the route we are actually looking at.
+ *
+ * `/company` and `/super-admin` share one layout, and the App Router does not
+ * re-render a shared layout on navigation between them. Without this, a super
+ * admin whose impersonation ended kept the company menu beside the platform
+ * dashboard — the menu said one thing and the page said another.
+ */
+function sectionsForPath(
+  pathname: string,
+  sections: NavSection[],
+  platformSections?: NavSection[],
+): NavSection[] {
+  if (platformSections && pathname.startsWith('/super-admin')) return platformSections;
+  return sections;
+}
+
 /** Desktop sidebar (hidden on mobile) with active-route highlighting. */
 export function DesktopSidebar({
   sections,
+  platformSections,
   brand,
   logoUrl,
   labels,
   impersonating,
 }: {
   sections: NavSection[];
+  /** The platform menu, for a super admin who may cross into /super-admin. */
+  platformSections?: NavSection[];
   brand: string;
   logoUrl?: string | null;
   labels?: ShellLabels;
   impersonating?: boolean;
 }) {
   const pathname = usePathname();
-  const brandHref = pathname.startsWith('/super-admin') ? '/super-admin' : '/company';
+  const onPlatform = pathname.startsWith('/super-admin');
+  const brandHref = onPlatform ? '/super-admin' : '/company';
+  // Not just the menu: "VIEWING CUSTOMER ACCOUNT" over the platform dashboard is
+  // the same contradiction in smaller type.
+  const showAsImpersonating = Boolean(impersonating) && !onPlatform;
   const l = withDefaults(labels);
   return (
     <aside className="hidden w-64 shrink-0 bg-brand-sidebar p-4 text-sidebar-fg shadow-xl md:block">
       <div className="mb-6">
         <BrandMark brand={brand} href={brandHref} logoUrl={logoUrl} className="shadow-lg" />
-        <WorkspaceIdentity brand={brand} impersonating={impersonating} labels={l} />
+        <WorkspaceIdentity brand={brand} impersonating={showAsImpersonating} labels={l} />
       </div>
-      <NavList sections={sections} pathname={pathname} />
+      <NavList sections={sectionsForPath(pathname, sections, platformSections)} pathname={pathname} />
     </aside>
   );
 }
@@ -246,12 +270,15 @@ export function DesktopSidebar({
  */
 export function MobileNav({
   sections,
+  platformSections,
   brand,
   logoUrl,
   labels,
   impersonating,
 }: {
   sections: NavSection[];
+  /** The platform menu, for a super admin who may cross into /super-admin. */
+  platformSections?: NavSection[];
   brand: string;
   logoUrl?: string | null;
   labels?: ShellLabels;
@@ -335,7 +362,11 @@ export function MobileNav({
           </SheetClose>
         </div>
 
-        <NavList sections={sections} pathname={pathname} onNavigate={() => setOpen(false)} />
+        <NavList
+          sections={sectionsForPath(pathname, sections, platformSections)}
+          pathname={pathname}
+          onNavigate={() => setOpen(false)}
+        />
       </SheetContent>
     </Sheet>
   );
@@ -385,8 +416,21 @@ export function ImpersonationBanner({
   children: React.ReactNode;
 }) {
   const msLeft = useTimeLeft(expiresAt);
+  const router = useRouter();
 
   const expired = msLeft !== null && msLeft <= 0;
+
+  // The countdown reaching zero only changed a label. The server still believed
+  // the impersonation was live until something happened to re-render, so the
+  // banner said "Session expired" while the whole workspace carried on as the
+  // customer. Refreshing re-runs the layout, which drops the impersonation and
+  // puts the operator back in their own account — once, not on every tick.
+  const refreshedRef = useRef(false);
+  useEffect(() => {
+    if (!expired || refreshedRef.current) return;
+    refreshedRef.current = true;
+    router.refresh();
+  }, [expired, router]);
   const critical = msLeft !== null && msLeft > 0 && msLeft <= 60_000;
   const warning = msLeft !== null && msLeft > 60_000 && msLeft <= 5 * 60_000;
   const alarm = expired || critical;

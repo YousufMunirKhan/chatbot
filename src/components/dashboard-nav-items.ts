@@ -144,6 +144,7 @@ const COMPANY_NAV_GROUPS: NavGroupDef[] = [
       { href: '/company/intents', label: 'Trigger phrases' },
       // Was "Quality" / "Quality Room". Says what you do there instead.
       { href: '/company/quality', label: 'Improve answers' },
+      { href: '/company/help-center', label: 'Help articles' },
     ],
   },
   {
@@ -177,6 +178,7 @@ const COMPANY_NAV_GROUPS: NavGroupDef[] = [
     items: [
       { href: '/company/reports', label: 'Reports' },
       { href: '/company/usage', label: 'Usage & limits' },
+      { href: '/company/activity', label: 'Activity log' },
     ],
   },
   {

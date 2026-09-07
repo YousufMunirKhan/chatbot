@@ -48,6 +48,10 @@
     {
       "path": "/api/cron/snooze",
       "schedule": "*/5 * * * *"
+    },
+    {
+      "path": "/api/v1/hooks/dispatch",
+      "schedule": "* * * * *"
     }
   ]
 }

@@ -4,6 +4,12 @@ import { getSessionUser, homePathFor } from '@/lib/auth';
 import { getCompanyCoreRow } from '@/lib/company/company-core';
 import { createSupabaseServiceClient } from '@/lib/db/server';
 import { NotFoundError } from '@/lib/errors';
+import {
+  normalizePermissionOverrides,
+  resolvePermissions,
+  type Permission,
+  type PermissionOverrides,
+} from '@/lib/permissions';
 
 /**
  * Company-scoped data layer (Module 5). Every query is bound to the SESSION
@@ -153,12 +159,23 @@ export interface MemberRow {
   fullName: string | null;
   role: string;
   presenceStatus?: string | null;
+  /**
+   * Role defaults plus this person's own overrides — what they can actually do.
+   * Resolved here rather than on the page so the Team screen, an escalation
+   * check and an audit entry can never disagree about one member.
+   */
+  permissions: Permission[];
+  /** Only the differences from the role default, as stored. */
+  permissionOverrides: PermissionOverrides;
 }
 
 export interface AgentInviteRow {
   id: string;
   email: string;
   fullName: string | null;
+  role: string;
+  /** What this person will be able to do the moment they accept. */
+  permissions: Permission[];
   expiresAt: string;
   acceptedAt: string | null;
   revokedAt: string | null;
@@ -171,19 +188,22 @@ export const listMembers = cache(async function listMembers(): Promise<MemberRow
   const sb = createSupabaseServiceClient();
   const { data, error } = await sb
     .from('company_users')
-    .select('id, user_id, role, users(email, full_name)')
+    .select('id, user_id, role, permissions_json, users(email, full_name)')
     .eq('company_id', companyId)
     .order('created_at', { ascending: true });
   if (error) throw error;
   const rows: MemberRow[] = (data ?? []).map((m) => {
     const x = m as Record<string, unknown>;
     const u = rec(x.users);
+    const role = x.role as string;
     return {
       membershipId: x.id as string,
       userId: x.user_id as string,
       email: (u.email as string) ?? null,
       fullName: (u.full_name as string) ?? null,
-      role: x.role as string,
+      role,
+      permissions: [...resolvePermissions(role, x.permissions_json)],
+      permissionOverrides: normalizePermissionOverrides(x.permissions_json),
     };
   });
   const userIds = rows.map((r) => r.userId);
@@ -206,16 +226,23 @@ export async function listAgentInvites(): Promise<AgentInviteRow[]> {
   const sb = createSupabaseServiceClient();
   const { data, error } = await sb
     .from('agent_invites')
-    .select('id,email,full_name,expires_at,accepted_at,revoked_at,last_sent_at')
+    .select('id,email,full_name,role,permissions_json,expires_at,accepted_at,revoked_at,last_sent_at')
     .eq('company_id', companyId)
     .order('created_at', { ascending: false });
   if (error) throw error;
   return (data ?? []).map((invite) => {
     const x = invite as Record<string, unknown>;
+    // Invitations sent before migration 0080 have no role stored on them in any
+    // meaningful sense — the column existed but only ever held 'agent'. Reading
+    // it back with that fallback keeps the historic rows rendering as what they
+    // actually were.
+    const role = (x.role as string) ?? 'agent';
     return {
       id: x.id as string,
       email: x.email as string,
       fullName: (x.full_name as string) ?? null,
+      role,
+      permissions: [...resolvePermissions(role, x.permissions_json)],
       expiresAt: x.expires_at as string,
       acceptedAt: (x.accepted_at as string) ?? null,
       revokedAt: (x.revoked_at as string) ?? null,

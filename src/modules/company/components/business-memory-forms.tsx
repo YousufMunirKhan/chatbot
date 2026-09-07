@@ -179,7 +179,7 @@ export function BusinessMemoryForm({ profile }: { profile: BusinessProfileMemory
         </FormField>
       </div>
 
-      <div className="grid gap-4 lg:grid-cols-3">
+      <div className="grid gap-4 sm:grid-cols-2">
         {/* Phone boxes with no `type` get a full keyboard on a phone and no
             format guidance at all. The assistant reads these out to customers,
             so the country code is not optional. */}
@@ -323,7 +323,7 @@ export function LocationForm() {
   const [state, action] = useFormState(addLocationAction, initial);
   return (
     <form action={action} className="space-y-4">
-      <div className="grid gap-4 lg:grid-cols-3">
+      <div className="grid gap-4 sm:grid-cols-2">
         <FormField label="Location name" htmlFor="name">
           <Input name="name" required placeholder="Main branch" />
         </FormField>
@@ -411,8 +411,16 @@ export function ServiceForm({ defaultCurrency }: { defaultCurrency: string }) {
   const [state, action] = useFormState(addServiceAction, initial);
   return (
     <form action={action} className="space-y-4">
-      <div className="grid gap-4 lg:grid-cols-4">
-        <FormField label="Service, product, or appointment option" htmlFor="serviceName">
+      {/* Two across, not four. `lg:` measures the VIEWPORT, but this form sits in
+          the narrow column of a 1.5fr/1fr split, so a four-column row here was
+          about 110px per field on a full-width screen — wide enough to clip a
+          select's own text. Anything with a long label spans the row. */}
+      <div className="grid gap-4 sm:grid-cols-2">
+        <FormField
+          label="Service, product, or appointment option"
+          htmlFor="serviceName"
+          className="sm:col-span-2"
+        >
           <Input
             name="name"
             required
@@ -455,14 +463,14 @@ export function ServiceForm({ defaultCurrency }: { defaultCurrency: string }) {
             ))}
           </Select>
         </FormField>
-        <label className="mt-7 flex items-center gap-2 text-sm">
-          <input name="bookingRequired" type="checkbox" className="h-4 w-4" />
-          Visitor can request/book this
+        <label className="flex items-center gap-2 text-sm sm:col-span-2">
+          <input name="bookingRequired" type="checkbox" className="h-4 w-4 shrink-0" />
+          Visitor can request or book this
         </label>
         <FormField
           label="What should the assistant say about it?"
           htmlFor="description"
-          className="lg:col-span-4"
+          className="sm:col-span-2"
         >
           <Textarea
             name="description"
@@ -473,7 +481,7 @@ export function ServiceForm({ defaultCurrency }: { defaultCurrency: string }) {
         <FormField
           label="What should the visitor provide?"
           htmlFor="requirements"
-          className="lg:col-span-4"
+          className="sm:col-span-2"
         >
           <Textarea
             name="requirements"
@@ -500,7 +508,7 @@ export function EditServiceForm({
   return (
     <form action={action} className="mt-3 space-y-4 rounded-md border bg-muted/30 p-4">
       <input type="hidden" name="id" value={service.id} />
-      <div className="grid gap-4 lg:grid-cols-4">
+      <div className="grid gap-4 sm:grid-cols-2">
         <FormField
           label="Service, product, or appointment option"
           htmlFor={`serviceName-${service.id}`}
@@ -560,14 +568,14 @@ export function EditServiceForm({
         <FormField
           label="What should the assistant say about it?"
           htmlFor={`description-${service.id}`}
-          className="lg:col-span-4"
+          className="sm:col-span-2"
         >
           <Textarea name="description" rows={3} defaultValue={service.description ?? ''} />
         </FormField>
         <FormField
           label="What should the visitor provide?"
           htmlFor={`requirements-${service.id}`}
-          className="lg:col-span-4"
+          className="sm:col-span-2"
         >
           <Textarea name="requirements" rows={2} defaultValue={service.requirements ?? ''} />
         </FormField>
@@ -582,7 +590,7 @@ export function PolicyForm() {
   const [state, action] = useFormState(addPolicyAction, initial);
   return (
     <form action={action} className="space-y-4">
-      <div className="grid gap-4 lg:grid-cols-3">
+      <div className="grid gap-4 sm:grid-cols-2">
         <FormField label="Policy title" htmlFor="policyTitle">
           <Input name="title" required placeholder="Refund policy" />
         </FormField>
@@ -610,7 +618,7 @@ export function EditPolicyForm({ policy }: { policy: PolicyRow }) {
   return (
     <form action={action} className="mt-3 space-y-4 rounded-md border bg-muted/30 p-4">
       <input type="hidden" name="id" value={policy.id} />
-      <div className="grid gap-4 lg:grid-cols-3">
+      <div className="grid gap-4 sm:grid-cols-2">
         <FormField label="Policy title" htmlFor={`policyTitle-${policy.id}`}>
           <Input name="title" required defaultValue={policy.title} />
         </FormField>
@@ -637,7 +645,7 @@ export function FaqForm() {
   const [state, action] = useFormState(addFaqAction, initial);
   return (
     <form action={action} className="space-y-4">
-      <div className="grid gap-4 lg:grid-cols-3">
+      <div className="grid gap-4 sm:grid-cols-2">
         <FormField label="Question" htmlFor="question" className="lg:col-span-2">
           <Input name="question" required />
         </FormField>
@@ -665,7 +673,7 @@ export function EditFaqForm({ faq }: { faq: FaqRow }) {
   return (
     <form action={action} className="mt-3 space-y-4 rounded-md border bg-muted/30 p-4">
       <input type="hidden" name="id" value={faq.id} />
-      <div className="grid gap-4 lg:grid-cols-3">
+      <div className="grid gap-4 sm:grid-cols-2">
         <FormField label="Question" htmlFor={`question-${faq.id}`} className="lg:col-span-2">
           <Input name="question" required defaultValue={faq.question} />
         </FormField>

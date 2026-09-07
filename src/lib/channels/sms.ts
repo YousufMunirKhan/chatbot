@@ -56,8 +56,23 @@ function twilioFields(payload: unknown): TwilioFields | null {
  * what the webhook delivers or the identity lookup silently finds nothing.
  */
 export function toE164(value: string | null | undefined): string {
-  const digits = String(value ?? '').replace(/\D/g, '');
-  return digits ? `+${digits}` : '';
+  const raw = String(value ?? '').trim();
+  const digits = raw.replace(/\D/g, '');
+  if (!digits) return '';
+
+  // Already international: keep it.
+  if (raw.startsWith('+')) return `+${digits}`;
+  // `00` is the international access prefix in most of the world.
+  if (digits.startsWith('00')) return `+${digits.slice(2)}`;
+  // A leading zero is a NATIONAL trunk prefix, not a country code. Blindly
+  // prefixing `+` produced `+07946322081`, which is not a valid E.164 number:
+  // nothing after `+` may start with a zero. It showed up in the contact list,
+  // and it broke both buttons beside it — a `tel:` link that will not dial and
+  // a wa.me link that resolves to nothing. Without knowing the country there is
+  // no correct international form, so the national form is kept intact rather
+  // than being decorated into something invalid.
+  if (digits.startsWith('0')) return digits;
+  return `+${digits}`;
 }
 
 function mediaKind(contentType: string | undefined): InboundAttachment['kind'] {

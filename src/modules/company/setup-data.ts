@@ -22,6 +22,15 @@ export interface CompanySetupProgress {
   total: number;
   nextStep: SetupStep | null;
   steps: SetupStep[];
+  /**
+   * The website import that already happened, if one did.
+   *
+   * The setup page asked for a website address every time it was opened, even
+   * with "Your website is connected" ticked two inches above it — so it read as
+   * a job still to do, on a page whose whole purpose is telling you what is
+   * left.
+   */
+  websiteImport: { title: string; importedAt: string } | null;
   stats: {
     bots: number;
     knowledgeDocs: number;
@@ -280,6 +289,12 @@ export async function getCompanySetupProgress(): Promise<CompanySetupProgress> {
     },
   ];
 
+  // `sourceType` is 'url' for anything the crawler brought in.
+  const imported = docs.filter((d) => d.sourceType === 'url');
+  const newestImport = imported.length
+    ? imported.reduce((a, b) => (a.createdAt > b.createdAt ? a : b))
+    : null;
+
   const complete = steps.filter((step) => step.complete).length;
   const total = steps.length;
 
@@ -291,6 +306,9 @@ export async function getCompanySetupProgress(): Promise<CompanySetupProgress> {
     total,
     nextStep: steps.find((step) => !step.complete) ?? null,
     steps,
+    websiteImport: newestImport
+      ? { title: newestImport.title, importedAt: newestImport.createdAt }
+      : null,
     stats: {
       bots: bots.length,
       knowledgeDocs: docs.length,

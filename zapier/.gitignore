@@ -1,0 +1,9 @@
+# The Zapier CLI writes the app id and deploy key here after `zapier register`
+# / `zapier link`. It identifies one private app on Zapier's platform and must
+# not be committed.
+.zapierapprc
+.env
+
+node_modules/
+build/
+*.zip

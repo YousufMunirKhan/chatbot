@@ -169,6 +169,18 @@ export default async function DashboardLayout({ children }: { children: React.Re
   const dict = platformView ? getDictionary('en') : companyShell.dict;
   const sections = translateSections(rawSections, dict);
 
+  // The nav and the page can disagree, and it looks like a broken app.
+  //
+  // `/company` and `/super-admin` share this layout, and the App Router does not
+  // re-render a shared layout when you navigate between routes inside it. So a
+  // super admin whose impersonation ends — by expiry, most obviously — keeps the
+  // company menu while the page beside it becomes the platform dashboard. The
+  // sidebar is a client component that already knows the pathname, so it is
+  // given both menus and picks the one that matches the route it is actually on.
+  const platformSections = user.isSuperAdmin
+    ? translateSections(PLATFORM_NAV_GROUPS, getDictionary('en'))
+    : undefined;
+
   // The agency's product name replaces the platform's own on the platform-brand
   // surfaces only; a tenant workspace keeps showing the tenant's name.
   const brand = platformView ? 'Switch & Save' : companyShell.brand;
@@ -208,6 +220,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
       <RefreshOnHistoryNav />
       <DesktopSidebar
         sections={sections}
+        platformSections={platformSections}
         brand={brand}
         logoUrl={logoUrl}
         labels={shellLabels}
@@ -230,6 +243,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
           <div className="flex min-w-0 items-center gap-3">
             <MobileNav
               sections={sections}
+              platformSections={platformSections}
               brand={brand}
               logoUrl={logoUrl}
               labels={shellLabels}

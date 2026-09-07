@@ -13,6 +13,12 @@ export interface Campaign {
 }
 
 export interface ProactiveRule {
+  /**
+   * Sent to the widget so it can remember which invites it has already shown.
+   * Without it every invite shared one flag, and the first one to fire silenced
+   * all the others for that visitor permanently.
+   */
+  id: string;
   matchUrl: string | null;
   delaySeconds: number;
   message: string;
@@ -51,7 +57,7 @@ export async function getActiveWebProactiveRules(companyId: string, botId: strin
   const sb = createSupabaseServiceClient();
   const { data } = await sb
     .from('proactive_campaigns')
-    .select('match_url,delay_seconds,message,auto_open,priority')
+    .select('id,match_url,delay_seconds,message,auto_open,priority')
     .eq('company_id', companyId)
     .eq('status', 'active')
     .eq('type', 'web_proactive')
@@ -61,6 +67,7 @@ export async function getActiveWebProactiveRules(companyId: string, botId: strin
   return (data ?? []).map((r) => {
     const x = r as Record<string, unknown>;
     return {
+      id: x.id as string,
       matchUrl: (x.match_url as string) ?? null,
       delaySeconds: (x.delay_seconds as number) ?? 8,
       message: x.message as string,

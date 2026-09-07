@@ -4,17 +4,20 @@ import { ROLES } from '@/lib/constants';
 import { handleApiError } from '@/lib/errors';
 import {
   getAssistantReport,
+  getCompanyRangeOffset,
   getCustomersReport,
   getReportsSnapshot,
   getSalesReport,
   getTeamReport,
+  rangeRequestFrom,
+  resolveRange,
+  type ReportRange,
 } from '@/modules/company/reports-data';
 import { DAY_LABELS, toCsv } from '@/modules/company/reports-metrics';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
-const RANGES = [7, 30, 90];
 const TABS = ['overview', 'team', 'customers', 'assistant', 'sales'] as const;
 type Tab = (typeof TABS)[number];
 
@@ -33,9 +36,9 @@ interface Sheet {
  * right. Company-scoping therefore also comes for free: every reader binds to
  * `getCompanyId()` from the session, never to anything in the request.
  */
-async function build(tab: Tab, days: number): Promise<Sheet> {
+async function build(tab: Tab, range: ReportRange): Promise<Sheet> {
   if (tab === 'overview') {
-    const r = await getReportsSnapshot(days);
+    const r = await getReportsSnapshot(range);
     const rows: Array<Array<unknown>> = [];
     for (const c of r.channels) {
       rows.push(['channel', c.label, c.conversations, c.messages, `${c.automationRate}%`, c.leads]);
@@ -60,7 +63,7 @@ async function build(tab: Tab, days: number): Promise<Sheet> {
   }
 
   if (tab === 'team') {
-    const r = await getTeamReport(days);
+    const r = await getTeamReport(range);
     return {
       header: [
         'teammate',
@@ -90,7 +93,7 @@ async function build(tab: Tab, days: number): Promise<Sheet> {
   }
 
   if (tab === 'customers') {
-    const r = await getCustomersReport(days);
+    const r = await getCustomersReport(range);
     const rows: Array<Array<unknown>> = [];
     for (const s of r.funnel) rows.push(['funnel', s.label, s.count, `${s.ofStart}%`, `${s.ofPrevious}%`]);
     rows.push(['visitors', 'New (in period)', r.visitors.newVisitors, '', '']);
@@ -109,7 +112,7 @@ async function build(tab: Tab, days: number): Promise<Sheet> {
   }
 
   if (tab === 'assistant') {
-    const r = await getAssistantReport(days);
+    const r = await getAssistantReport(range);
     const rows: Array<Array<unknown>> = [
       ['summary', 'Conversations', r.conversations, ''],
       ['summary', 'Contained (no human)', r.containedConversations, `${r.containmentRate}%`],
@@ -122,7 +125,7 @@ async function build(tab: Tab, days: number): Promise<Sheet> {
     return { header: ['section', 'name', 'value_1', 'value_2'], rows };
   }
 
-  const r = await getSalesReport(days);
+  const r = await getSalesReport(range);
   const rows: Array<Array<unknown>> = [
     ['orders', 'Total orders', r.orders.total, ''],
     ['orders', 'Started in chat', r.orders.fromChat, `${r.orders.chatAttributionRate}%`],
@@ -138,23 +141,49 @@ async function build(tab: Tab, days: number): Promise<Sheet> {
   return { header: ['section', 'name', 'value_1', 'value_2'], rows };
 }
 
-/** Export the active reports tab as CSV. Company-admin only, own company only. */
+/** A filename a spreadsheet folder can be sorted by, from an arbitrary label. */
+function slug(value: string): string {
+  return (
+    value
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/^-+|-+$/g, '')
+      .slice(0, 60) || 'range'
+  );
+}
+
+/**
+ * Export the active reports tab as CSV. Company-admin only, own company only.
+ *
+ * The window comes from the same `?range=`/`?from=`/`?to=` contract the page
+ * uses and is resolved by the same function, so the spreadsheet covers exactly
+ * the period on screen — including the correction `resolveRange` applies when a
+ * range is unparseable or longer than the cap. Validating it a second time here
+ * would be a second answer to "what does this URL mean".
+ */
 export async function GET(req: Request) {
   try {
     await requireRole([ROLES.COMPANY_ADMIN]);
     const url = new URL(req.url);
     const rawTab = url.searchParams.get('tab') ?? 'overview';
     const tab = (TABS as readonly string[]).includes(rawTab) ? (rawTab as Tab) : 'overview';
-    const rawDays = Number(url.searchParams.get('days'));
-    const days = RANGES.includes(rawDays) ? rawDays : 30;
+    const range = resolveRange(
+      rangeRequestFrom({
+        range: url.searchParams.get('range'),
+        days: url.searchParams.get('days'),
+        from: url.searchParams.get('from'),
+        to: url.searchParams.get('to'),
+      }),
+      await getCompanyRangeOffset(),
+    );
 
-    const sheet = await build(tab, days);
+    const sheet = await build(tab, range);
     const csv = toCsv(sheet.header, sheet.rows);
 
     return new NextResponse(csv, {
       headers: {
         'Content-Type': 'text/csv',
-        'Content-Disposition': `attachment; filename="reports-${tab}-${days}d.csv"`,
+        'Content-Disposition': `attachment; filename="reports-${tab}-${slug(range.label)}.csv"`,
       },
     });
   } catch (err) {
