@@ -9,6 +9,7 @@ import { FormMessage } from '@/components/ui/form-message';
 import { SubmitButton } from '@/components/ui/submit-button';
 import { sendAgentReplyAction, type ActionState } from '../inbox-actions';
 import type { CannedResponse } from '../inbox-data';
+import { CopilotBar } from './copilot-bar';
 
 const initial: ActionState = {};
 
@@ -28,6 +29,12 @@ export function AgentReplyForm({
     if (!canned || !textRef.current) return;
     const existing = textRef.current.value;
     textRef.current.value = existing ? `${existing}\n${canned.body}` : canned.body;
+    textRef.current.focus();
+  }
+
+  function setDraft(text: string) {
+    if (!textRef.current) return;
+    textRef.current.value = text;
     textRef.current.focus();
   }
 
@@ -94,6 +101,11 @@ export function AgentReplyForm({
           placeholder="Type your reply…  (Enter to send, Shift+Enter for a new line)"
         />
       </div>
+      <CopilotBar
+        conversationId={conversationId}
+        getDraft={() => textRef.current?.value ?? ''}
+        onText={setDraft}
+      />
       {/* Success is the reply appearing in the thread, so this region carries
           the failure branch only. */}
       <FormMessage state={{ error: state.error }} />
