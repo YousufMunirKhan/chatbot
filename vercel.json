@@ -28,6 +28,22 @@
     {
       "path": "/api/cron/insights",
       "schedule": "0 6 * * 1"
+    },
+    {
+      "path": "/api/cron?task=sync",
+      "schedule": "0 * * * *"
+    },
+    {
+      "path": "/api/cron?task=jobs",
+      "schedule": "*/5 * * * *"
+    },
+    {
+      "path": "/api/cron?task=cleanup",
+      "schedule": "0 3 * * *"
+    },
+    {
+      "path": "/api/cron?task=improvement_emails",
+      "schedule": "0 7 * * 1"
     }
   ]
 }
