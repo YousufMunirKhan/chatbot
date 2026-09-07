@@ -13,6 +13,22 @@ import { COUNTRY_OPTIONS, TIMEZONE_OPTIONS } from '../form-options';
 
 const initial: ActionState = {};
 
+/**
+ * Show an IANA timezone id as a place name.
+ *
+ * `Europe/London` is stored, submitted and compared verbatim — only the text
+ * shown changes, to "London (Europe/London)". The id stays in the text because
+ * an owner who was given a specific one has to be able to find it.
+ *
+ * Deliberately duplicated in `connect-integration-form.tsx`: the list both
+ * format (`TIMEZONE_OPTIONS`) lives in a module this change does not own, so
+ * there is nowhere shared to put it yet.
+ */
+function timezoneLabel(id: string): string {
+  const place = id.split('/').pop()?.replace(/_/g, ' ') ?? id;
+  return `${place} (${id})`;
+}
+
 export function ProfileForm({ company }: { company: CompanyProfile }) {
   const [state, action] = useFormState(updateProfileAction, initial);
 
@@ -28,8 +44,13 @@ export function ProfileForm({ company }: { company: CompanyProfile }) {
         </FormField>
         <FormField label="Country" htmlFor="country">
           <Select name="country" defaultValue={company.country ?? 'GB'}>
-            {company.country && !COUNTRY_OPTIONS.some((country) => country.value === company.country) ? (
-              <option value={company.country}>{company.country}</option>
+            {/* A country we have no name for still has to stay selectable, or
+                saving anything else would silently change it. Saying it is a
+                country code at least tells the owner what "AE" is; the value
+                submitted is the code itself and is unchanged. */}
+            {company.country &&
+            !COUNTRY_OPTIONS.some((country) => country.value === company.country) ? (
+              <option value={company.country}>Country code {company.country}</option>
             ) : null}
             {COUNTRY_OPTIONS.map((country) => (
               <option key={country.value} value={country.value}>
@@ -38,14 +59,18 @@ export function ProfileForm({ company }: { company: CompanyProfile }) {
             ))}
           </Select>
         </FormField>
-        <FormField label="Timezone" htmlFor="timezone">
+        <FormField
+          label="Timezone"
+          htmlFor="timezone"
+          hint="Opening hours, reply-time targets and the times on your reports are all read in this zone."
+        >
           <Select name="timezone" defaultValue={company.timezone ?? 'Europe/London'}>
             {company.timezone && !TIMEZONE_OPTIONS.includes(company.timezone) ? (
-              <option value={company.timezone}>{company.timezone}</option>
+              <option value={company.timezone}>{timezoneLabel(company.timezone)}</option>
             ) : null}
             {TIMEZONE_OPTIONS.map((timezone) => (
               <option key={timezone} value={timezone}>
-                {timezone}
+                {timezoneLabel(timezone)}
               </option>
             ))}
           </Select>

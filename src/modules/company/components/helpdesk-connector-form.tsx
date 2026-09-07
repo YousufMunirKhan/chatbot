@@ -82,23 +82,52 @@ export function QueueConnectorEventForm({ actionId }: { actionId: string }) {
         className="min-h-0 p-2 font-mono text-xs"
         defaultValue={'{"query":"Pepsi"}'}
       />
-      <div className="grid gap-2 text-xs">
-        <label className="flex items-center gap-2">
-          <input type="checkbox" name="dryRun" defaultChecked className="h-4 w-4" />
-          Dry-run sandbox test
-        </label>
-        <label className="flex items-center gap-2">
-          <input type="checkbox" name="confirmed" className="h-4 w-4" />
-          Confirm real write action
-        </label>
+      {/* "Dry-run sandbox test" and "Confirm real write action" were both
+          engineer's shorthand for the same question — does this touch the real
+          shop system? Each label now answers it, and each hint says what happens
+          if the box is left as it is. */}
+      <div className="grid gap-3 text-xs">
+        <div className="space-y-1">
+          <label className="flex items-center gap-2">
+            <input
+              type="checkbox"
+              name="dryRun"
+              defaultChecked
+              className="h-4 w-4"
+              aria-describedby={`dry-run-hint-${actionId}`}
+            />
+            Practice run — do not change anything
+          </label>
+          <p id={`dry-run-hint-${actionId}`} className="text-muted-foreground">
+            Your system is asked to go through the motions and report back, but nothing is saved.
+            Untick it and the action runs for real.
+          </p>
+        </div>
+        <div className="space-y-1">
+          <label className="flex items-center gap-2">
+            <input
+              type="checkbox"
+              name="confirmed"
+              className="h-4 w-4"
+              aria-describedby={`confirmed-hint-${actionId}`}
+            />
+            Yes, I am happy for this to change real data
+          </label>
+          <p id={`confirmed-hint-${actionId}`} className="text-muted-foreground">
+            Needed for anything that adds or edits records — stock, prices, products. Left unticked,
+            a change like that is refused rather than run.
+          </p>
+        </div>
       </div>
       <FormMessage
         state={state}
         okText="Queued. Connector can receive it by WebSocket or polling."
         className="text-xs"
       />
+      {/* Was "Queue sandbox event", which is only true while the practice-run
+          box above is ticked — the same button runs it for real once it is not. */}
       <Button type="submit" size="sm" variant="outline">
-        Queue sandbox event
+        Send this to your system
       </Button>
     </form>
   );

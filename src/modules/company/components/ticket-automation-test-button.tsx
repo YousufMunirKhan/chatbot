@@ -21,7 +21,11 @@ export function TicketAutomationTestButton() {
   return (
     <form action={action} className="space-y-2">
       <SubmitButton />
-      {state.ok ? <p className="text-xs text-emerald-700">Test sent. Check the latest delivery status below or in Webhooks.</p> : null}
+      {state.ok ? (
+        <p className="text-xs text-emerald-700">
+          Test sent. Check the latest delivery status below or in Webhooks.
+        </p>
+      ) : null}
       {state.error ? <p className="text-xs text-destructive">{state.error}</p> : null}
     </form>
   );

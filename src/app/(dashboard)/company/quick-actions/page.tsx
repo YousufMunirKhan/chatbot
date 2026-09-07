@@ -4,56 +4,33 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { PageHeader } from '@/components/ui/page-header';
 import { requireRole } from '@/lib/auth';
-import { ROLES } from '@/lib/constants';
+import {
+  ROLES,
+  ACTIVATION_STATUS_LABELS,
+  QUICK_ACTION_AUDIENCE_LABELS,
+  QUICK_ACTION_CONTEXT_LABELS,
+  QUICK_ACTION_MOMENT_LABELS,
+  QUICK_ACTION_SOURCE_LABELS,
+  QUICK_ACTION_TYPE_LABELS,
+  labelFor,
+} from '@/lib/constants';
 import { QuickActionForm } from '@/modules/company/components/quick-action-form';
 import { deleteQuickActionAction } from '@/modules/company/quick-actions-actions';
 import { listQuickActions } from '@/modules/company/quick-actions-data';
 import { ConfirmSubmit } from '@/components/confirm-submit';
 
-const TYPE_LABELS: Record<string, string> = {
-  send_message: 'Message',
-  direct_answer: 'Answer',
-  lead_form: 'Lead form',
-  appointment_form: 'Appointment',
-  external_link: 'Link',
-  product_link: 'Product',
-  whatsapp: 'WhatsApp',
-  phone_call: 'Call',
-  request_human: 'Human handoff',
-  tool_action: 'Tool',
-};
-
-const AUDIENCE_LABELS: Record<string, string> = {
-  customer: 'Customer',
-  internal: 'Help desk',
-  both: 'Both',
-};
-
-const SOURCE_LABELS: Record<string, string> = {
-  manual: 'Manual',
-  default: 'Default',
-  connector: 'Connector',
-  ai_contextual: 'AI contextual',
-};
-
-const CONTEXT_MODE_LABELS: Record<string, string> = {
-  initial: 'Initial',
-  contextual: 'Contextual',
-  follow_up: 'Follow-up',
-  navigation: 'Navigation',
-  action: 'Action',
-};
-
-function prettyList(values: string[]) {
-  if (!values.length) return 'Not targeted';
-  return values
-    .map((value) =>
-      value
-        .split('_')
-        .map((part) => part[0]?.toUpperCase() + part.slice(1))
-        .join(' '),
-    )
-    .join(', ');
+/**
+ * Every label on this page now comes from the shared `QUICK_ACTION_*` maps.
+ * This file used to keep its own four maps and its own humaniser, and the
+ * builder below kept a fifth set, so one stored value read two different ways
+ * depending on which screen you were on — `send_message` was "Message" here and
+ * "Send message" in the form.
+ */
+function moments(values: string[]): string {
+  // An empty `contexts` array is not "untargeted" — the widget treats it as
+  // matching every moment, so say that rather than implying it is switched off.
+  if (!values.length) return 'Shown at every moment in the chat';
+  return values.map((value) => labelFor(QUICK_ACTION_MOMENT_LABELS, value)).join(', ');
 }
 
 export default async function QuickActionsPage() {
@@ -64,13 +41,13 @@ export default async function QuickActionsPage() {
   return (
     <div className="mx-auto max-w-6xl space-y-6">
       <PageHeader
-        title="Quick Actions"
-        description="Create helpful chat buttons like Book demo, Ask pricing, Request support, or Talk to human."
+        title="Chat buttons"
+        description="The buttons a customer can tap in the chat instead of typing — “Book a table”, “What does it cost?”, “Talk to a person”. Give people something to press and far more of them start a conversation."
         actions={
           <Button asChild variant="outline">
             <a href="/company/quick-actions/analytics">
-              <BarChart3 className="me-2 h-4 w-4" />
-              Analytics
+              <BarChart3 className="me-2 h-4 w-4" aria-hidden="true" />
+              See how they are doing
             </a>
           </Button>
         }
@@ -78,22 +55,29 @@ export default async function QuickActionsPage() {
 
       <div className="grid gap-4 md:grid-cols-3">
         <div className="rounded-lg border bg-card p-4">
-          <div className="text-sm font-semibold">1. Choose action</div>
-          <p className="mt-1 text-sm text-muted-foreground">Pick message, answer, form, link, call, or handoff.</p>
+          <div className="text-sm font-semibold">1. Pick what it does</div>
+          <p className="mt-1 text-sm text-muted-foreground">
+            Send a message, give an answer, ask for details, open a link, ring you, or fetch a
+            person.
+          </p>
         </div>
         <div className="rounded-lg border bg-card p-4">
-          <div className="text-sm font-semibold">2. Fill only what matters</div>
-          <p className="mt-1 text-sm text-muted-foreground">The builder changes based on the selected action type.</p>
+          <div className="text-sm font-semibold">2. Fill in the few boxes</div>
+          <p className="mt-1 text-sm text-muted-foreground">
+            You are only asked for what that particular kind of button needs.
+          </p>
         </div>
         <div className="rounded-lg border bg-card p-4">
-          <div className="text-sm font-semibold">3. Preview before saving</div>
-          <p className="mt-1 text-sm text-muted-foreground">See how the pill will look in the website chat.</p>
+          <div className="text-sm font-semibold">3. See it before you save</div>
+          <p className="mt-1 text-sm text-muted-foreground">
+            The preview shows exactly how it will look in your website chat.
+          </p>
         </div>
       </div>
 
       <Card id="create-quick-action">
         <CardHeader>
-          <CardTitle className="text-base">Create quick action</CardTitle>
+          <CardTitle className="text-base">Make a chat button</CardTitle>
         </CardHeader>
         <CardContent>
           <QuickActionForm bots={bots} />
@@ -102,8 +86,10 @@ export default async function QuickActionsPage() {
 
       <section className="space-y-4">
         <div>
-          <h2 className="text-lg font-semibold">Existing quick actions</h2>
-          <p className="text-sm text-muted-foreground">Manage the pills already available in the chat widget.</p>
+          <h2 className="text-lg font-semibold">Your chat buttons</h2>
+          <p className="text-sm text-muted-foreground">
+            These are showing in your chat right now. Change or remove any of them here.
+          </p>
         </div>
 
         {actions.length ? (
@@ -114,24 +100,46 @@ export default async function QuickActionsPage() {
                   <div className="min-w-0">
                     <div className="flex flex-wrap items-center gap-2">
                       <CardTitle className="text-base">{action.label}</CardTitle>
-                      <Badge variant={action.isActive ? 'success' : 'secondary'}>{action.isActive ? 'Active' : 'Off'}</Badge>
-                      <Badge variant="outline">{TYPE_LABELS[action.actionType] ?? action.actionType}</Badge>
-                      <Badge variant="outline">{AUDIENCE_LABELS[action.audience] ?? action.audience}</Badge>
-                      <Badge variant="secondary">{SOURCE_LABELS[action.source] ?? action.source}</Badge>
-                      <Badge variant="outline">{CONTEXT_MODE_LABELS[action.contextMode] ?? action.contextMode}</Badge>
+                      <Badge variant={action.isActive ? 'success' : 'secondary'}>
+                        {labelFor(
+                          ACTIVATION_STATUS_LABELS,
+                          action.isActive ? 'active' : 'disabled',
+                        )}
+                      </Badge>
+                      <Badge variant="outline">
+                        {labelFor(QUICK_ACTION_TYPE_LABELS, action.actionType)}
+                      </Badge>
+                      <Badge variant="outline">
+                        {labelFor(QUICK_ACTION_AUDIENCE_LABELS, action.audience)}
+                      </Badge>
+                      <Badge variant="secondary">
+                        {labelFor(QUICK_ACTION_SOURCE_LABELS, action.source)}
+                      </Badge>
+                      <Badge variant="outline">
+                        {labelFor(QUICK_ACTION_CONTEXT_LABELS, action.contextMode)}
+                      </Badge>
                     </div>
                     <p className="mt-1 text-sm text-muted-foreground">
-                      {botName.get(action.botId ?? '') ?? 'All assistants'} - {prettyList(action.contexts)}
+                      {botName.get(action.botId ?? '') ?? 'All assistants'} ·{' '}
+                      {moments(action.contexts)}
                     </p>
                   </div>
                   <form action={deleteQuickActionAction}>
                     <input type="hidden" name="id" value={action.id} />
-                    <ConfirmSubmit label="Delete" question="This button disappears from the chat." />
+                    {/* The visible label names the button being removed: a list
+                        of identical "Delete" controls gives a screen-reader
+                        user no way to tell which one they are on. */}
+                    <ConfirmSubmit
+                      label={`Delete “${action.label}”`}
+                      question="This button stops appearing in your chat straight away."
+                    />
                   </form>
                 </CardHeader>
                 <CardContent>
                   <details className="rounded-lg border bg-muted/20 p-3">
-                    <summary className="cursor-pointer text-sm font-medium">Edit this quick action</summary>
+                    <summary className="cursor-pointer text-sm font-medium">
+                      Edit this chat button
+                    </summary>
                     <div className="mt-4">
                       <QuickActionForm bots={bots} action={action} compact />
                     </div>
@@ -142,30 +150,35 @@ export default async function QuickActionsPage() {
           </div>
         ) : (
           <Card>
-            <CardContent className="grid gap-6 p-6 lg:grid-cols-[1fr_340px] lg:items-center">
+            <CardContent className="grid gap-6 p-6 lg:grid-cols-[minmax(0,1fr)_340px] lg:items-center [&>*]:min-w-0">
               {/* Module 1 — the builder is on this page, so link straight to it. */}
               <div>
-                <h3 className="text-lg font-semibold">No quick actions yet</h3>
+                <h3 className="text-lg font-semibold">No chat buttons yet</h3>
                 <p className="mt-2 max-w-2xl text-sm text-muted-foreground">
-                  Visitors see a plain chat box with nothing to tap. Start with one high-intent button like booking
-                  a demo, asking for pricing, or reaching a person. The example on the right is how it will look.
+                  Right now a visitor opens the chat and sees an empty box with nothing to tap, and
+                  most of them close it again. Add one button for the thing people most often want —
+                  booking, prices, or talking to you. The example on the right is how it will look.
                 </p>
                 <Button asChild size="sm" className="mt-4">
-                  <a href="#create-quick-action">Create your first quick action</a>
+                  <a href="#create-quick-action">Make my first chat button</a>
                 </Button>
               </div>
               <div className="rounded-xl border bg-slate-950 p-4 text-white">
                 <div className="mb-3 flex items-center gap-2 text-sm font-semibold">
-                  <MessageSquare className="h-4 w-4 text-emerald-300" />
-                  Chat preview
+                  <MessageSquare className="h-4 w-4 text-emerald-300" aria-hidden="true" />
+                  How it would look
                 </div>
                 <div className="rounded-xl bg-white p-3 text-slate-950">
                   <p className="mb-3 text-sm text-slate-600">Hi! How can I help?</p>
-                  <button type="button" disabled className="inline-flex cursor-not-allowed items-center gap-2 rounded-full bg-primary px-4 py-2 text-sm font-semibold text-white opacity-80">
-                    <CalendarDays className="h-4 w-4" />
+                  <button
+                    type="button"
+                    disabled
+                    className="inline-flex cursor-not-allowed items-center gap-2 rounded-full bg-primary px-4 py-2 text-sm font-semibold text-white opacity-80"
+                  >
+                    <CalendarDays className="h-4 w-4" aria-hidden="true" />
                     Book a free demo
                   </button>
-                  <p className="mt-2 text-xs text-slate-500">Disabled demo pill</p>
+                  <p className="mt-2 text-xs text-slate-500">An example — this one does nothing</p>
                 </div>
               </div>
             </CardContent>

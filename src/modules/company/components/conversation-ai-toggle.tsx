@@ -80,7 +80,13 @@ export function ConversationAiToggle({
           </button>
         </div>
         {!isClosed ? (
-          <Button type="button" variant="ghost" size="sm" disabled={busy} onClick={() => run('close', closeChatAction)}>
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            disabled={busy}
+            onClick={() => run('close', closeChatAction)}
+          >
             {pendingAction === 'close' ? 'Sorting…' : 'Mark as sorted'}
           </Button>
         ) : null}

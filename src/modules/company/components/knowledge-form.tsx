@@ -20,10 +20,7 @@ const initial: ActionState = {};
 // `...rest` matters: `FormField` wires the control by cloning it with
 // `aria-describedby` / `aria-invalid`, and a wrapper that swallowed its extra
 // props would quietly drop that.
-function BotSelect({
-  bots,
-  ...rest
-}: SelectProps & { bots: { id: string; name: string }[] }) {
+function BotSelect({ bots, ...rest }: SelectProps & { bots: { id: string; name: string }[] }) {
   return (
     <Select name="botId" defaultValue="" {...rest}>
       <option value="">All assistants</option>

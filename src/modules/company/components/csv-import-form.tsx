@@ -34,13 +34,7 @@ export function CsvImportForm() {
         htmlFor="csv"
         hint="Paste a header row followed by your data. Columns are matched by name."
       >
-        <Textarea
-          name="csv"
-          rows={10}
-          className="font-mono"
-          placeholder={PLACEHOLDER}
-          required
-        />
+        <Textarea name="csv" rows={10} className="font-mono" placeholder={PLACEHOLDER} required />
       </FormField>
       <FormMessage state={state} okText="Import complete." />
       <SubmitButton pendingLabel="Importing…">Import CSV</SubmitButton>

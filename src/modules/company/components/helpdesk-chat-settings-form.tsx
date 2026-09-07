@@ -18,11 +18,21 @@ export function HelpdeskChatSettingsForm({ settings }: { settings: HelpdeskChatS
     <form action={action} className="space-y-4">
       <div className="grid gap-4 sm:grid-cols-2">
         <label className="flex items-center gap-2 text-sm">
-          <input type="checkbox" name="enabled" defaultChecked={settings.enabled} className="h-4 w-4" />
+          <input
+            type="checkbox"
+            name="enabled"
+            defaultChecked={settings.enabled}
+            className="h-4 w-4"
+          />
           Enabled
         </label>
         <label className="flex items-center gap-2 text-sm">
-          <input type="checkbox" name="autoOpen" defaultChecked={settings.autoOpen} className="h-4 w-4" />
+          <input
+            type="checkbox"
+            name="autoOpen"
+            defaultChecked={settings.autoOpen}
+            className="h-4 w-4"
+          />
           Auto-open when allowed
         </label>
         <FormField label="Show mode" htmlFor="showMode">
@@ -45,14 +55,22 @@ export function HelpdeskChatSettingsForm({ settings }: { settings: HelpdeskChatS
           htmlFor="allowedRoutes"
           hint="Optional. Leave empty to show Help Desk on every staff route except blocked routes."
         >
-          <Textarea name="allowedRoutes" rows={5} defaultValue={settings.allowedRoutes.join('\n')} />
+          <Textarea
+            name="allowedRoutes"
+            rows={5}
+            defaultValue={settings.allowedRoutes.join('\n')}
+          />
         </FormField>
         <FormField
           label="Blocked routes/screens"
           htmlFor="blockedRoutes"
           hint="Use this for screens where Help Desk should never appear, like login, payment, or customer display."
         >
-          <Textarea name="blockedRoutes" rows={5} defaultValue={settings.blockedRoutes.join('\n')} />
+          <Textarea
+            name="blockedRoutes"
+            rows={5}
+            defaultValue={settings.blockedRoutes.join('\n')}
+          />
         </FormField>
       </div>
       <FormMessage state={state} />

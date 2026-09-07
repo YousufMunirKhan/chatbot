@@ -1,6 +1,7 @@
 import { createSupabaseServiceClient } from '@/lib/db/server';
 import { ROLES } from '@/lib/constants';
 import { getSupportSettingsFor } from '@/modules/company/support-settings-data';
+import { startSlaClock } from '@/lib/sla';
 
 export async function assignBestAvailableAgent(companyId: string, conversationId: string): Promise<string | null> {
   const sb = createSupabaseServiceClient();
@@ -29,6 +30,7 @@ export async function assignBestAvailableAgent(companyId: string, conversationId
       .update({ assigned_agent_id: fallback.user_id, status: 'needs_human', ai_enabled: false })
       .eq('company_id', companyId)
       .eq('id', conversationId);
+    await beginSla(companyId, conversationId);
     return fallback.user_id;
   }
 
@@ -56,5 +58,28 @@ export async function assignBestAvailableAgent(companyId: string, conversationId
     .update({ assigned_agent_id: agent, status: 'needs_human', ai_enabled: false })
     .eq('company_id', companyId)
     .eq('id', conversationId);
+  await beginSla(companyId, conversationId);
   return agent;
+}
+
+/**
+ * Start the response clock for a conversation that now needs a human. The
+ * policy is chosen from the conversation's own priority and channel, so this
+ * reads those two columns rather than taking them on trust from the caller.
+ */
+async function beginSla(companyId: string, conversationId: string): Promise<void> {
+  const sb = createSupabaseServiceClient();
+  const { data } = await sb
+    .from('conversations')
+    .select('priority,channel')
+    .eq('company_id', companyId)
+    .eq('id', conversationId)
+    .maybeSingle();
+  const row = (data ?? {}) as { priority?: string | null; channel?: string | null };
+  await startSlaClock({
+    companyId,
+    conversationId,
+    priority: row.priority ?? null,
+    channel: row.channel ?? null,
+  });
 }

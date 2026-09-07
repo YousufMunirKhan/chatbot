@@ -20,28 +20,32 @@ const TEMPLATES = [
     subject: 'Report is not loading',
     severity: 'high',
     route: 'reports.daily_sales',
-    details: 'Staff tried to open or generate a report, but the result stayed queued or did not appear. Please check connector delivery, report action logs, and POS report API response.',
+    details:
+      'Staff tried to open or generate a report, but the result stayed queued or did not appear. Please check connector delivery, report action logs, and POS report API response.',
   },
   {
     label: 'Stock mismatch',
     subject: 'Stock quantity does not match POS',
     severity: 'normal',
     route: 'inventory.products',
-    details: 'Staff found a stock value that does not match the POS. Please check the product identifier, latest sync time, and stock lookup/update action response.',
+    details:
+      'Staff found a stock value that does not match the POS. Please check the product identifier, latest sync time, and stock lookup/update action response.',
   },
   {
     label: 'Product update failed',
     subject: 'Product update failed',
     severity: 'high',
     route: 'inventory.products',
-    details: 'Staff attempted to update a product, but the connector action failed or did not confirm the update. Please check required fields, confirmation status, and POS validation errors.',
+    details:
+      'Staff attempted to update a product, but the connector action failed or did not confirm the update. Please check required fields, confirmation status, and POS validation errors.',
   },
   {
     label: 'Connector offline',
     subject: 'Connector is offline',
     severity: 'urgent',
     route: 'helpdesk.connector',
-    details: 'The connector is not polling or sending results. Please check the connector token, base URL, internet access, and whether the connector service/app is running.',
+    details:
+      'The connector is not polling or sending results. Please check the connector token, base URL, internet access, and whether the connector service/app is running.',
   },
 ] as const;
 
@@ -74,7 +78,7 @@ export function HelpdeskIssueReportForm() {
           </Button>
         ))}
       </div>
-      <div className="grid gap-4 md:grid-cols-[1fr_180px]">
+      <div className="grid gap-4 md:grid-cols-[minmax(0,1fr)_180px]">
         <FormField label="Issue summary" htmlFor="helpdesk-issue-subject">
           <Input
             name="subject"
@@ -124,7 +128,8 @@ export function HelpdeskIssueReportForm() {
         // stays an `Alert` — with the live region added by hand, which the
         // `bg-emerald-50` paragraph it replaces never had.
         <Alert tone="success" role="status" aria-live="polite" className="p-3">
-          Issue report sent. It is now visible in company notifications and delivery rules will fan it out if enabled.
+          Issue report sent. It is now visible in company notifications and delivery rules will fan
+          it out if enabled.
         </Alert>
       ) : null}
       <SubmitButton pendingLabel="Sending...">Send issue report</SubmitButton>

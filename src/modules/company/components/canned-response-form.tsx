@@ -25,7 +25,13 @@ export function CannedResponseForm() {
         <Input name="title" required maxLength={120} placeholder="e.g. Refund policy" />
       </FormField>
       <FormField label="Reply text" htmlFor="body">
-        <Textarea name="body" required rows={3} maxLength={4000} placeholder="The message agents can insert with one click." />
+        <Textarea
+          name="body"
+          required
+          rows={3}
+          maxLength={4000}
+          placeholder="The message agents can insert with one click."
+        />
       </FormField>
       {/* This form resets on success rather than confirming in place, so the
           live region carries the failure branch only. */}

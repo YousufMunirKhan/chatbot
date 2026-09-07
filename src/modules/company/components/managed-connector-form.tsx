@@ -52,7 +52,8 @@ export function ManagedConnectorForm({ fields }: { fields: Record<string, Field[
       ))}
 
       <p className="text-xs text-muted-foreground">
-        Credentials are encrypted at rest. We run the platform&apos;s read actions server-side — no SDK to install.
+        Credentials are encrypted at rest. We run the platform&apos;s read actions server-side — no
+        SDK to install.
       </p>
       <FormMessage state={state} okText="Connected. The assistant can now use it." />
       <SubmitButton pendingLabel="Connecting…">Connect &amp; activate</SubmitButton>

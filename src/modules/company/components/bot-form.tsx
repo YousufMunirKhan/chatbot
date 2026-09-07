@@ -144,7 +144,8 @@ export function BotForm({
   const [state, formAction] = useFormState(action, initial);
   const appearance = (bot?.appearance ?? {}) as Record<string, unknown>;
   const initialAudience =
-    bot?.assistantAudience ?? (appearance.assistantAudience === 'internal' ? 'internal' : 'customer');
+    bot?.assistantAudience ??
+    (appearance.assistantAudience === 'internal' ? 'internal' : 'customer');
   const [assistantAudience, setAssistantAudience] = useState<'customer' | 'internal'>(
     initialAudience,
   );
@@ -155,7 +156,9 @@ export function BotForm({
   const capabilityOptions =
     assistantAudience === 'internal' ? INTERNAL_CAPABILITIES : CUSTOMER_CAPABILITIES;
   const customerBotType =
-    bot?.botType === 'help_desk' ? 'hybrid_business_assistant' : (bot?.botType ?? 'hybrid_business_assistant');
+    bot?.botType === 'help_desk'
+      ? 'hybrid_business_assistant'
+      : (bot?.botType ?? 'hybrid_business_assistant');
   const enableDefaultPills = appearance.enableDefaultPills !== false;
   const enableContextualPills = appearance.enableContextualPills !== false;
   const enableConnectorGeneratedPills = appearance.enableConnectorGeneratedPills !== false;
@@ -237,11 +240,7 @@ export function BotForm({
             </div>
           ) : (
             <FormField label="Type" htmlFor="botType">
-              <Select
-                key="customer-bot-type"
-                name="botType"
-                defaultValue={customerBotType}
-              >
+              <Select key="customer-bot-type" name="botType" defaultValue={customerBotType}>
                 {BOT_TYPES.filter((t) => t !== 'help_desk').map((t) => (
                   <option key={t} value={t}>
                     {companyLabel('botType', t)}
@@ -254,10 +253,7 @@ export function BotForm({
             </FormField>
           )}
           <FormField label="Default language" htmlFor="languageDefault">
-            <Select
-              name="languageDefault"
-              defaultValue={bot?.languageDefault ?? 'auto'}
-            >
+            <Select name="languageDefault" defaultValue={bot?.languageDefault ?? 'auto'}>
               <option value="auto">Auto-detect</option>
               <option value="en">English</option>
               <option value="ar">Arabic</option>
@@ -373,13 +369,18 @@ export function BotForm({
             The link to your shop system
           </h2>
           <div className="rounded-md border bg-muted/30 p-3 text-sm text-muted-foreground">
-            <p className="font-medium text-foreground">A staff assistant does not go on your website</p>
+            <p className="font-medium text-foreground">
+              A staff assistant does not go on your website
+            </p>
             <p className="mt-1">
               You link it to your own shop system instead. Once linked, it can read your screens and
               run the tasks you have approved, so your team can just ask for what they need.
             </p>
             {bot ? (
-              <Link href="/company/help-desk" className="mt-2 inline-block text-primary hover:underline">
+              <Link
+                href="/company/help-desk"
+                className="mt-2 inline-block text-primary hover:underline"
+              >
                 Set up the link
               </Link>
             ) : null}
@@ -405,10 +406,12 @@ export function BotForm({
             </p>
           </FormField>
           <div className="rounded-md border bg-muted/30 p-3 text-sm text-muted-foreground">
-            <p className="font-medium text-foreground">Widget look &amp; feel lives in the Design Studio</p>
+            <p className="font-medium text-foreground">
+              Widget look &amp; feel lives in the Design Studio
+            </p>
             <p className="mt-1">
-              Colors, launcher, avatar, labels, sizing, and placement are designed with a live preview
-              on the{' '}
+              Colors, launcher, avatar, labels, sizing, and placement are designed with a live
+              preview on the{' '}
               {bot ? (
                 <Link href="/company/widget" className="text-primary hover:underline">
                   Website Widget page

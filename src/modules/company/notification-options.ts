@@ -13,4 +13,8 @@ export const DELIVERY_CHANNELS = [
   { key: 'whatsapp', label: 'WhatsApp' },
   { key: 'slack', label: 'Slack' },
   { key: 'webhook', label: 'Webhook' },
+  // Web push to the installed dashboard app. Delivered by src/lib/push, not by
+  // notification-delivery.ts — it targets devices rather than addresses — but
+  // it is configured here so admins have one grid, not two.
+  { key: 'push', label: 'Phone alert' },
 ] as const;

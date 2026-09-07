@@ -10,11 +10,13 @@ export default async function SupportSettingsPage() {
   const settings = await getSupportSettings();
 
   return (
-    <div className="mx-auto max-w-6xl space-y-6">
+    // One form of short fields. At `max-w-6xl` it was a 1150px-wide column
+    // holding a single number box — forms stay at a readable measure.
+    <div className="mx-auto max-w-3xl space-y-6">
       <PageHeader
         backTo={{ href: '/company/inbox', label: 'Inbox' }}
-        title="Support settings"
-        description="Response-time targets, agent routing, and business hours for your team inbox."
+        title="Inbox rules"
+        description="How quickly you promise to reply, who a handed-over chat goes to, and the hours that promise applies in."
       />
       <Card>
         <CardContent className="p-5">

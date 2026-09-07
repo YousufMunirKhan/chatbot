@@ -1,6 +1,7 @@
 import { createSupabaseServiceClient } from '@/lib/db/server';
 import { sendEmail } from '@/lib/email';
 import { sendNotificationEvent } from '@/lib/notification-delivery';
+import { fanOutPushNotification } from '@/lib/push/fanout';
 import {
   dispatchWebhookEvent,
   NOTIFICATION_TO_EVENT,
@@ -26,7 +27,9 @@ export type NotificationType =
   | 'failed_payment'
   | 'failed_sync'
   | 'over_usage_limit'
-  | 'integration_disconnected';
+  | 'integration_disconnected'
+  | 'sla_warning'
+  | 'sla_breach';
 
 export async function notify(params: {
   companyId: string;
@@ -76,6 +79,10 @@ export async function notify(params: {
     data: params.data,
     suppressedChannels,
   });
+
+  // Web push to the dashboard PWA — a fifth delivery channel governed by the
+  // same settings row. Self-guarding: never throws, never blocks the above.
+  await fanOutPushNotification(params);
 
   if (params.email) {
     const { data: deliverySettings } = await sb

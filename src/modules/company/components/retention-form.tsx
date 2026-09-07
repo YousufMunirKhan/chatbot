@@ -14,7 +14,15 @@ export function RetentionForm({ current }: { current: number }) {
 
   return (
     <form action={action} className="space-y-4">
-      <FormField label="Retention period (days)" htmlFor="retentionDays">
+      {/* This select is the only control on the page that destroys data, and it
+          does it to chats that already exist — not just to future ones. The hint
+          says so before the click, because the deletion has no undo and no
+          confirmation step after it. */}
+      <FormField
+        label="Keep chat history for"
+        htmlFor="retentionDays"
+        hint="Every conversation and its messages are permanently deleted once they are older than this. Shortening it deletes the chats that are already older than the new period straight away — that cannot be undone, and the transcripts cannot be recovered."
+      >
         {/* `max-w-xs` is this one select's own width cap, kept from the local
             `selectCls` it replaced. */}
         <Select name="retentionDays" className="max-w-xs" defaultValue={current}>
@@ -31,7 +39,7 @@ export function RetentionForm({ current }: { current: number }) {
         </Select>
       </FormField>
       <FormMessage state={state} />
-      <SubmitButton>Save</SubmitButton>
+      <SubmitButton pendingLabel="Saving…">Save and start deleting older chats</SubmitButton>
     </form>
   );
 }

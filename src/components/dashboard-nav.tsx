@@ -17,6 +17,36 @@ import {
 export type NavSection = { group: string; items: { href: string; label: string }[] };
 
 /**
+ * Chrome strings the shell owns (Module 21 translation).
+ *
+ * Passed in rather than looked up here: this is a client component, and the
+ * dictionary is resolved on the server from the company's `default_language`.
+ * Every field is optional so a caller that has not been translated yet keeps
+ * the English wording it had.
+ */
+export interface ShellLabels {
+  account?: string;
+  viewingCustomer?: string;
+  openMenu?: string;
+  closeMenu?: string;
+  navMenu?: string;
+  navMenuDescription?: string;
+}
+
+const DEFAULT_LABELS: Required<ShellLabels> = {
+  account: 'Account',
+  viewingCustomer: 'Viewing customer account',
+  openMenu: 'Open menu',
+  closeMenu: 'Close menu',
+  navMenu: 'Navigation menu',
+  navMenuDescription: 'Move between the sections of the dashboard.',
+};
+
+function withDefaults(labels?: ShellLabels): Required<ShellLabels> {
+  return { ...DEFAULT_LABELS, ...(labels ?? {}) };
+}
+
+/**
  * Focus ring shared by every interactive element in the shell chrome.
  *
  * The sidebar sits on a dark brand background, so the default `ring-ring`
@@ -84,11 +114,19 @@ function NavList({ sections, pathname, onNavigate }: { sections: NavSection[]; p
  * name as real text is the difference between "I am on the platform" and "I am
  * inside a paying customer's data".
  */
-function WorkspaceIdentity({ brand, impersonating }: { brand: string; impersonating?: boolean }) {
+function WorkspaceIdentity({
+  brand,
+  impersonating,
+  labels,
+}: {
+  brand: string;
+  impersonating?: boolean;
+  labels: Required<ShellLabels>;
+}) {
   return (
     <div className="mt-3 px-1">
       <p className="text-[11px] font-semibold uppercase tracking-wider text-sidebar-fg-subtle">
-        {impersonating ? 'Viewing customer account' : 'Account'}
+        {impersonating ? labels.viewingCustomer : labels.account}
       </p>
       <p
         className={cn(
@@ -116,12 +154,15 @@ function WorkspaceIdentity({ brand, impersonating }: { brand: string; impersonat
 function BrandMark({
   brand,
   href,
+  logoUrl,
   onNavigate,
   className,
   imageClassName,
 }: {
   brand: string;
   href: string;
+  /** White-label logo (migration 0057). Falls back to the platform artwork. */
+  logoUrl?: string | null;
   onNavigate?: () => void;
   className?: string;
   imageClassName?: string;
@@ -133,14 +174,26 @@ function BrandMark({
       onClick={onNavigate}
       className={cn('block rounded-2xl bg-brand-plate p-3', FOCUS_RING, className)}
     >
-      <Image
-        src="/brand/switch-save-logo.png"
-        alt={brand}
-        width={205}
-        height={41}
-        priority
-        className={cn('h-auto', imageClassName ?? 'w-full')}
-      />
+      {logoUrl ? (
+        // An agency's logo lives on a host we do not control, so `next/image`
+        // would need every reseller's domain in `remotePatterns`. A plain <img>
+        // is the only version that works for a logo added at runtime.
+        // eslint-disable-next-line @next/next/no-img-element
+        <img
+          src={logoUrl}
+          alt={brand}
+          className={cn('h-auto max-h-10 object-contain', imageClassName ?? 'w-full')}
+        />
+      ) : (
+        <Image
+          src="/brand/switch-save-logo.png"
+          alt={brand}
+          width={205}
+          height={41}
+          priority
+          className={cn('h-auto', imageClassName ?? 'w-full')}
+        />
+      )}
     </Link>
   );
 }
@@ -149,19 +202,24 @@ function BrandMark({
 export function DesktopSidebar({
   sections,
   brand,
+  logoUrl,
+  labels,
   impersonating,
 }: {
   sections: NavSection[];
   brand: string;
+  logoUrl?: string | null;
+  labels?: ShellLabels;
   impersonating?: boolean;
 }) {
   const pathname = usePathname();
   const brandHref = pathname.startsWith('/super-admin') ? '/super-admin' : '/company';
+  const l = withDefaults(labels);
   return (
     <aside className="hidden w-64 shrink-0 bg-brand-sidebar p-4 text-sidebar-fg shadow-xl md:block">
       <div className="mb-6">
-        <BrandMark brand={brand} href={brandHref} className="shadow-lg" />
-        <WorkspaceIdentity brand={brand} impersonating={impersonating} />
+        <BrandMark brand={brand} href={brandHref} logoUrl={logoUrl} className="shadow-lg" />
+        <WorkspaceIdentity brand={brand} impersonating={impersonating} labels={l} />
       </div>
       <NavList sections={sections} pathname={pathname} />
     </aside>
@@ -189,15 +247,20 @@ export function DesktopSidebar({
 export function MobileNav({
   sections,
   brand,
+  logoUrl,
+  labels,
   impersonating,
 }: {
   sections: NavSection[];
   brand: string;
+  logoUrl?: string | null;
+  labels?: ShellLabels;
   impersonating?: boolean;
 }) {
   const [open, setOpen] = useState(false);
   const pathname = usePathname();
   const brandHref = pathname.startsWith('/super-admin') ? '/super-admin' : '/company';
+  const l = withDefaults(labels);
 
   // The trigger is `md:hidden`, but the drawer is portalled to <body> and so is
   // not inside that wrapper. Without this, rotating a tablet or resizing across
@@ -224,7 +287,7 @@ export function MobileNav({
           {/* Radix supplies `aria-haspopup="dialog"` and `aria-expanded`. */}
           <button
             type="button"
-            aria-label="Open menu"
+            aria-label={l.openMenu}
             className="inline-flex h-9 w-9 items-center justify-center rounded-md border hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
           >
             <svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
@@ -244,23 +307,22 @@ export function MobileNav({
         showClose={false}
         className="w-72 max-w-[82%] border-e-0 bg-brand-sidebar p-4 text-sidebar-fg"
       >
-        <SheetTitle srOnly>Navigation menu</SheetTitle>
-        <SheetDescription className="sr-only">
-          Move between the sections of the dashboard.
-        </SheetDescription>
+        <SheetTitle srOnly>{l.navMenu}</SheetTitle>
+        <SheetDescription className="sr-only">{l.navMenuDescription}</SheetDescription>
 
         <div className="mb-6 flex items-start justify-between gap-3">
           <div className="min-w-0">
             <BrandMark
               brand={brand}
               href={brandHref}
+              logoUrl={logoUrl}
               onNavigate={() => setOpen(false)}
               imageClassName="w-48"
             />
-            <WorkspaceIdentity brand={brand} impersonating={impersonating} />
+            <WorkspaceIdentity brand={brand} impersonating={impersonating} labels={l} />
           </div>
           <SheetClose
-            aria-label="Close menu"
+            aria-label={l.closeMenu}
             className={cn(
               'inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-md text-sidebar-fg hover:bg-sidebar-hover',
               FOCUS_RING,

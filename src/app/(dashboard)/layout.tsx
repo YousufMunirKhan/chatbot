@@ -6,88 +6,86 @@ import { EndImpersonationButton } from '@/modules/super-admin/components/end-imp
 import { RefreshOnHistoryNav } from '@/components/refresh-on-history-nav';
 import { ThemeToggle } from '@/components/ui/theme-toggle';
 import { createSupabaseServiceClient } from '@/lib/db/server';
+import { getAgencyForOwner, resolveBranding, DEFAULT_BRANDING, type AgencyBranding } from '@/lib/agency';
+import { getDictionary, navKey, t, tOr, type Dictionary } from '@/lib/i18n';
+import { getCompanyLocaleInfo } from '@/lib/i18n/server';
+import {
+  AGENT_NAV_GROUPS,
+  COMPANY_NAV_FALLBACK,
+  PLATFORM_NAV_GROUPS,
+  companyNavGroups,
+  type NavGroupDef,
+} from '@/components/dashboard-nav-items';
 
 /**
  * Protected dashboard shell (Module 1 shell + Module 3 auth). Requires a signed-in
  * user and renders role-based navigation (Access Rules: super admin → platform,
  * company admin → full company, agent → conversation-focused subset).
  */
-type NavSection = { group: string; items: { href: string; label: string }[] };
-
-const PLATFORM_NAV: NavSection = {
-  group: 'Platform',
-  items: [
-    { href: '/super-admin', label: 'Command Center' },
-    { href: '/super-admin/companies', label: 'Companies' },
-    { href: '/super-admin/billing', label: 'Billing & Plans' },
-    { href: '/super-admin/quality', label: 'Quality & Usage' },
-    // Reachable only by typed URL until now. /costs and /profit are the two
-    // screens the platform's money questions are answered from, so an operator
-    // having to know the URL was a real gap, not a cosmetic one.
-    { href: '/super-admin/subscriptions', label: 'Subscriptions' },
-    { href: '/super-admin/usage', label: 'Usage' },
-    { href: '/super-admin/costs', label: 'AI Cost' },
-    { href: '/super-admin/profit', label: 'Profit / Loss' },
-    { href: '/super-admin/chat-logs', label: 'Chat Logs' },
-    { href: '/super-admin/integrations', label: 'Integrations' },
-    { href: '/super-admin/notifications', label: 'Notifications' },
-    { href: '/super-admin/audit-logs', label: 'Audit Logs' },
-    { href: '/super-admin/security', label: 'Security Logs' },
-    { href: '/super-admin/error-logs', label: 'Error Logs' },
-    { href: '/super-admin/settings', label: 'Settings' },
-  ],
-};
-
-const COMPANY_ADMIN_NAV_ITEMS: NavSection['items'] = [
-  { href: '/company', label: 'Home' },
-  { href: '/company/setup', label: 'Setup' },
-  { href: '/company/bots', label: 'Assistants' },
-  { href: '/company/widget', label: 'Website Widget' },
-  { href: '/company/inbox', label: 'Inbox' },
-  { href: '/company/notifications', label: 'Notifications' },
-  { href: '/company/customers', label: 'Customers' },
-  { href: '/company/business-data', label: 'Business Data' },
-  { href: '/company/quick-actions', label: 'Quick Actions' },
-  { href: '/company/webhooks', label: 'Webhooks' },
-  { href: '/company/settings', label: 'Team & Settings' },
-];
-
-const AGENT_NAV: NavSection = {
-  group: 'Workspace',
-  items: [
-    { href: '/company/inbox', label: 'Inbox' },
-    { href: '/company/customers', label: 'Customers' },
-  ],
-};
+/**
+ * The nav itself lives in `src/components/dashboard-nav-items.ts`.
+ *
+ * It used to be three arrays declared here, which made this file — already the
+ * one every dashboard change touches — the place where "add a page" collided
+ * with everything else. It is pure data, so it moved out; this file is left with
+ * the part that genuinely needs the session: which set to show, and translating
+ * it.
+ *
+ * `NavGroupDef` is `NavSection` plus a `key`, which is what the group heading is
+ * translated by ('Talk to customers' is not a dictionary key; `conversations` is).
+ */
+type NavSection = NavGroupDef;
 
 /**
- * Document direction for the dashboard shell (Module 21).
+ * Direction AND language for the dashboard shell (Module 21).
  *
  * The root `src/app/layout.tsx` cannot do this: it renders for the marketing,
  * auth and widget-embed routes too and has no session, so it has no company to
- * read `default_language` from. This layout already loads the company, so the
- * direction is set on the shell wrapper element instead — `dir` on a container
- * is valid HTML and inherits to every descendant exactly like `dir` on <html>.
+ * read `default_language` from. This layout already loads the company, so both
+ * attributes are set on the shell wrapper element instead — `dir` and `lang` on
+ * a container are valid HTML and inherit to every descendant exactly like they
+ * do on <html>.
  *
- * `lang` is deliberately NOT switched: the UI copy is still English (this change
- * is direction support, not translation), and lying about the language would
- * make screen readers pronounce English text with an Arabic voice.
+ * `lang` used to be deliberately left alone, because the copy was still English
+ * and telling a screen reader otherwise would have it pronounce English words
+ * with an Arabic voice. That reason is gone: `src/lib/i18n` now translates the
+ * shell and the pages it wraps, so the language attribute is finally true.
  *
- * 'auto' and anything unrecognised stay LTR, so the un-configured and English
- * cases render exactly as before.
+ * 'auto' and anything unrecognised stay English/LTR, so the un-configured case
+ * renders exactly as before.
  */
 type ShellDir = 'ltr' | 'rtl';
 
-function shellDirFor(defaultLanguage: string | null | undefined): ShellDir {
-  return defaultLanguage === 'ar' ? 'rtl' : 'ltr';
+interface CompanyShell {
+  /** Several grouped sections now, not one flat list. */
+  nav: NavSection[];
+  brand: string;
+  dir: ShellDir;
+  locale: string;
+  dict: Dictionary;
+  branding: AgencyBranding;
 }
 
-async function companyShellFor(user: SessionUser): Promise<{ nav: NavSection; brand: string; dir: ShellDir }> {
+async function companyShellFor(user: SessionUser): Promise<CompanyShell> {
+  // One cached read for name + language (see src/lib/i18n/server.ts) — it
+  // replaces the `companies` query this function used to make itself, so
+  // translation costs the shell no extra round trip.
+  const localeInfo = await getCompanyLocaleInfo();
+  const base = {
+    dir: localeInfo.dir,
+    locale: localeInfo.locale,
+    dict: localeInfo.dict,
+  };
   if (!user.companyId)
-    return { nav: { group: 'Company', items: COMPANY_ADMIN_NAV_ITEMS }, brand: 'Company', dir: 'ltr' };
+    return {
+      ...base,
+      nav: COMPANY_NAV_FALLBACK,
+      brand: 'Company',
+      branding: DEFAULT_BRANDING,
+    };
+
   const sb = createSupabaseServiceClient();
-  const [{ data: company }, { data: internalBot }, { data: connector }] = await Promise.all([
-    sb.from('companies').select('name, default_language').eq('id', user.companyId).maybeSingle(),
+  const [{ data: internalBot }, { data: connector }, branding, ownedAgency] = await Promise.all([
     sb
       .from('bots')
       .select('id')
@@ -102,62 +100,119 @@ async function companyShellFor(user: SessionUser): Promise<{ nav: NavSection; br
       .eq('status', 'active')
       .limit(1)
       .maybeSingle(),
+    // Both memoised in-process for a minute (src/lib/agency.ts), so the common
+    // "no agency" answer costs nothing after the first render.
+    resolveBranding(user.companyId),
+    getAgencyForOwner(user.userId),
   ]);
 
-  const showInternalHelpDesk = Boolean(internalBot || connector);
-  const items = showInternalHelpDesk
-    ? [
-        ...COMPANY_ADMIN_NAV_ITEMS.slice(0, 4),
-        { href: '/company/help-desk', label: 'Internal Help Desk' },
-        ...COMPANY_ADMIN_NAV_ITEMS.slice(4),
-      ]
-    : COMPANY_ADMIN_NAV_ITEMS;
+  // Both conditional rows are placed inside the group they belong to rather than
+  // spliced by index the way the flat list did it — the staff help desk sits with
+  // the customer inbox, the agency console with the account settings.
+  const nav = companyNavGroups({
+    showInternalHelpDesk: Boolean(internalBot || connector),
+    // The agency console exists only for the operator who owns one (0057).
+    showAgency: Boolean(ownedAgency),
+  });
+
   return {
-    nav: { group: 'Company', items },
-    brand: company?.name ?? 'Company',
-    dir: shellDirFor(company?.default_language as string | null | undefined),
+    ...base,
+    nav,
+    // An agency's product name replaces the platform's, but never the tenant's
+    // own name: "whose account am I in" is what the sidebar answers.
+    brand: localeInfo.companyName ?? 'Company',
+    branding,
   };
+}
+
+/**
+ * Swap each nav label for its translation, keyed off the href (`nav.company.inbox`),
+ * and each group heading for `nav.group.<key>`. Anything with no dictionary entry
+ * keeps the English it was declared with, so adding a route can never blank a row.
+ */
+function translateSections(sections: NavSection[], dict: Dictionary): NavSection[] {
+  return sections.map((section) => ({
+    key: section.key,
+    group: tOr(dict, `nav.group.${section.key}`, section.group),
+    items: section.items.map((item) => ({
+      href: item.href,
+      label: tOr(dict, navKey(item.href), item.label),
+    })),
+  }));
 }
 
 export default async function DashboardLayout({ children }: { children: React.ReactNode }) {
   const user = await requireUser();
-  const companyShell = await companyShellFor(user).catch(() => ({
-    nav: { group: 'Company', items: COMPANY_ADMIN_NAV_ITEMS },
-    brand: 'Company',
-    dir: 'ltr' as ShellDir,
-  }));
+  const companyShell = await companyShellFor(user).catch(
+    (): CompanyShell => ({
+      nav: COMPANY_NAV_FALLBACK,
+      brand: 'Company',
+      dir: 'ltr',
+      locale: 'en',
+      dict: getDictionary('en'),
+      branding: DEFAULT_BRANDING,
+    }),
+  );
 
-  const sections: NavSection[] = user.impersonation
-    ? [companyShell.nav]
+  const rawSections: NavSection[] = user.impersonation
+    ? companyShell.nav
     : user.isSuperAdmin
-      ? [PLATFORM_NAV]
+      ? PLATFORM_NAV_GROUPS
       : user.role === ROLES.AGENT
-      ? [AGENT_NAV]
-      : [companyShell.nav];
+      ? AGENT_NAV_GROUPS
+      : companyShell.nav;
 
-  const brand = user.isSuperAdmin && !user.impersonation ? 'Switch & Save' : companyShell.brand;
+  // Super admins on the platform surfaces stay English/LTR; once they impersonate
+  // they are looking at a company workspace, so they get that company's language
+  // and direction too.
+  const platformView = user.isSuperAdmin && !user.impersonation;
+  const dict = platformView ? getDictionary('en') : companyShell.dict;
+  const sections = translateSections(rawSections, dict);
 
-  // Super admins on the platform surfaces stay LTR; once they impersonate they are
-  // looking at a company workspace, so they get that company's direction too.
-  const dir: ShellDir = user.isSuperAdmin && !user.impersonation ? 'ltr' : companyShell.dir;
+  // The agency's product name replaces the platform's own on the platform-brand
+  // surfaces only; a tenant workspace keeps showing the tenant's name.
+  const brand = platformView ? 'Switch & Save' : companyShell.brand;
+  const logoUrl = platformView ? null : companyShell.branding.logoUrl;
+
+  const dir: ShellDir = platformView ? 'ltr' : companyShell.dir;
   // Rendered only for RTL: nothing above this element sets a direction, so an
   // explicit "ltr" would be a no-op and the English markup stays untouched.
   const shellDirAttr = dir === 'rtl' ? 'rtl' : undefined;
+  // `lang` is only stated when it differs from the document's English default,
+  // for the same reason.
+  const shellLangAttr = platformView ? undefined : companyShell.locale === 'ar' ? 'ar' : undefined;
 
   const roleLabel = user.impersonation
-    ? `Impersonating ${user.impersonation.companyName ?? 'company'}`
+    ? t(dict, 'shell.role.impersonating', {
+        company: user.impersonation.companyName ?? 'company',
+      })
     : user.isSuperAdmin
-    ? 'Super Admin'
+    ? t(dict, 'shell.role.super_admin')
     : user.role === ROLES.AGENT
-      ? 'Agent'
+      ? t(dict, 'shell.role.agent')
       : user.role === ROLES.COMPANY_ADMIN
-        ? 'Company Admin'
-        : 'Member';
+        ? t(dict, 'shell.role.company_admin')
+        : t(dict, 'shell.role.member');
+
+  const shellLabels = {
+    account: t(dict, 'shell.account'),
+    viewingCustomer: t(dict, 'shell.viewing_customer'),
+    openMenu: t(dict, 'shell.open_menu'),
+    closeMenu: t(dict, 'shell.close_menu'),
+    navMenu: t(dict, 'shell.nav_menu'),
+    navMenuDescription: t(dict, 'shell.nav_menu_description'),
+  };
 
   return (
-    <div dir={shellDirAttr} className="flex min-h-screen">
+    <div dir={shellDirAttr} lang={shellLangAttr} className="flex min-h-screen">
       <RefreshOnHistoryNav />
-      <DesktopSidebar sections={sections} brand={brand} impersonating={Boolean(user.impersonation)} />
+      <DesktopSidebar
+        sections={sections}
+        brand={brand}
+        logoUrl={logoUrl}
+        labels={shellLabels}
+        impersonating={Boolean(user.impersonation)}
+      />
 
       <div className="min-w-0 flex-1">
         {user.impersonation ? (
@@ -173,7 +228,13 @@ export default async function DashboardLayout({ children }: { children: React.Re
             and in dark mode an unpainted strip there reads as a gap. */}
         <header className="flex h-14 items-center justify-between gap-3 border-b bg-background px-4 sm:px-6">
           <div className="flex min-w-0 items-center gap-3">
-            <MobileNav sections={sections} brand={brand} impersonating={Boolean(user.impersonation)} />
+            <MobileNav
+              sections={sections}
+              brand={brand}
+              logoUrl={logoUrl}
+              labels={shellLabels}
+              impersonating={Boolean(user.impersonation)}
+            />
             <span className="truncate text-sm text-muted-foreground">{roleLabel}</span>
           </div>
           <div className="flex min-w-0 items-center gap-3">
@@ -192,7 +253,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
                 on, so before this existed a user with a dark OS got the dark
                 token block and no way to leave it. */}
             <ThemeToggle />
-            <SignOutButton />
+            <SignOutButton label={t(dict, 'shell.sign_out')} />
           </div>
         </header>
         <main className="p-4 sm:p-6">{children}</main>

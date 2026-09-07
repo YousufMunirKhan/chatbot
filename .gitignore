@@ -43,3 +43,6 @@ yarn-error.log*
 .idea
 .vscode/*
 !.vscode/extensions.json
+
+# Backups written by scripts/dedupe-leads.mjs
+leads-backup-*.json

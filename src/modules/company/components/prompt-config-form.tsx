@@ -28,7 +28,11 @@ export function PromptConfigForm({
       <input type="hidden" name="botId" value={botId} />
       <div className="grid gap-4 sm:grid-cols-2">
         <FormField label="Industry" htmlFor="industry">
-          <Input name="industry" defaultValue={config.industry ?? ''} placeholder="restaurant, clinic, retail…" />
+          <Input
+            name="industry"
+            defaultValue={config.industry ?? ''}
+            placeholder="restaurant, clinic, retail…"
+          />
         </FormField>
         <FormField label="Tone" htmlFor="tone">
           <Select name="tone" defaultValue={config.tone ?? 'professional'}>

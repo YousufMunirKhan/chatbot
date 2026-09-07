@@ -1,4 +1,5 @@
 import { getSessionUser } from '@/lib/auth';
+import { humanizeStoredSubmission } from '@/lib/quick-actions-format';
 import { createSupabaseServiceClient } from '@/lib/db/server';
 import { ticketNumberFromState } from '@/lib/tickets/ticket-number';
 import { getCompanyId } from './data';
@@ -170,7 +171,9 @@ function mapConversationRow(row: unknown): ConversationRow {
 
 /** Trims a raw message body down to something that fits two lines in a queue row. */
 export function messagePreview(content: string, max = 120): string {
-  const flat = content
+  // Submissions stored before the formatter existed still hold raw JSON. Render
+  // them readably rather than showing an agent a payload.
+  const flat = humanizeStoredSubmission(content)
     .replace(/^#{1,6}\s+/gm, '')
     .replace(/[*_`>]/g, '')
     .replace(/\s+/g, ' ')
@@ -584,7 +587,9 @@ export async function getConversationDetail(
         return {
           id: x.id as string,
           senderType: x.sender_type as string,
-          content: (x.content_text as string) ?? '',
+          // Same rescue as the list preview: a submission stored as raw JSON
+          // is rendered as labelled lines in the transcript too.
+          content: humanizeStoredSubmission((x.content_text as string) ?? ''),
           createdAt: x.created_at as string,
         };
       })

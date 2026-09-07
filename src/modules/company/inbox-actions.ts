@@ -7,6 +7,7 @@ import { ROLES } from '@/lib/constants';
 import { createSupabaseServiceClient } from '@/lib/db/server';
 import { sendEmail } from '@/lib/email';
 import { notify } from '@/lib/notify';
+import { markFirstResponse, markResolved } from '@/lib/sla';
 import { getCompanyId } from './data';
 
 export type ActionState = { error?: string; ok?: boolean };
@@ -124,6 +125,9 @@ export async function sendAgentReplyAction(
     .eq('id', conversationId);
   if (updErr) return { error: updErr.message };
 
+  // Stop the SLA first-response clock. Harmless when no policy is running.
+  await markFirstResponse({ companyId, conversationId });
+
   revalidateInbox(conversationId);
   return { ok: true };
 }
@@ -146,10 +150,12 @@ export async function resumeAiAction(formData: FormData): Promise<ActionState> {
 
 export async function closeChatAction(formData: FormData): Promise<ActionState> {
   const { conversationId } = conversationIdSchema.parse(Object.fromEntries(formData));
-  return updateConversationState({
+  const result = await updateConversationState({
     conversationId,
     values: { ai_enabled: false, status: 'closed', closed_at: new Date().toISOString() },
   });
+  if (result.ok) await markResolved({ companyId: await getCompanyId(), conversationId });
+  return result;
 }
 
 const resolveTicketSchema = z.object({

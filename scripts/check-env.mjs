@@ -46,6 +46,29 @@ const optionalRecommended = [
   'RESEND_API_KEY',
 ];
 
+/**
+ * Settings whose absence silently disables a whole feature.
+ *
+ * These are reported separately from `optionalRecommended` because the failure
+ * mode is invisible: without CRON_SECRET no background job runs and nothing
+ * says so; without META_APP_SECRET inbound webhooks are refused in production.
+ * A green `env:check` that hides that is worse than no check.
+ */
+const featureGates = [
+  ['CRON_SECRET', 'reply-time warnings, broadcasts, order + cart messages, Gmail/YouTube polling, auto top-up'],
+  ['META_APP_SECRET', 'WhatsApp / Messenger / Instagram webhooks (REFUSED in production without it)'],
+  ['META_VERIFY_TOKEN', 'saving the webhook in the Meta app dashboard'],
+  ['GOOGLE_CLIENT_ID', 'the "Connect Gmail" button and Google Calendar'],
+  ['GOOGLE_CLIENT_SECRET', 'the "Connect Gmail" button and Google Calendar'],
+  ['EMAIL_API_URL', 'replying to inbound email (reading it still works)'],
+  ['TIKTOK_CLIENT_SECRET', 'verifying TikTok comment webhooks'],
+  ['SHOPIFY_WEBHOOK_SECRET', 'Shopify order automations (webhook returns 503 in production)'],
+  ['WOOCOMMERCE_WEBHOOK_SECRET', 'WooCommerce order automations (webhook returns 503 in production)'],
+  ['VAPID_PUBLIC_KEY', 'phone alerts (web push) for the dashboard app — the toggle reports "not switched on"'],
+  ['VAPID_PRIVATE_KEY', 'phone alerts (web push) — nothing can be signed or delivered without it'],
+  ['VAPID_SUBJECT', 'the contact URI push services require; delivery is refused by some without it'],
+];
+
 let failed = false;
 console.log(`Checking ${fileName}\n`);
 
@@ -54,6 +77,22 @@ for (const key of required) {
   const ok = Boolean(value);
   if (!ok) failed = true;
   console.log(`${ok ? 'OK ' : 'MISS'} ${key}${ok ? `=${mask(value)}` : ''}`);
+}
+
+const missingGates = featureGates.filter(([key]) => {
+  const value = env.get(key);
+  // META_APP_SECRET has an accepted alias for single-app deployments.
+  if (key === 'META_APP_SECRET' && env.get('WHATSAPP_APP_SECRET')) return false;
+  if (key === 'META_VERIFY_TOKEN' && env.get('WHATSAPP_VERIFY_TOKEN')) return false;
+  return !value;
+});
+
+if (missingGates.length > 0) {
+  console.log('');
+  console.log('Not set — these features are OFF and will not report an error:');
+  for (const [key, effect] of missingGates) console.log(`  OFF  ${key} — ${effect}`);
+  // In production an unset feature gate is a deployment mistake, not a choice.
+  if (fileName === '.env.production') failed = true;
 }
 
 if (fileName === '.env.production') {

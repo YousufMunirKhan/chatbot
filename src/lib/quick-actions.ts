@@ -1,4 +1,5 @@
 import { createSupabaseServiceClient } from '@/lib/db/server';
+import { isCompanyOpenNow, matchesBusinessHours } from '@/lib/business-hours';
 
 export type QuickActionType =
   | 'send_message'
@@ -177,6 +178,11 @@ export function filterQuickActionRows(
     capabilities?: string[];
     audience?: QuickActionAudience;
     settings?: { enableDefaultPills?: boolean; enableContextualPills?: boolean; enableConnectorGeneratedPills?: boolean };
+    /**
+     * Whether the business is open right now. `null` = hours not configured,
+     * in which case nothing is hidden.
+     */
+    isOpenNow?: boolean | null;
   },
 ): QuickActionPublic[] {
   const context = params.context || 'initial';
@@ -194,6 +200,11 @@ export function filterQuickActionRows(
       if (patterns.length && !patterns.some((p) => patternMatches(p, pageUrl))) return false;
       const required = toStringArray(row.required_capabilities);
       if (required.length && !required.every((cap) => caps.has(cap))) return false;
+      // "Only while you are open" / "only outside opening hours". This was a
+      // saved setting nothing ever read, so the choice silently did nothing.
+      if (!matchesBusinessHours(row.business_hours_mode as string | undefined, params.isOpenNow ?? null)) {
+        return false;
+      }
       return true;
     })
     .map(mapQuickAction);
@@ -223,6 +234,7 @@ export async function loadPublicQuickActions(params: {
   return filterQuickActionRows((data ?? []) as Array<Record<string, unknown>>, {
     ...params,
     audience: params.audience ?? 'customer',
+    isOpenNow: await isCompanyOpenNow(params.companyId),
   }).slice(0, params.limit ?? 8);
 }
 
@@ -245,6 +257,9 @@ export async function loadInternalQuickActions(params: {
     .order('created_at', { ascending: true })
     .limit(100);
   if (error) throw error;
+  // Staff-facing actions are not gated by opening hours: the setting exists to
+  // stop a customer being offered "call us" when nobody is there, and staff
+  // using the internal assistant are by definition at work.
   return filterQuickActionRows((data ?? []) as Array<Record<string, unknown>>, {
     ...params,
     audience: 'internal',
@@ -283,6 +298,7 @@ export async function loadContextualQuickActions(params: {
     capabilities: params.capabilities,
     audience: params.assistantAudience,
     settings: params.settings,
+    isOpenNow: await isCompanyOpenNow(params.companyId),
   });
 
   return candidates

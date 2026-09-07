@@ -24,7 +24,13 @@ export function CampaignForm() {
         <Input name="name" required maxLength={120} placeholder="Pricing page nudge" />
       </FormField>
       <FormField label="Message" htmlFor="message">
-        <Textarea name="message" required rows={2} maxLength={500} placeholder="Have a question about pricing? I can help." />
+        <Textarea
+          name="message"
+          required
+          rows={2}
+          maxLength={500}
+          placeholder="Have a question about pricing? I can help."
+        />
       </FormField>
       <div className="grid gap-4 sm:grid-cols-2">
         <FormField label="Show on pages containing (optional)" htmlFor="matchUrl">

@@ -23,6 +23,13 @@ const nextConfig = {
           { key: 'Cache-Control', value: 'public, max-age=300, s-maxage=86400' },
         ],
       },
+      {
+        // The mobile embed bridge. Loaded same-origin by /embed/[publicBotId],
+        // so it needs no CORS — but a WebView on a phone network benefits from
+        // the same cache policy as the widget.
+        source: '/sdk/:path*',
+        headers: [{ key: 'Cache-Control', value: 'public, max-age=300, s-maxage=86400' }],
+      },
     ];
   },
 };

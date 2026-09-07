@@ -15,11 +15,20 @@ import { runToolLoop } from './agent';
 import { getToolSchemas } from '@/lib/tools';
 import { logAiUsage } from './usage';
 import { logger } from '@/lib/logger';
+import { runFlowTurn } from '@/lib/flows/runtime';
+import { blocksToText } from '@/lib/channels/types';
+import type { OutboundBlock } from '@/lib/channels/types';
 
 export interface InboundResult {
   conversationId: string;
   answer: string | null;
   aiHandled: boolean;
+  /**
+   * Rich reply blocks when a flow answered (buttons, galleries, media). Channels
+   * that can render them should prefer these over `answer`, which is the same
+   * content flattened to text for transports that cannot.
+   */
+  blocks?: OutboundBlock[];
 }
 
 /**
@@ -36,6 +45,12 @@ export async function processInboundMessage(params: {
   visitorId: string;
   text: string;
   channel: string;
+  /** Display name from the channel profile, used by flows and the inbox. */
+  contactName?: string | null;
+  /** Ad id / ref parameter / entry point that brought the customer here. */
+  referral?: string | null;
+  /** `comment` events come from a public post rather than a private thread. */
+  kind?: 'message' | 'comment';
 }): Promise<InboundResult> {
   const { bot, visitorId, text, channel } = params;
   const language = detectLanguage(text);
@@ -65,8 +80,54 @@ export async function processInboundMessage(params: {
     return { conversationId: convo.id, answer: null, aiHandled: false };
   }
 
+  // --- Flows answer before the AI does --------------------------------------
+  // A live flow that matches this message owns the turn. When it hands back
+  // (an `ai` block, or an answer none of its buttons matched) its messages so
+  // far become the prefix and the assistant finishes the turn.
+  const flowTurn = await runFlowTurn({
+    companyId: bot.companyId,
+    botId: bot.id,
+    conversationId: convo.id,
+    channel,
+    text,
+    visitorId,
+    contactName: params.contactName ?? null,
+    referral: params.referral ?? null,
+    isFirstMessage: Boolean(convo.isNew),
+    kind: params.kind ?? 'message',
+  });
+
+  const prefixBlocks: OutboundBlock[] = flowTurn?.blocks ?? [];
+  const prefixText = prefixBlocks.length ? blocksToText(prefixBlocks) : '';
+  if (prefixText) {
+    await saveMessage({
+      companyId: bot.companyId,
+      conversationId: convo.id,
+      senderType: 'ai',
+      text: prefixText,
+      language,
+      channel,
+    });
+  }
+
+  if (flowTurn && !flowTurn.handoffToAi) {
+    // The flow is done talking for this turn (it is waiting on an answer, it
+    // finished, or it escalated to a human).
+    return {
+      conversationId: convo.id,
+      answer: prefixText || null,
+      blocks: prefixBlocks.length ? prefixBlocks : undefined,
+      aiHandled: !flowTurn.handoffToHuman,
+    };
+  }
+
   if (!bot.aiEnabled) {
-    return { conversationId: convo.id, answer: null, aiHandled: false };
+    return {
+      conversationId: convo.id,
+      answer: prefixText || null,
+      blocks: prefixBlocks.length ? prefixBlocks : undefined,
+      aiHandled: false,
+    };
   }
 
   try {
@@ -88,7 +149,9 @@ export async function processInboundMessage(params: {
     );
 
     const messages = buildMessages({
-      systemPrompt: bot.systemPrompt,
+      systemPrompt: flowTurn?.aiInstruction
+        ? [bot.systemPrompt ?? '', `Instruction for this reply: ${flowTurn.aiInstruction}`].join('\n\n').trim()
+        : bot.systemPrompt,
       businessContext,
       contextText,
       summary,
@@ -159,12 +222,22 @@ export async function processInboundMessage(params: {
       model: resolved.model,
     });
 
-    return { conversationId: convo.id, answer, aiHandled: true };
+    return {
+      conversationId: convo.id,
+      answer: [prefixText, answer].filter(Boolean).join('\n\n') || null,
+      blocks: prefixBlocks.length ? [...prefixBlocks, { type: 'text', text: answer }] : undefined,
+      aiHandled: true,
+    };
   } catch (err) {
     logger.error('processInboundMessage failed', {
       channel,
       error: err instanceof Error ? err.message : String(err),
     });
-    return { conversationId: convo.id, answer: null, aiHandled: false };
+    return {
+      conversationId: convo.id,
+      answer: prefixText || null,
+      blocks: prefixBlocks.length ? prefixBlocks : undefined,
+      aiHandled: false,
+    };
   }
 }

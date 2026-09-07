@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { formatActionSubmission } from '@/lib/quick-actions-format';
 import {
   detectLanguage,
   getOrCreateConversation,
@@ -129,7 +130,7 @@ export async function POST(req: Request) {
       conversationId: convo.id,
       senderType: 'visitor',
       senderId: body.visitorId,
-      text: `${action.label}: ${JSON.stringify(body.formValues)}`,
+      text: formatActionSubmission(action.label, body.formValues),
       language,
       bumpUnread: true,
     });
@@ -186,7 +187,7 @@ export async function POST(req: Request) {
       conversationId: convo.id,
       senderType: 'visitor',
       senderId: body.visitorId,
-      text: `${action.label}: ${JSON.stringify(body.formValues)}`,
+      text: formatActionSubmission(action.label, body.formValues),
       language,
       bumpUnread: true,
     });

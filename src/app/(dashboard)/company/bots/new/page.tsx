@@ -35,11 +35,15 @@ export default async function NewBotPage() {
   const suggestedDomains = suggestedDomainsFrom(company.website);
 
   return (
-    <div className="mx-auto max-w-6xl space-y-6">
+    // A single form of short fields and tick boxes. At `max-w-6xl` it stretched
+    // across 1150px on a wide screen; forms stay at a readable measure.
+    <div className="mx-auto max-w-3xl space-y-6">
       <PageHeader
-        backTo={{ href: '/company/bots', label: 'Assistants' }}
+        backTo={{ href: '/company/bots', label: 'My assistants' }}
         title="New assistant"
-        description={<>Pick a type and capabilities. Prompt templates &amp; advanced tuning come in Module 6.</>}
+        // Was "Prompt templates & advanced tuning come in Module 6" — an
+        // internal roadmap note, shown to shop owners.
+        description="Say who it talks to and tick the jobs you want it doing. You can change any of this later, and nothing goes live until you put it on your website."
       />
       {atBotLimit ? (
         <Card>

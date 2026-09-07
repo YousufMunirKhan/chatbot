@@ -4,6 +4,8 @@ import type { BotContext } from '@/lib/ai/engine';
 import { loadBotByPublicId } from '@/lib/ai/engine';
 
 export interface ChannelIdentity {
+  /** `channel_identities.id` — needed to write refreshed OAuth tokens back. */
+  id: string;
   companyId: string;
   botPublicId: string | null;
   channel: string;
@@ -20,7 +22,7 @@ export async function resolveChannelIdentity(
   const sb = createSupabaseServiceClient();
   const { data } = await sb
     .from('channel_identities')
-    .select('company_id,bot_id,channel,external_id,secret_encrypted,settings_json,is_active,bots(public_bot_id)')
+    .select('id,company_id,bot_id,channel,external_id,secret_encrypted,settings_json,is_active,bots(public_bot_id)')
     .eq('channel', channel)
     .eq('external_id', externalId)
     .maybeSingle();
@@ -41,6 +43,7 @@ export async function resolveChannelIdentity(
   const botJoin = row.bots as { public_bot_id?: string } | null;
   const botPublicId = botJoin?.public_bot_id ?? null;
   const identity: ChannelIdentity = {
+    id: row.id as string,
     companyId: row.company_id as string,
     botPublicId,
     channel: row.channel as string,

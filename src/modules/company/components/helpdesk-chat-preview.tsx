@@ -36,21 +36,32 @@ function AskButton() {
       aria-label="Ask assistant"
       title="Ask assistant"
     >
-      {pending ? <Sparkles className="h-4 w-4 animate-pulse" /> : <ArrowRight className="h-4 w-4" />}
+      {pending ? (
+        <Sparkles className="h-4 w-4 animate-pulse" />
+      ) : (
+        <ArrowRight className="h-4 w-4" />
+      )}
     </Button>
   );
 }
 
-export function HelpdeskChatPreview({ suggestions = fallbackSuggestions }: { suggestions?: string[] }) {
+export function HelpdeskChatPreview({
+  suggestions = fallbackSuggestions,
+}: {
+  suggestions?: string[];
+}) {
   const [state, action] = useFormState(testAssistantAction, initial);
   const visibleSuggestions = suggestions.length ? suggestions.slice(0, 5) : fallbackSuggestions;
 
   return (
-    <section className="grid gap-6 lg:grid-cols-[minmax(320px,0.95fr)_1.05fr]">
+    <section className="grid gap-6 lg:grid-cols-[minmax(320px,0.95fr)_1.05fr] [&>*]:min-w-0">
       <div className="overflow-hidden rounded-lg border bg-white shadow-sm">
         <div className="flex items-center justify-between border-b px-5 py-4">
           <div className="inline-flex rounded-full bg-slate-100 p-1 text-sm font-medium">
-            <button className="rounded-full bg-white px-4 py-2 text-slate-950 shadow-sm" type="button">
+            <button
+              className="rounded-full bg-white px-4 py-2 text-slate-950 shadow-sm"
+              type="button"
+            >
               Chat
             </button>
             <button className="px-4 py-2 text-slate-500" type="button">
@@ -118,8 +129,20 @@ export function HelpdeskChatPreview({ suggestions = fallbackSuggestions }: { sug
             ))}
           </div>
 
-          <form action={action} className="mt-4 rounded-[28px] border-2 border-slate-900 bg-white p-4">
+          <form
+            action={action}
+            className="mt-4 rounded-[28px] border-2 border-slate-900 bg-white p-4"
+          >
+            {/* Visually hidden rather than a `FormField`: this box is the mock
+                of the staff chat composer, and a visible label above it would
+                stop the preview looking like the thing it is previewing. The
+                name still has to reach a screen reader, so it is a real
+                `<label>` and not a placeholder. */}
+            <label htmlFor="helpdesk-preview-question" className="sr-only">
+              Ask the staff assistant a question
+            </label>
             <textarea
+              id="helpdesk-preview-question"
               name="question"
               rows={3}
               className="w-full resize-none border-0 bg-transparent text-sm outline-none placeholder:text-slate-400"
@@ -200,7 +223,9 @@ export function HelpdeskChatPreview({ suggestions = fallbackSuggestions }: { sug
             <p className="text-xs font-semibold uppercase tracking-wider text-slate-500">
               Assistant answered
             </p>
-            <p className="mt-3 whitespace-pre-wrap text-sm leading-6 text-slate-700">{state.answer}</p>
+            <p className="mt-3 whitespace-pre-wrap text-sm leading-6 text-slate-700">
+              {state.answer}
+            </p>
           </div>
         ) : null}
       </div>

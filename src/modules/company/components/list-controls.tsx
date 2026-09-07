@@ -1,6 +1,8 @@
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
+import { FormField } from '@/components/ui/form-field';
 import { Select } from '@/components/ui/select';
+import { labelFor } from '@/lib/constants';
 
 /**
  * Shared, server-rendered list controls for the leads / appointments tables:
@@ -15,38 +17,62 @@ import { Select } from '@/components/ui/select';
 const inputCls =
   'flex h-9 w-56 rounded-md border border-input bg-background px-3 py-1 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring';
 
+// One filter bar per page, so fixed ids are safe and keep the label wiring
+// readable. If a page ever renders two, give each its own `idPrefix`.
+const SEARCH_ID = 'list-filter-search';
+const STATUS_ID = 'list-filter-status';
+
 export function ListFilters({
   basePath,
   search,
   status,
   statuses,
   placeholder = 'Search…',
+  searchLabel = 'Search',
+  statusLabel = 'Status',
+  statusLabels = {},
 }: {
   basePath: string;
   search?: string;
   status?: string;
   statuses: readonly string[];
   placeholder?: string;
+  /** Visible label for the search box — say what this list is searched by. */
+  searchLabel?: string;
+  /** Visible label for the status dropdown. */
+  statusLabel?: string;
+  /**
+   * Display names for the status values, supplied by the caller (bookings pass
+   * `APPOINTMENT_STATUS_LABELS`, leads pass theirs). This component cannot pick
+   * the map itself — the same `pending` means different things on different
+   * lists — and without one the options degrade through `labelFor` to
+   * `humanizeToken` rather than to the raw `no_show` fragment they used to show.
+   */
+  statusLabels?: Record<string, string>;
 }) {
   return (
     <form method="get" action={basePath} className="flex flex-wrap items-end gap-2">
-      <input
-        type="text"
-        name="q"
-        defaultValue={search ?? ''}
-        placeholder={placeholder}
-        className={inputCls}
-      />
+      <FormField label={searchLabel} htmlFor={SEARCH_ID}>
+        <input
+          type="text"
+          name="q"
+          defaultValue={search ?? ''}
+          placeholder={placeholder}
+          className={inputCls}
+        />
+      </FormField>
       {/* `w-auto`: this select sizes to its options in the filter row, where
           `Select`'s default `w-full` would stretch it across the bar. */}
-      <Select size="sm" name="status" defaultValue={status ?? 'all'} className="w-auto">
-        <option value="all">All statuses</option>
-        {statuses.map((s) => (
-          <option key={s} value={s}>
-            {s.replace(/_/g, ' ')}
-          </option>
-        ))}
-      </Select>
+      <FormField label={statusLabel} htmlFor={STATUS_ID}>
+        <Select size="sm" name="status" defaultValue={status ?? 'all'} className="w-auto">
+          <option value="all">All statuses</option>
+          {statuses.map((s) => (
+            <option key={s} value={s}>
+              {labelFor(statusLabels, s)}
+            </option>
+          ))}
+        </Select>
+      </FormField>
       <Button type="submit" variant="outline" size="sm">
         Filter
       </Button>

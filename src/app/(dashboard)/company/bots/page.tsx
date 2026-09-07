@@ -22,10 +22,14 @@ export default async function BotsPage() {
   const bots = await listBots();
 
   return (
-    <div className="mx-auto max-w-6xl space-y-6">
+    <div className="mx-auto max-w-7xl space-y-6">
       <PageHeader
-        title="Assistants"
-        description={`${bots.length} configured`}
+        title="My assistants"
+        description={
+          bots.length === 0
+            ? 'An assistant is the thing that talks to people for you. Most shops need one, for customers.'
+            : `You have ${bots.length}. One can answer your customers, another can answer your own staff.`
+        }
         actions={
           <Button asChild>
             <Link href="/company/bots/new">New assistant</Link>
@@ -51,10 +55,11 @@ export default async function BotsPage() {
                 <TableRow className="hover:bg-transparent">
                   <TableCell colSpan={6} className="p-0">
                     <EmptyState
-                      title="No assistants yet."
+                      title="No assistants yet"
+                      body="An assistant answers your customers on your website and on WhatsApp, day and night, using what you tell it about your business. Most shops only ever need one."
                       action={
                         <Button asChild size="sm">
-                          <Link href="/company/bots/new">Create one</Link>
+                          <Link href="/company/bots/new">Create my assistant</Link>
                         </Button>
                       }
                     />

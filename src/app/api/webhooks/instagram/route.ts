@@ -1,23 +1,31 @@
-import { processInboundMessage } from '@/lib/ai/inbound';
-import { resolveChannelIdentity } from '@/lib/channels/identity';
-import { sendInstagramText } from '@/lib/channels/instagram';
+import { handleInboundEvents } from '@/lib/channels/handler';
+import { instagramAdapter } from '@/lib/channels/adapters/meta';
 import { logger } from '@/lib/logger';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
 /**
- * Instagram / Messenger webhook (Meta Graph). Inbound DMs become conversations
- * and get an AI reply on the same account. Map each IG/page id to a company via
- * a channel_identities row (channel='instagram', external_id=<page id>, secret=
- * page access token). Verify token: INSTAGRAM_VERIFY_TOKEN (or WHATSAPP_VERIFY_TOKEN).
+ * Instagram webhook (Meta Graph).
+ *
+ * Delegates to the shared adapter pipeline, so this endpoint now handles
+ * everything the adapter does: direct messages, quick-reply and postback taps,
+ * media attachments, ad referrals, and **post comments** — which the previous
+ * hand-rolled version silently dropped while the Channels screen offered
+ * comment-reply settings for them.
+ *
+ * The URL is unchanged so an existing Meta app subscription keeps working.
+ * Map each account to a company with a `channel_identities` row
+ * (channel='instagram', external_id=<IG account id>, secret=page access token).
+ * Verify token: INSTAGRAM_VERIFY_TOKEN (or WHATSAPP_VERIFY_TOKEN).
  */
 export async function GET(req: Request) {
   const url = new URL(req.url);
   const mode = url.searchParams.get('hub.mode');
   const token = url.searchParams.get('hub.verify_token');
   const challenge = url.searchParams.get('hub.challenge');
-  const expected = process.env.INSTAGRAM_VERIFY_TOKEN || process.env.WHATSAPP_VERIFY_TOKEN;
+  const expected =
+    process.env.INSTAGRAM_VERIFY_TOKEN || process.env.META_VERIFY_TOKEN || process.env.WHATSAPP_VERIFY_TOKEN;
   if (mode === 'subscribe' && expected && token === expected) {
     return new Response(challenge ?? '', { status: 200 });
   }
@@ -25,49 +33,30 @@ export async function GET(req: Request) {
 }
 
 export async function POST(req: Request) {
-  let payload: Record<string, unknown>;
+  // The raw bytes are what Meta signed — parsing and re-serialising would
+  // change whitespace and break verification.
+  const raw = await req.text();
+
+  if (instagramAdapter.verifySignature && !instagramAdapter.verifySignature(raw, req.headers, null)) {
+    return new Response('invalid signature', { status: 401 });
+  }
+
+  let payload: unknown;
   try {
-    payload = await req.json();
+    payload = raw ? JSON.parse(raw) : {};
   } catch {
     return new Response('bad request', { status: 400 });
   }
 
   try {
-    const entries = (payload.entry as Array<Record<string, unknown>>) ?? [];
-    for (const entry of entries) {
-      const pageId = entry.id as string | undefined;
-      const messaging = (entry.messaging as Array<Record<string, unknown>>) ?? [];
-      if (!pageId || messaging.length === 0) continue;
-
-      const resolved = await resolveChannelIdentity('instagram', pageId);
-      if (!resolved || !resolved.bot) {
-        logger.warn('Instagram inbound for unmapped page', { pageId });
-        continue;
-      }
-
-      for (const event of messaging) {
-        const sender = (event.sender as Record<string, unknown>)?.id as string | undefined;
-        const message = event.message as Record<string, unknown> | undefined;
-        const text = (message?.text as string | undefined)?.trim();
-        // Ignore echoes of our own outbound messages.
-        if (!sender || !text || message?.is_echo) continue;
-
-        const result = await processInboundMessage({
-          bot: resolved.bot,
-          visitorId: sender,
-          text,
-          channel: 'instagram',
-        });
-        if (result.answer && resolved.identity.secret) {
-          await sendInstagramText(resolved.identity.secret, sender, result.answer);
-        }
-      }
-    }
+    const events = instagramAdapter.parse(payload, { queryIdentity: null, headers: req.headers });
+    const result = await handleInboundEvents('instagram', events);
+    return Response.json({ ok: true, ...result });
   } catch (err) {
     logger.error('Instagram webhook processing failed', {
       error: err instanceof Error ? err.message : String(err),
     });
+    // Still 200 so Meta does not hammer retries for a transient app error.
+    return new Response('ok', { status: 200 });
   }
-
-  return new Response('ok', { status: 200 });
 }

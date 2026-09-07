@@ -1,13 +1,26 @@
 import Link from 'next/link';
 import { requireRole } from '@/lib/auth';
-import { ROLES } from '@/lib/constants';
+import {
+  ROLES,
+  APPOINTMENT_STATUS_LABELS,
+  LEAD_STATUS_LABELS,
+  ORDER_STATUS_LABELS,
+  labelFor,
+} from '@/lib/constants';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { EmptyState } from '@/components/ui/empty-state';
 import { PageHeader } from '@/components/ui/page-header';
 import { StatTile } from '@/components/ui/stat-tile';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table';
 import { formatCurrency, formatDate } from '@/lib/format';
 import { listAppointments } from '@/modules/company/appointments-data';
 import { listLeads } from '@/modules/company/leads-data';
@@ -25,11 +38,11 @@ export default async function CustomersWorkspacePage() {
   const orders = [...chatOrders, ...syncedOrders].slice(0, 8);
 
   return (
-    <div className="mx-auto max-w-6xl space-y-6">
+    <div className="mx-auto max-w-7xl space-y-6">
       <RefreshOnFocus />
       <PageHeader
         title="Customers"
-        description="Leads, appointment requests, and orders in one customer workspace."
+        description="Everyone who has been in touch — who left their details, who asked to book, and who ordered. The three sections below each have a full page behind them."
         actions={
           <>
             <Button asChild variant="outline" size="sm">
@@ -54,7 +67,9 @@ export default async function CustomersWorkspacePage() {
       <Card id="leads">
         <CardHeader className="flex-row items-center justify-between">
           <CardTitle>Recent leads</CardTitle>
-          <Link href="/company/leads" className="text-sm text-primary hover:underline">Manage all</Link>
+          <Link href="/company/leads" className="text-sm text-primary hover:underline">
+            Manage all
+          </Link>
         </CardHeader>
         <CardContent className="p-0">
           {leads.length === 0 ? (
@@ -85,8 +100,12 @@ export default async function CustomersWorkspacePage() {
                     <TableCell className="font-medium">{lead.name || 'Lead'}</TableCell>
                     <TableCell>{lead.email ?? lead.phone ?? '-'}</TableCell>
                     <TableCell>{lead.enquiryType ?? '-'}</TableCell>
-                    <TableCell><Badge variant="secondary">{lead.status}</Badge></TableCell>
-                    <TableCell className="text-muted-foreground">{formatDate(lead.createdAt)}</TableCell>
+                    <TableCell>
+                      <Badge variant="secondary">{labelFor(LEAD_STATUS_LABELS, lead.status)}</Badge>
+                    </TableCell>
+                    <TableCell className="text-muted-foreground">
+                      {formatDate(lead.createdAt)}
+                    </TableCell>
                   </TableRow>
                 ))}
               </TableBody>
@@ -98,7 +117,9 @@ export default async function CustomersWorkspacePage() {
       <Card id="appointments">
         <CardHeader className="flex-row items-center justify-between">
           <CardTitle>Appointment requests</CardTitle>
-          <Link href="/company/appointments" className="text-sm text-primary hover:underline">Manage all</Link>
+          <Link href="/company/appointments" className="text-sm text-primary hover:underline">
+            Manage all
+          </Link>
         </CardHeader>
         <CardContent className="p-0">
           {appointments.length === 0 ? (
@@ -125,12 +146,20 @@ export default async function CustomersWorkspacePage() {
               <TableBody>
                 {appointments.slice(0, 8).map((appointment) => (
                   <TableRow key={appointment.id}>
-                    <TableCell className="font-medium">{appointment.customerName || 'Customer'}</TableCell>
+                    <TableCell className="font-medium">
+                      {appointment.customerName || 'Customer'}
+                    </TableCell>
                     <TableCell>{appointment.serviceType ?? '-'}</TableCell>
                     <TableCell>
-                      {[appointment.preferredDate, appointment.preferredTime].filter(Boolean).join(' ') || '-'}
+                      {[appointment.preferredDate, appointment.preferredTime]
+                        .filter(Boolean)
+                        .join(' ') || '-'}
                     </TableCell>
-                    <TableCell><Badge variant="secondary">{appointment.status}</Badge></TableCell>
+                    <TableCell>
+                      <Badge variant="secondary">
+                        {labelFor(APPOINTMENT_STATUS_LABELS, appointment.status)}
+                      </Badge>
+                    </TableCell>
                   </TableRow>
                 ))}
               </TableBody>
@@ -142,7 +171,9 @@ export default async function CustomersWorkspacePage() {
       <Card id="orders">
         <CardHeader className="flex-row items-center justify-between">
           <CardTitle>Recent orders</CardTitle>
-          <Link href="/company/orders" className="text-sm text-primary hover:underline">Manage all</Link>
+          <Link href="/company/orders" className="text-sm text-primary hover:underline">
+            Manage all
+          </Link>
         </CardHeader>
         <CardContent className="p-0">
           {orders.length === 0 ? (
@@ -169,10 +200,20 @@ export default async function CustomersWorkspacePage() {
               <TableBody>
                 {orders.map((order) => (
                   <TableRow key={order.id}>
-                    <TableCell className="font-medium">{order.customerName ?? 'Customer'}</TableCell>
-                    <TableCell><Badge variant="secondary">{order.status ?? 'unknown'}</Badge></TableCell>
+                    <TableCell className="font-medium">
+                      {order.customerName ?? 'Customer'}
+                    </TableCell>
+                    <TableCell>
+                      {/* This row mixes chat orders with store-synced ones, so the
+                          status can be a WooCommerce token we never chose. */}
+                      <Badge variant="secondary">
+                        {labelFor(ORDER_STATUS_LABELS, order.status, 'Not known')}
+                      </Badge>
+                    </TableCell>
                     <TableCell>{formatCurrency(order.total, order.currency)}</TableCell>
-                    <TableCell className="text-muted-foreground">{formatDate(order.createdAt)}</TableCell>
+                    <TableCell className="text-muted-foreground">
+                      {formatDate(order.createdAt)}
+                    </TableCell>
                   </TableRow>
                 ))}
               </TableBody>

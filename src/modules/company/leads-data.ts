@@ -17,6 +17,10 @@ export interface LeadRow {
   message: string | null;
   status: string;
   createdAt: string;
+  /** The chat this enquiry came from, so the reply can start with context. */
+  conversationId: string | null;
+  /** 'chat', 'manual', a flow id — where the enquiry entered the business. */
+  source: string | null;
 }
 
 function toLeadRow(row: Record<string, unknown>): LeadRow {
@@ -29,6 +33,8 @@ function toLeadRow(row: Record<string, unknown>): LeadRow {
     message: (row.message as string) ?? null,
     status: row.status as string,
     createdAt: row.created_at as string,
+    conversationId: (row.conversation_id as string) ?? null,
+    source: (row.source as string) ?? null,
   };
 }
 
@@ -37,7 +43,7 @@ export async function listLeads(): Promise<LeadRow[]> {
   const sb = createSupabaseServiceClient();
   const { data, error } = await sb
     .from('leads')
-    .select('id,name,email,phone,enquiry_type,message,status,created_at')
+    .select('id,name,email,phone,enquiry_type,message,status,created_at,conversation_id,source')
     .eq('company_id', companyId)
     .order('created_at', { ascending: false })
     .limit(500);
@@ -71,7 +77,7 @@ export async function listLeadsPaged(opts: ListLeadsOptions = {}): Promise<Paged
 
   let query = sb
     .from('leads')
-    .select('id,name,email,phone,enquiry_type,message,status,created_at', { count: 'exact' })
+    .select('id,name,email,phone,enquiry_type,message,status,created_at,conversation_id,source', { count: 'exact' })
     .eq('company_id', companyId);
 
   if (opts.status && opts.status !== 'all') query = query.eq('status', opts.status);

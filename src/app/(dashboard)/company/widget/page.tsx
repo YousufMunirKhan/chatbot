@@ -6,20 +6,26 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { EmptyState } from '@/components/ui/empty-state';
 import { PageHeader } from '@/components/ui/page-header';
 import { getCurrentCompany, listBots } from '@/modules/company/data';
+import { listMobileEmbedBots } from '@/modules/company/mobile-embed-data';
+import { MobileEmbedKit } from '@/modules/company/components/mobile-embed-kit';
 import { WidgetDesignStudio } from '@/modules/company/components/widget-design-studio';
 import { TestAssistant } from '@/modules/company/components/test-assistant';
 import { env } from '@/lib/env';
 
 export default async function WidgetPage() {
   await requireRole([ROLES.COMPANY_ADMIN]);
-  const [company, allBots] = await Promise.all([getCurrentCompany(), listBots()]);
+  const [company, allBots, mobileBots] = await Promise.all([
+    getCurrentCompany(),
+    listBots(),
+    listMobileEmbedBots(),
+  ]);
   const bots = allBots.filter((bot) => bot.assistantAudience === 'customer');
 
   return (
     <div className="mx-auto max-w-6xl space-y-6">
       <PageHeader
-        title="Website Widget"
-        description="Design the customer-facing chat widget, preview it against different website backgrounds, then save it to update the live embed."
+        title="Website chat"
+        description="The chat bubble your customers see on your own website. Choose how it looks, try it out here, then copy one line of code onto your site to switch it on."
       />
 
       {/* The setup wizard's test step lands here, so the real test tool sits above
@@ -46,10 +52,11 @@ export default async function WidgetPage() {
         <Card>
           <CardContent className="p-0">
             <EmptyState
-              title="Create a customer-facing assistant first to get a preview and embed snippet."
+              title="You need an assistant first"
+              body="The chat on your website is the front of an assistant, so there has to be one to put there. It takes a couple of minutes to create."
               action={
                 <Button asChild size="sm">
-                  <Link href="/company/bots/new">New assistant</Link>
+                  <Link href="/company/bots/new">Create my assistant</Link>
                 </Button>
               }
             />
@@ -78,6 +85,22 @@ export default async function WidgetPage() {
           );
         })
       )}
+
+      {mobileBots.length > 0 ? (
+        <Card id="mobile-app">
+          <CardHeader>
+            <CardTitle className="text-base">Inside your own mobile app</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <p className="text-sm text-muted-foreground">
+              The same chat, the same inbox, the same assistant — running full screen inside your
+              Android or iOS app. Your developer loads one address in a WebView; there is no SDK to
+              add and nothing to release through the app stores when you change the chat.
+            </p>
+            <MobileEmbedKit bots={mobileBots} />
+          </CardContent>
+        </Card>
+      ) : null}
     </div>
   );
 }

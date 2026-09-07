@@ -1,6 +1,6 @@
 import Link from 'next/link';
 import { requireRole } from '@/lib/auth';
-import { ROLES } from '@/lib/constants';
+import { ROLES, CATALOG_STATUS_LABELS, labelFor } from '@/lib/constants';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -16,10 +16,10 @@ function NothingSynced({ kind, detail }: { kind: string; detail: string }) {
   return (
     <EmptyState
       title={`No ${kind} yet.`}
-      body={`This page is read-only — ${detail} Connect your store or upload a CSV and they appear here.`}
+      body={`You cannot type ${kind} in here — ${detail} Connect your shop or upload a spreadsheet and they appear on this page, and your assistant can start quoting them.`}
       action={
         <Button asChild size="sm">
-          <Link href="/company/integrations">Import your {kind}</Link>
+          <Link href="/company/integrations">Connect your shop</Link>
         </Button>
       }
     />
@@ -31,19 +31,19 @@ export default async function CompanyCatalogPage() {
   const [products, menuItems] = await Promise.all([listSyncedProducts(), listMenuItems()]);
 
   return (
-    <div className="mx-auto max-w-6xl space-y-6">
+    <div className="mx-auto max-w-7xl space-y-6">
       <PageHeader
-        title="Catalog"
-        description="Products and menu items synced from your integrations."
+        title="Products"
+        description="What your assistant can quote a price for. This list is a copy of your shop — change a price in Shopify or WooCommerce and it changes here, not the other way round."
       />
 
       <Card>
         <CardHeader>
-          <CardTitle>Products</CardTitle>
+          <CardTitle>Things you sell</CardTitle>
         </CardHeader>
         <CardContent className="p-0">
           {products.length === 0 ? (
-            <NothingSynced kind="products" detail="products come from your integrations, not from typing them in." />
+            <NothingSynced kind="products" detail="they are copied from the shop you connect." />
           ) : (
             <Table>
               <TableHeader>
@@ -63,7 +63,11 @@ export default async function CompanyCatalogPage() {
                     </TableCell>
                     <TableCell className="text-muted-foreground">{p.sku ?? '—'}</TableCell>
                     <TableCell>
-                      {p.status ? <Badge variant="secondary">{p.status}</Badge> : '—'}
+                      {p.status ? (
+                        <Badge variant="secondary">{labelFor(CATALOG_STATUS_LABELS, p.status)}</Badge>
+                      ) : (
+                        '—'
+                      )}
                     </TableCell>
                   </TableRow>
                 ))}
@@ -76,10 +80,13 @@ export default async function CompanyCatalogPage() {
       <Card>
         <CardHeader>
           <CardTitle>Menu items</CardTitle>
+          <p className="mt-1 text-sm text-muted-foreground">
+            For cafés and restaurants — dishes and drinks, kept separately from products.
+          </p>
         </CardHeader>
         <CardContent className="p-0">
           {menuItems.length === 0 ? (
-            <NothingSynced kind="menu items" detail="menu items come from your integrations, not from typing them in." />
+            <NothingSynced kind="menu items" detail="they are copied from the till or shop you connect." />
           ) : (
             <Table>
               <TableHeader>

@@ -18,7 +18,12 @@ export function EvalForm({ bots }: { bots: { id: string; name: string }[] }) {
   return (
     <form action={action} className="space-y-4">
       <FormField label="Question" htmlFor="question" required>
-        <Textarea name="question" required minLength={3} placeholder="What are your business hours?" />
+        <Textarea
+          name="question"
+          required
+          minLength={3}
+          placeholder="What are your business hours?"
+        />
       </FormField>
       <div className="grid gap-4 sm:grid-cols-2">
         <FormField label="Assistant" htmlFor="botId">

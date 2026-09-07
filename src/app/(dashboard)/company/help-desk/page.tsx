@@ -211,7 +211,7 @@ function ManualSetupGuide() {
   ];
 
   return (
-    <div className="grid gap-6 lg:grid-cols-[0.9fr_1.1fr]">
+    <div className="grid gap-6 lg:grid-cols-[0.9fr_1.1fr] [&>*]:min-w-0">
       <Card>
         <CardHeader>
           <CardTitle>For your developer: setup steps</CardTitle>
@@ -480,7 +480,7 @@ function HelpDeskOverview({
   ];
 
   return (
-    <div className="grid gap-6 lg:grid-cols-[1fr_360px]">
+    <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_360px] [&>*]:min-w-0">
       <Card>
         <CardHeader>
           <CardTitle>Help Desk status</CardTitle>
@@ -930,10 +930,10 @@ export default async function HelpDeskPage({ searchParams }: { searchParams?: { 
     .filter((group) => group.documents.length > 0);
 
   return (
-    <div className="mx-auto max-w-6xl space-y-6">
+    <div className="mx-auto max-w-7xl space-y-6">
       <PageHeader
-        title="Internal Help Desk"
-        description="One place for your team to ask questions about your software, get things done in it, and hand anything tricky to a person."
+        title="Staff help desk"
+        description="The same idea, pointed at your own team instead of your customers: they ask how something works, it answers, and anything it cannot sort goes to a person."
         actions={
           <Button asChild variant="outline">
             <Link href={assistantHref}>{assistantLabel}</Link>
@@ -1013,7 +1013,7 @@ export default async function HelpDeskPage({ searchParams }: { searchParams?: { 
       {activeTab === 'connect' ? <ManualSetupGuide /> : null}
 
       {activeTab === 'settings' ? (
-        <div className="grid gap-6 lg:grid-cols-[0.95fr_1.05fr]">
+        <div className="grid gap-6 lg:grid-cols-[0.95fr_1.05fr] [&>*]:min-w-0">
           <Card>
             <CardHeader>
               <CardTitle>Where the Help Desk chat appears</CardTitle>
@@ -1053,7 +1053,7 @@ export default async function HelpDeskPage({ searchParams }: { searchParams?: { 
 
       {activeTab === 'connect' ? (
         <>
-          <div className="grid gap-6 lg:grid-cols-[0.9fr_1.1fr]">
+          <div className="grid gap-6 lg:grid-cols-[0.9fr_1.1fr] [&>*]:min-w-0">
             <Card>
               <CardHeader>
                 <CardTitle>Create connector</CardTitle>

@@ -1,13 +1,20 @@
 import Link from 'next/link';
 import { requireRole } from '@/lib/auth';
-import { ROLES } from '@/lib/constants';
+import { ROLES, APPOINTMENT_STATUS_LABELS, labelFor } from '@/lib/constants';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent } from '@/components/ui/card';
 import { EmptyState } from '@/components/ui/empty-state';
 import { PageHeader } from '@/components/ui/page-header';
 import { Select } from '@/components/ui/select';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table';
 import { formatDate } from '@/lib/format';
 import { listAppointmentsPaged } from '@/modules/company/appointments-data';
 import { setAppointmentStatusAction } from '@/modules/company/appointments-actions';
@@ -16,7 +23,13 @@ import { RefreshOnFocus } from '@/components/refresh-on-focus';
 
 type BadgeVariant = 'default' | 'secondary' | 'success' | 'warning' | 'destructive' | 'outline';
 
-const APPOINTMENT_STATUSES = ['requested', 'confirmed', 'cancelled', 'completed', 'no_show'] as const;
+const APPOINTMENT_STATUSES = [
+  'requested',
+  'confirmed',
+  'cancelled',
+  'completed',
+  'no_show',
+] as const;
 
 function statusVariant(status: string): BadgeVariant {
   if (status === 'requested') return 'default';
@@ -49,11 +62,11 @@ export default async function AppointmentsPage({
   const filtered = Boolean(search) || status !== 'all';
 
   return (
-    <div className="mx-auto max-w-6xl space-y-6">
+    <div className="mx-auto max-w-7xl space-y-6">
       <RefreshOnFocus />
       <PageHeader
-        title="Appointments"
-        description="Booking and appointment requests from your assistant."
+        title="Bookings"
+        description="Everyone who has asked for an appointment through your assistant. Nothing is confirmed until you say so."
       />
 
       <div className="px-1">
@@ -62,6 +75,9 @@ export default async function AppointmentsPage({
           search={search}
           status={status}
           statuses={APPOINTMENT_STATUSES}
+          statusLabels={APPOINTMENT_STATUS_LABELS}
+          searchLabel="Search bookings"
+          statusLabel="Booking status"
           placeholder="Search name, email, phone…"
         />
       </div>
@@ -71,12 +87,20 @@ export default async function AppointmentsPage({
           {appointments.length === 0 && filtered ? (
             // Module 1 — a filter is hiding everything, so offer the way back.
             <EmptyState
-              title="No appointments match your filters"
+              title="No bookings match your filters"
               body={
                 <>
                   Nothing matches {search ? <>&ldquo;{search}&rdquo;</> : 'this search'}
-                  {status !== 'all' ? ` with status ${status.replace(/_/g, ' ')}` : ''}. Try a different term or start
-                  over.
+                  {status !== 'all' ? (
+                    <>
+                      {' '}
+                      among bookings marked &ldquo;{labelFor(APPOINTMENT_STATUS_LABELS, status)}
+                      &rdquo;
+                    </>
+                  ) : (
+                    ''
+                  )}
+                  . Try a different word, or clear the filters to see every booking.
                 </>
               }
               action={
@@ -91,8 +115,8 @@ export default async function AppointmentsPage({
               title="No appointment requests yet"
               body={
                 <>
-                  Mark a service as bookable and the assistant can take requests in chat, with the customer&rsquo;s
-                  preferred day and time.
+                  Mark a service as bookable and the assistant can take requests in chat, with the
+                  customer&rsquo;s preferred day and time.
                 </>
               }
               action={
@@ -125,21 +149,36 @@ export default async function AppointmentsPage({
                     <TableCell>{appt.serviceType ?? '—'}</TableCell>
                     <TableCell>{dateTime(appt.preferredDate, appt.preferredTime)}</TableCell>
                     <TableCell>
-                      <Badge variant={statusVariant(appt.status)}>{appt.status.replace(/_/g, ' ')}</Badge>
+                      <Badge variant={statusVariant(appt.status)}>
+                        {labelFor(APPOINTMENT_STATUS_LABELS, appt.status)}
+                      </Badge>
                     </TableCell>
                     <TableCell>{formatDate(appt.createdAt)}</TableCell>
                     <TableCell>
                       <form action={setAppointmentStatusAction} className="flex items-center gap-2">
                         <input type="hidden" name="appointmentId" value={appt.id} />
-                        <Select name="status" size="sm" defaultValue={appt.status} aria-label="Appointment status">
+                        {/* One control per row, so the accessible name has to
+                            name the row too — a screen reader hearing "Booking
+                            status" twenty times cannot tell whose it is. */}
+                        <Select
+                          name="status"
+                          size="sm"
+                          defaultValue={appt.status}
+                          aria-label={`Booking status for ${appt.customerName || 'this customer'}`}
+                        >
                           {APPOINTMENT_STATUSES.map((s) => (
                             <option key={s} value={s}>
-                              {s.replace(/_/g, ' ')}
+                              {labelFor(APPOINTMENT_STATUS_LABELS, s)}
                             </option>
                           ))}
                         </Select>
-                        <Button type="submit" variant="outline" size="sm">
-                          Update
+                        <Button
+                          type="submit"
+                          variant="outline"
+                          size="sm"
+                          aria-label={`Save booking status for ${appt.customerName || 'this customer'}`}
+                        >
+                          Save status
                         </Button>
                       </form>
                     </TableCell>

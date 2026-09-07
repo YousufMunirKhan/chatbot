@@ -9,17 +9,42 @@ import { Textarea } from '@/components/ui/textarea';
 import { FormField } from '@/components/ui/form-field';
 import { FormMessage } from '@/components/ui/form-message';
 import { SubmitButton } from '@/components/ui/submit-button';
+import { companyLabel } from '@/lib/labels';
 import { saveQualityFeedbackAction, type QualityActionState } from '../quality-actions';
 
 const initial: QualityActionState = {};
 
 const FIX_TYPES = [
-  { value: 'knowledge', label: 'Add missing answer', helper: 'Saves a general knowledge fix in the Knowledge Base.' },
-  { value: 'faq', label: 'Add FAQ-style answer', helper: 'Creates an editable FAQ and indexes the answer.' },
-  { value: 'policy', label: 'Add policy or rule', helper: 'Use for refunds, delivery, warranty, pricing rules.' },
-  { value: 'service', label: 'Update service or offer', helper: 'Use for prices, booking rules, products, packages.' },
-  { value: 'profile', label: 'Update business details', helper: 'Use for hours, contact, location, service areas.' },
-  { value: 'prompt', label: 'Improve assistant instruction', helper: 'Use for tone, behavior, or escalation style.' },
+  {
+    value: 'knowledge',
+    label: 'Add missing answer',
+    helper: 'Saves a general knowledge fix in the Knowledge Base.',
+  },
+  {
+    value: 'faq',
+    label: 'Add FAQ-style answer',
+    helper: 'Creates an editable FAQ and indexes the answer.',
+  },
+  {
+    value: 'policy',
+    label: 'Add policy or rule',
+    helper: 'Use for refunds, delivery, warranty, pricing rules.',
+  },
+  {
+    value: 'service',
+    label: 'Update service or offer',
+    helper: 'Use for prices, booking rules, products, packages.',
+  },
+  {
+    value: 'profile',
+    label: 'Update business details',
+    helper: 'Use for hours, contact, location, service areas.',
+  },
+  {
+    value: 'prompt',
+    label: 'Improve assistant instruction',
+    helper: 'Use for tone, behavior, or escalation style.',
+  },
 ];
 
 export function QualityFeedbackForm({ qualityLogId }: { qualityLogId: string }) {
@@ -34,9 +59,13 @@ export function QualityFeedbackForm({ qualityLogId }: { qualityLogId: string }) 
     // for selection.
     <form action={action} className="space-y-4 rounded-lg border bg-info-bg/40 p-4">
       <input type="hidden" name="qualityLogId" value={qualityLogId} />
-      <div className="grid gap-4 lg:grid-cols-[220px_1fr]">
+      <div className="grid gap-4 lg:grid-cols-[220px_minmax(0,1fr)]">
         <FormField label="What kind of fix?" htmlFor="fixType" hint={selected?.helper}>
-          <Select name="fixType" value={fixType} onChange={(event) => setFixType(event.target.value)}>
+          <Select
+            name="fixType"
+            value={fixType}
+            onChange={(event) => setFixType(event.target.value)}
+          >
             {FIX_TYPES.map((type) => (
               <option key={type.value} value={type.value}>
                 {type.label}
@@ -52,14 +81,18 @@ export function QualityFeedbackForm({ qualityLogId }: { qualityLogId: string }) 
           />
         </FormField>
       </div>
-      <div className="grid gap-4 lg:grid-cols-[220px_1fr]">
+      <div className="grid gap-4 lg:grid-cols-[220px_minmax(0,1fr)]">
         <FormField label="Issue type" htmlFor="rating">
           <Select name="rating" defaultValue="missing_info">
             <option value="missing_info">Missing information</option>
             <option value="wrong_answer">Wrong answer</option>
             <option value="bad">Poor answer</option>
             <option value="too_slow">Too slow</option>
-            <option value="needs_human">Needs human</option>
+            {/* "Needs human" was the stored token with the underscore taken
+                out. `conversationStatus` already owns the company-audience
+                wording for this exact value, so the option and the conversation
+                badge cannot drift apart. */}
+            <option value="needs_human">{companyLabel('conversationStatus', 'needs_human')}</option>
             <option value="good">Actually okay</option>
           </Select>
         </FormField>
@@ -73,7 +106,11 @@ export function QualityFeedbackForm({ qualityLogId }: { qualityLogId: string }) 
           </SubmitButton>
           {fixType !== 'knowledge' && fixType !== 'faq' ? (
             <Button asChild variant="outline" size="sm">
-              <Link href={fixType === 'prompt' ? '/company/bots' : '/company/business-data?tab=basics'}>Open full editor</Link>
+              <Link
+                href={fixType === 'prompt' ? '/company/bots' : '/company/business-data?tab=basics'}
+              >
+                Open full editor
+              </Link>
             </Button>
           ) : null}
         </div>

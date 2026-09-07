@@ -214,8 +214,12 @@ export default async function ConversationPage({
           </CardContent>
         </Card>
 
-        {/* Pinned composer — outside the scroll area, so it never moves. */}
-        <Card className="shrink-0">
+        {/* Pinned composer — outside the scroll area, so it never moves.
+            On a phone the column has no fixed height, so it also sticks to the
+            bottom of the viewport: at 375x812 the reply box rendered at y=912,
+            which is to say an agent opened a chat on their phone and could not
+            see where to type. */}
+        <Card className="sticky bottom-0 z-10 shrink-0 shadow-lg lg:static lg:shadow-none">
           <CardContent className="p-4">
             <AgentReplyForm key={convo.id} conversationId={convo.id} cannedResponses={convo.cannedResponses} />
           </CardContent>

@@ -28,7 +28,13 @@ import {
   SERVICE_CATEGORY_OPTIONS,
 } from '../business-categories';
 import { CURRENCY_OPTIONS, DURATION_OPTIONS, TIMEZONE_OPTIONS } from '../form-options';
-import type { BusinessProfileMemory, FaqRow, HoursRow, PolicyRow, ServiceRow } from '../business-profile-data';
+import type {
+  BusinessProfileMemory,
+  FaqRow,
+  HoursRow,
+  PolicyRow,
+  ServiceRow,
+} from '../business-profile-data';
 
 const initial: ActionState = {};
 
@@ -100,19 +106,35 @@ export function BusinessMemoryForm({ profile }: { profile: BusinessProfileMemory
     <form action={action} className="space-y-5">
       <div className="grid gap-4 lg:grid-cols-2">
         <FormField label="Short business description" htmlFor="shortDescription">
-          <Textarea name="shortDescription" defaultValue={profile.shortDescription ?? ''} rows={3} />
+          <Textarea
+            name="shortDescription"
+            defaultValue={profile.shortDescription ?? ''}
+            rows={3}
+          />
         </FormField>
         <FormField label="Why customers choose you" htmlFor="uniqueSellingPoints">
-          <Textarea name="uniqueSellingPoints" defaultValue={profile.uniqueSellingPoints ?? ''} rows={3} />
+          <Textarea
+            name="uniqueSellingPoints"
+            defaultValue={profile.uniqueSellingPoints ?? ''}
+            rows={3}
+          />
         </FormField>
         <FormField label="Industry" htmlFor="industry">
-          <Input name="industry" defaultValue={profile.industry ?? ''} placeholder="restaurant, clinic, retail" />
+          <Input
+            name="industry"
+            defaultValue={profile.industry ?? ''}
+            placeholder="restaurant, clinic, retail"
+          />
         </FormField>
         <FormField label="Target customers" htmlFor="targetCustomers">
           <Input name="targetCustomers" defaultValue={profile.targetCustomers ?? ''} />
         </FormField>
         <FormField label="Brand voice" htmlFor="brandVoice">
-          <Input name="brandVoice" defaultValue={profile.brandVoice ?? ''} placeholder="premium, friendly, concise" />
+          <Input
+            name="brandVoice"
+            defaultValue={profile.brandVoice ?? ''}
+            placeholder="premium, friendly, concise"
+          />
         </FormField>
         <FormField label="Answer length" htmlFor="answerLength">
           <Select name="answerLength" defaultValue={profile.answerLength}>
@@ -136,7 +158,11 @@ export function BusinessMemoryForm({ profile }: { profile: BusinessProfileMemory
           </Select>
         </FormField>
         <FormField label="Banned phrases" htmlFor="bannedPhrases">
-          <Input name="bannedPhrases" defaultValue={profile.bannedPhrases.join(', ')} placeholder="cheap, no problem, dear customer" />
+          <Input
+            name="bannedPhrases"
+            defaultValue={profile.bannedPhrases.join(', ')}
+            placeholder="cheap, no problem, dear customer"
+          />
         </FormField>
         <FormField label="Default currency" htmlFor="defaultCurrency">
           <Select name="defaultCurrency" defaultValue={profile.defaultCurrency}>
@@ -166,7 +192,11 @@ export function BusinessMemoryForm({ profile }: { profile: BusinessProfileMemory
           <Input name="salesEmail" type="email" defaultValue={profile.salesEmail ?? ''} />
         </FormField>
         <FormField label="Payment methods" htmlFor="paymentMethods" className="lg:col-span-2">
-          <Input name="paymentMethods" defaultValue={profile.paymentMethods.join(', ')} placeholder="cash, card, bank transfer" />
+          <Input
+            name="paymentMethods"
+            defaultValue={profile.paymentMethods.join(', ')}
+            placeholder="cash, card, bank transfer"
+          />
         </FormField>
       </div>
 
@@ -185,7 +215,11 @@ export function BusinessMemoryForm({ profile }: { profile: BusinessProfileMemory
           defaultValue={profile.escalationRules ?? ''}
         />
         <FormField label="What it says when passing it on" htmlFor="escalationMessage">
-          <Textarea name="escalationMessage" defaultValue={profile.escalationMessage ?? ''} rows={3} />
+          <Textarea
+            name="escalationMessage"
+            defaultValue={profile.escalationMessage ?? ''}
+            rows={3}
+          />
         </FormField>
         <FormField label="Tone notes" htmlFor="toneNotes" className="lg:col-span-2">
           <Textarea name="toneNotes" defaultValue={profile.toneNotes ?? ''} rows={3} />
@@ -220,15 +254,38 @@ export function HoursForm({ hours }: { hours: HoursRow[] }) {
     <form action={action} className="space-y-4">
       <div className="space-y-3">
         {hours.map((h) => (
-          <div key={h.dayOfWeek} className="grid gap-3 rounded-md border p-3 md:grid-cols-[120px_1fr_1fr_1fr_2fr]">
+          <div
+            key={h.dayOfWeek}
+            className="grid gap-3 rounded-md border p-3 md:grid-cols-[120px_1fr_1fr_1fr_2fr]"
+          >
             <div className="text-sm font-medium">{DAYS[h.dayOfWeek]}</div>
             <label className="flex items-center gap-2 text-sm">
-              <input name={`closed_${h.dayOfWeek}`} type="checkbox" defaultChecked={h.isClosed} className="h-4 w-4" />
+              <input
+                name={`closed_${h.dayOfWeek}`}
+                type="checkbox"
+                defaultChecked={h.isClosed}
+                className="h-4 w-4"
+              />
               Closed
             </label>
-            <Input name={`open_${h.dayOfWeek}`} type="time" defaultValue={h.openTime ?? ''} aria-label={`${DAYS[h.dayOfWeek]} open time`} />
-            <Input name={`close_${h.dayOfWeek}`} type="time" defaultValue={h.closeTime ?? ''} aria-label={`${DAYS[h.dayOfWeek]} close time`} />
-            <Input name={`notes_${h.dayOfWeek}`} defaultValue={h.notes ?? ''} placeholder="Notes" aria-label={`${DAYS[h.dayOfWeek]} notes`} />
+            <Input
+              name={`open_${h.dayOfWeek}`}
+              type="time"
+              defaultValue={h.openTime ?? ''}
+              aria-label={`${DAYS[h.dayOfWeek]} open time`}
+            />
+            <Input
+              name={`close_${h.dayOfWeek}`}
+              type="time"
+              defaultValue={h.closeTime ?? ''}
+              aria-label={`${DAYS[h.dayOfWeek]} close time`}
+            />
+            <Input
+              name={`notes_${h.dayOfWeek}`}
+              defaultValue={h.notes ?? ''}
+              placeholder="Notes"
+              aria-label={`${DAYS[h.dayOfWeek]} notes`}
+            />
           </div>
         ))}
       </div>
@@ -296,7 +353,11 @@ export function ServiceForm({ defaultCurrency }: { defaultCurrency: string }) {
     <form action={action} className="space-y-4">
       <div className="grid gap-4 lg:grid-cols-4">
         <FormField label="Service, product, or appointment option" htmlFor="serviceName">
-          <Input name="name" required placeholder="Product demo, installation visit, consultation, support call" />
+          <Input
+            name="name"
+            required
+            placeholder="Product demo, installation visit, consultation, support call"
+          />
         </FormField>
         <FormField label="Offer type" htmlFor="serviceCategory">
           <Select name="category" defaultValue="service">
@@ -338,11 +399,27 @@ export function ServiceForm({ defaultCurrency }: { defaultCurrency: string }) {
           <input name="bookingRequired" type="checkbox" className="h-4 w-4" />
           Visitor can request/book this
         </label>
-        <FormField label="What should the assistant say about it?" htmlFor="description" className="lg:col-span-4">
-          <Textarea name="description" rows={3} placeholder="Who it is for, what is included, and any useful price or package details." />
+        <FormField
+          label="What should the assistant say about it?"
+          htmlFor="description"
+          className="lg:col-span-4"
+        >
+          <Textarea
+            name="description"
+            rows={3}
+            placeholder="Who it is for, what is included, and any useful price or package details."
+          />
         </FormField>
-        <FormField label="What should the visitor provide?" htmlFor="requirements" className="lg:col-span-4">
-          <Textarea name="requirements" rows={2} placeholder="For example location, number of tills, current provider, preferred date, or business type." />
+        <FormField
+          label="What should the visitor provide?"
+          htmlFor="requirements"
+          className="lg:col-span-4"
+        >
+          <Textarea
+            name="requirements"
+            rows={2}
+            placeholder="For example location, number of tills, current provider, preferred date, or business type."
+          />
         </FormField>
       </div>
       <FormMessage state={state} />
@@ -351,14 +428,23 @@ export function ServiceForm({ defaultCurrency }: { defaultCurrency: string }) {
   );
 }
 
-export function EditServiceForm({ service, defaultCurrency }: { service: ServiceRow; defaultCurrency: string }) {
+export function EditServiceForm({
+  service,
+  defaultCurrency,
+}: {
+  service: ServiceRow;
+  defaultCurrency: string;
+}) {
   const [state, action] = useFormState(updateServiceAction, initial);
   const currency = service.currency || defaultCurrency;
   return (
     <form action={action} className="mt-3 space-y-4 rounded-md border bg-muted/30 p-4">
       <input type="hidden" name="id" value={service.id} />
       <div className="grid gap-4 lg:grid-cols-4">
-        <FormField label="Service, product, or appointment option" htmlFor={`serviceName-${service.id}`}>
+        <FormField
+          label="Service, product, or appointment option"
+          htmlFor={`serviceName-${service.id}`}
+        >
           <Input name="name" required defaultValue={service.name} />
         </FormField>
         <FormField label="Offer type" htmlFor={`serviceCategory-${service.id}`}>
@@ -371,14 +457,21 @@ export function EditServiceForm({ service, defaultCurrency }: { service: Service
           </Select>
         </FormField>
         <FormField label="Price from" htmlFor={`priceFrom-${service.id}`}>
-          <Input name="priceFrom" type="number" step="0.01" defaultValue={service.priceFrom ?? ''} />
+          <Input
+            name="priceFrom"
+            type="number"
+            step="0.01"
+            defaultValue={service.priceFrom ?? ''}
+          />
         </FormField>
         <FormField label="Price to" htmlFor={`priceTo-${service.id}`}>
           <Input name="priceTo" type="number" step="0.01" defaultValue={service.priceTo ?? ''} />
         </FormField>
         <FormField label="Currency" htmlFor={`currency-${service.id}`}>
           <Select name="currency" defaultValue={currency}>
-            {!CURRENCY_OPTIONS.includes(currency) ? <option value={currency}>{currency}</option> : null}
+            {!CURRENCY_OPTIONS.includes(currency) ? (
+              <option value={currency}>{currency}</option>
+            ) : null}
             {CURRENCY_OPTIONS.map((option) => (
               <option key={option} value={option}>
                 {option}
@@ -396,13 +489,26 @@ export function EditServiceForm({ service, defaultCurrency }: { service: Service
           </Select>
         </FormField>
         <label className="mt-7 flex items-center gap-2 text-sm">
-          <input name="bookingRequired" type="checkbox" defaultChecked={service.bookingRequired} className="h-4 w-4" />
+          <input
+            name="bookingRequired"
+            type="checkbox"
+            defaultChecked={service.bookingRequired}
+            className="h-4 w-4"
+          />
           Visitor can request/book this
         </label>
-        <FormField label="What should the assistant say about it?" htmlFor={`description-${service.id}`} className="lg:col-span-4">
+        <FormField
+          label="What should the assistant say about it?"
+          htmlFor={`description-${service.id}`}
+          className="lg:col-span-4"
+        >
           <Textarea name="description" rows={3} defaultValue={service.description ?? ''} />
         </FormField>
-        <FormField label="What should the visitor provide?" htmlFor={`requirements-${service.id}`} className="lg:col-span-4">
+        <FormField
+          label="What should the visitor provide?"
+          htmlFor={`requirements-${service.id}`}
+          className="lg:col-span-4"
+        >
           <Textarea name="requirements" rows={2} defaultValue={service.requirements ?? ''} />
         </FormField>
       </div>

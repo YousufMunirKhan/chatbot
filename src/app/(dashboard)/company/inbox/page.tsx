@@ -7,8 +7,11 @@ import { Card, CardContent } from '@/components/ui/card';
 import { EmptyState } from '@/components/ui/empty-state';
 import { PageHeader } from '@/components/ui/page-header';
 import { dayKey, formatAbsoluteTime, formatDayGroup, formatRelativeTime } from '@/lib/relative-time';
+import { t, type Dictionary } from '@/lib/i18n';
+import { getRequestDictionary } from '@/lib/i18n/server';
 import { getCompanyId } from '@/modules/company/data';
 import { InboxRealtime } from '@/modules/company/components/inbox-realtime';
+import { PushInboxPrompt } from '@/modules/company/components/push-inbox-prompt';
 import { Pagination } from '@/modules/company/components/list-controls';
 import {
   conversationDisplayName,
@@ -48,24 +51,31 @@ const searchInputCls =
  * Exceptions only, most urgent first — the first two win. A chat the assistant
  * is quietly handling produces nothing, which is the point.
  */
-function rowChips(c: ConversationRow, slaMinutes: number): Chip[] {
+function rowChips(c: ConversationRow, slaMinutes: number, dict: Dictionary): Chip[] {
   const chips: Chip[] = [];
-  if (isConversationOverdue(c, slaMinutes)) chips.push({ label: 'Overdue', variant: 'destructive' });
-  else if (c.status === 'needs_human') chips.push({ label: 'Waiting for you', variant: 'warning' });
-  if (c.priority === 'urgent') chips.push({ label: 'Urgent', variant: 'destructive' });
+  if (isConversationOverdue(c, slaMinutes))
+    chips.push({ label: t(dict, 'inbox.chip.overdue'), variant: 'destructive' });
+  else if (c.status === 'needs_human')
+    chips.push({ label: t(dict, 'inbox.chip.waiting'), variant: 'warning' });
+  if (c.priority === 'urgent') chips.push({ label: t(dict, 'inbox.chip.urgent'), variant: 'destructive' });
   if (typeof c.csatRating === 'number' && c.csatRating <= 2) {
-    chips.push({ label: `Rated ${c.csatRating}/5`, variant: 'destructive' });
+    chips.push({
+      label: t(dict, 'inbox.chip.rated', { rating: c.csatRating }),
+      variant: 'destructive',
+    });
   }
-  if (conversationSource(c) === 'connector') chips.push({ label: 'Connector problem', variant: 'destructive' });
-  if (c.status === 'human_active') chips.push({ label: 'A person is on it', variant: 'outline' });
-  if (c.status === 'closed') chips.push({ label: 'Sorted', variant: 'outline' });
-  if (c.status === 'expired') chips.push({ label: 'Went quiet', variant: 'outline' });
+  if (conversationSource(c) === 'connector')
+    chips.push({ label: t(dict, 'inbox.chip.connector'), variant: 'destructive' });
+  if (c.status === 'human_active')
+    chips.push({ label: t(dict, 'inbox.chip.human'), variant: 'outline' });
+  if (c.status === 'closed') chips.push({ label: t(dict, 'inbox.chip.closed'), variant: 'outline' });
+  if (c.status === 'expired') chips.push({ label: t(dict, 'inbox.chip.expired'), variant: 'outline' });
   return chips.slice(0, 2);
 }
 
-function previewPrefix(sender: string | null): string {
-  if (sender === 'agent') return 'You: ';
-  if (sender === 'ai') return 'Assistant: ';
+function previewPrefix(sender: string | null, dict: Dictionary): string {
+  if (sender === 'agent') return t(dict, 'inbox.preview.you');
+  if (sender === 'ai') return t(dict, 'inbox.preview.assistant');
   return '';
 }
 
@@ -87,15 +97,23 @@ export default async function InboxPage({
   const search = searchParams?.q?.trim() || undefined;
   const requestedPage = Number(searchParams?.page) || 1;
 
-  const [{ rows, total, page, pageCount, pageSize }, counts, companyId, support] = await Promise.all([
-    listConversationsPaged({ page: requestedPage, queue, search }),
-    getInboxQueueCounts(),
-    getCompanyId(),
-    getSupportSettings(),
-  ]);
+  const [{ rows, total, page, pageCount, pageSize }, counts, companyId, support, dict] =
+    await Promise.all([
+      listConversationsPaged({ page: requestedPage, queue, search }),
+      getInboxQueueCounts(),
+      getCompanyId(),
+      getSupportSettings(),
+      getRequestDictionary(),
+    ]);
 
   const now = new Date();
-  const activeQueueLabel = INBOX_QUEUES.find((q) => q.key === queue)?.label ?? 'Inbox';
+  // Queue labels come from the dictionary keyed by queue, so the rail and the
+  // empty state can never disagree about what a queue is called.
+  const queueLabel = (key: InboxQueue) =>
+    t(dict, `inbox.queue.${key}`, {}) === `inbox.queue.${key}`
+      ? (INBOX_QUEUES.find((q) => q.key === key)?.label ?? key)
+      : t(dict, `inbox.queue.${key}`);
+  const activeQueueLabel = queueLabel(queue);
   let lastGroup = '';
 
   return (
@@ -103,21 +121,27 @@ export default async function InboxPage({
       <InboxRealtime companyId={companyId} />
 
       <PageHeader
-        title="Inbox"
-        description="Every chat with your customers and your team."
+        title={t(dict, 'inbox.title')}
+        description={t(dict, 'inbox.description')}
         actions={
           <Link href="/company/inbox/canned" className="text-sm underline underline-offset-4">
-            Saved replies
+            {t(dict, 'inbox.saved_replies')}
           </Link>
         }
       />
 
-      <div className="grid gap-4 lg:grid-cols-[220px_minmax(0,1fr)]">
+      {/* Offered from the second inbox visit onwards, never on first paint. */}
+      <PushInboxPrompt />
+
+      {/* `min-w-0` on both tracks: a grid item defaults to min-width:auto, so one
+          long unbroken message preview stretched the column to 672px on a
+          375px phone and pulled the queue rail out with it. */}
+      <div className="grid gap-4 lg:grid-cols-[220px_minmax(0,1fr)] [&>*]:min-w-0">
         {/* Queue rail. Counts are company-wide, not page-wide, so the rail and
             the list beneath it can never disagree. */}
-        <nav aria-label="Conversation queues">
+        <nav aria-label={t(dict, 'inbox.queues.label')}>
           <ul className="space-y-1">
-            {INBOX_QUEUES.map(({ key, label }) => {
+            {INBOX_QUEUES.map(({ key }) => {
               const isActive = key === queue;
               return (
                 <li key={key}>
@@ -129,7 +153,7 @@ export default async function InboxPage({
                       isActive ? 'bg-muted font-medium' : 'text-muted-foreground hover:bg-muted/50',
                     ].join(' ')}
                   >
-                    <span>{label}</span>
+                    <span>{queueLabel(key)}</span>
                     <span className="tabular-nums text-xs">{counts[key]}</span>
                   </Link>
                 </li>
@@ -142,22 +166,22 @@ export default async function InboxPage({
           <form method="get" action="/company/inbox" className="flex flex-wrap items-center gap-2">
             {queue !== 'waiting' ? <input type="hidden" name="status" value={queue} /> : null}
             <label htmlFor="inbox-search" className="sr-only">
-              Search conversations
+              {t(dict, 'inbox.search.label')}
             </label>
             <input
               id="inbox-search"
               type="search"
               name="q"
               defaultValue={search ?? ''}
-              placeholder="Search names, numbers, or what was said…"
+              placeholder={t(dict, 'inbox.search.placeholder')}
               className={searchInputCls}
             />
             <Button type="submit" variant="outline" size="sm">
-              Search
+              {t(dict, 'common.search')}
             </Button>
             {search ? (
               <Button asChild variant="ghost" size="sm">
-                <Link href={queueHref(queue)}>Clear</Link>
+                <Link href={queueHref(queue)}>{t(dict, 'common.clear')}</Link>
               </Button>
             ) : null}
           </form>
@@ -167,41 +191,41 @@ export default async function InboxPage({
               {rows.length === 0 ? (
                 search ? (
                   <EmptyState
-                    title={<>Nothing matches &ldquo;{search}&rdquo;</>}
-                    body="Try a name, a phone number, or a word the customer used."
+                    title={t(dict, 'inbox.empty.search.title', { query: search })}
+                    body={t(dict, 'inbox.empty.search.body')}
                     action={
                       <Button asChild size="sm" variant="outline">
-                        <Link href={queueHref(queue)}>Clear the search</Link>
+                        <Link href={queueHref(queue)}>{t(dict, 'inbox.empty.search.cta')}</Link>
                       </Button>
                     }
                   />
                 ) : counts.everything === 0 ? (
                   <EmptyState
-                    title="No chats yet"
-                    body="Once your assistant is on your website, every chat with a customer lands here."
+                    title={t(dict, 'inbox.empty.none.title')}
+                    body={t(dict, 'inbox.empty.none.body')}
                     action={
                       <Button asChild size="sm">
-                        <Link href="/company/widget">Put it on my website</Link>
+                        <Link href="/company/widget">{t(dict, 'inbox.empty.none.cta')}</Link>
                       </Button>
                     }
                   />
                 ) : queue === 'waiting' ? (
                   <EmptyState
-                    title="Nothing is waiting for you"
-                    body="Your assistant is handling everything at the moment."
+                    title={t(dict, 'inbox.empty.waiting.title')}
+                    body={t(dict, 'inbox.empty.waiting.body')}
                     action={
                       <Button asChild size="sm" variant="outline">
-                        <Link href={queueHref('everything')}>See every chat</Link>
+                        <Link href={queueHref('everything')}>{t(dict, 'inbox.empty.see_all')}</Link>
                       </Button>
                     }
                   />
                 ) : (
                   <EmptyState
-                    title={`Nothing in ${activeQueueLabel.toLowerCase()}`}
-                    body={`There are ${counts.everything} chats in total.`}
+                    title={t(dict, 'inbox.empty.queue.title', { queue: activeQueueLabel })}
+                    body={t(dict, 'inbox.empty.queue.body', { count: counts.everything })}
                     action={
                       <Button asChild size="sm" variant="outline">
-                        <Link href={queueHref('everything')}>See every chat</Link>
+                        <Link href={queueHref('everything')}>{t(dict, 'inbox.empty.see_all')}</Link>
                       </Button>
                     }
                   />
@@ -213,7 +237,7 @@ export default async function InboxPage({
                     const showHeader = group !== lastGroup;
                     lastGroup = group;
                     const { label, suffix } = conversationDisplayName(c);
-                    const chips = rowChips(c, support.slaResponseMinutes);
+                    const chips = rowChips(c, support.slaResponseMinutes, dict);
                     const unread = c.unreadCount > 0;
 
                     return (
@@ -243,14 +267,14 @@ export default async function InboxPage({
                                   </Badge>
                                 ))}
                               </div>
-                              <p className="mt-1 line-clamp-2 text-sm text-muted-foreground">
+                              <p className="mt-1 line-clamp-2 break-words text-sm text-muted-foreground">
                                 {c.lastMessagePreview
-                                  ? `${previewPrefix(c.lastMessageSender)}${c.lastMessagePreview}`
-                                  : 'No messages yet'}
+                                  ? `${previewPrefix(c.lastMessageSender, dict)}${c.lastMessagePreview}`
+                                  : t(dict, 'inbox.preview.none')}
                               </p>
                               {c.assignedAgentName ? (
                                 <p className="mt-1 text-xs text-muted-foreground">
-                                  Assigned to {c.assignedAgentName}
+                                  {t(dict, 'inbox.assigned', { name: c.assignedAgentName })}
                                 </p>
                               ) : null}
                             </div>

@@ -86,8 +86,9 @@ export default async function SuperAdminOverview() {
             </Link>
           </CardContent>
           {/*
-            The sidebar (`PLATFORM_NAV`, owned elsewhere) lists nine entries and
-            none of these six, so until it does this is the only way into them.
+            The sidebar (`PLATFORM_NAV_GROUPS` in
+            src/components/dashboard-nav-items.ts) lists nine entries and none of
+            these six, so until it does this is the only way into them.
           */}
           <CardContent className="border-t pt-4">
             <p className="mb-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground">

@@ -7,6 +7,8 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
+import { FormField } from '@/components/ui/form-field';
+import { PRIORITY_LABELS, labelFor } from '@/lib/constants';
 import {
   addInternalNoteAction,
   resolveTicketAction,
@@ -16,6 +18,11 @@ import {
 } from '../inbox-actions';
 import type { InternalNote } from '../inbox-data';
 
+/**
+ * Values only. The wording lives in `PRIORITY_LABELS`, because a second copy
+ * here is how the same stored value ends up reading two different ways on two
+ * screens.
+ */
 const PRIORITIES = ['low', 'normal', 'high', 'urgent'] as const;
 const initial: ActionState = {};
 /**
@@ -102,7 +109,9 @@ export function TicketPanel({
   return (
     <div className="space-y-4">
       <div>
-        <p className="mb-1.5 text-xs font-medium uppercase tracking-wider text-muted-foreground">Priority</p>
+        <p className="mb-1.5 text-xs font-medium uppercase tracking-wider text-muted-foreground">
+          Priority
+        </p>
         <div className="flex flex-wrap gap-1.5">
           {PRIORITIES.map((p) => (
             <Button
@@ -112,36 +121,52 @@ export function TicketPanel({
               variant={priority === p ? 'default' : 'outline'}
               disabled={isPending}
               onClick={() => setPriority(p)}
-              className="capitalize"
             >
-              {p}
+              {labelFor(PRIORITY_LABELS, p)}
             </Button>
           ))}
         </div>
       </div>
 
       <div>
-        <p className="mb-1.5 text-xs font-medium uppercase tracking-wider text-muted-foreground">Tags</p>
+        <p className="mb-1.5 text-xs font-medium uppercase tracking-wider text-muted-foreground">
+          Tags
+        </p>
         {tags.length > 0 ? (
           <div className="mb-2 flex flex-wrap gap-1.5">
             {tags.map((t) => (
-              <Badge key={t} variant="secondary">{t}</Badge>
+              <Badge key={t} variant="secondary">
+                {t}
+              </Badge>
             ))}
           </div>
         ) : (
           <p className="mb-2 text-xs text-muted-foreground">No tags on this ticket yet.</p>
         )}
-        <div className="flex gap-2">
+        <FormField
+          label="Add or edit tags"
+          htmlFor={`tags-${conversationId}`}
+          hint="Your own words for grouping chats — separate them with commas. You can filter the inbox and your reports by them afterwards."
+        >
           <Input
+            name="tags"
             value={tagsValue}
             onChange={(e) => setTagsValue(e.target.value)}
             placeholder="vip, refund, billing"
           />
-          <Button type="button" size="sm" variant="outline" disabled={isPending} onClick={saveTags}>
-            Save
-          </Button>
-        </div>
-        <p className="mt-1 text-xs text-muted-foreground">Comma-separated. Used for filtering and reporting.</p>
+        </FormField>
+        {/* Below the hint rather than beside the input: the hint explains the
+            comma rule, and the button should follow what it is confirming. */}
+        <Button
+          type="button"
+          size="sm"
+          variant="outline"
+          className="mt-2"
+          disabled={isPending}
+          onClick={saveTags}
+        >
+          Save tags
+        </Button>
       </div>
 
       <div>
@@ -163,17 +188,28 @@ export function TicketPanel({
               </Button>
             ))}
           </div>
-          <Textarea
-            name="resolution"
-            rows={3}
+          <FormField
+            label="What you did to sort it"
+            htmlFor={`resolution-${conversationId}`}
             required
-            maxLength={2000}
-            value={resolution}
-            onChange={(event) => setResolution(event.target.value)}
-            placeholder="What was fixed? This message is saved on the ticket and can be emailed to the reporter."
-          />
-          {resolveState.error ? <p className="text-sm text-destructive">{resolveState.error}</p> : null}
-          {resolveState.ok ? <p className="text-sm text-emerald-700">Sorted. Anyone following this has been told.</p> : null}
+            hint="Saved on the ticket, and it can be emailed to whoever reported it — so write it for them, not for your notes."
+          >
+            <Textarea
+              name="resolution"
+              rows={3}
+              required
+              maxLength={2000}
+              value={resolution}
+              onChange={(event) => setResolution(event.target.value)}
+              placeholder="We looked into this and…"
+            />
+          </FormField>
+          {resolveState.error ? (
+            <p className="text-sm text-destructive">{resolveState.error}</p>
+          ) : null}
+          {resolveState.ok ? (
+            <p className="text-sm text-emerald-700">Sorted. Anyone following this has been told.</p>
+          ) : null}
           <ResolveSubmit />
         </form>
       </div>
@@ -182,7 +218,9 @@ export function TicketPanel({
         <p className="mb-1.5 text-xs font-medium uppercase tracking-wider text-muted-foreground">
           Internal notes
         </p>
-        <p className="mb-2 text-xs text-muted-foreground">Private to your team — the visitor never sees these.</p>
+        <p className="mb-2 text-xs text-muted-foreground">
+          Private to your team — the visitor never sees these.
+        </p>
         {notes.length > 0 ? (
           <ul className="mb-3 space-y-2">
             {notes.map((n) => (
@@ -194,12 +232,21 @@ export function TicketPanel({
           </ul>
         ) : (
           <p className="mb-3 rounded-md border border-dashed p-2 text-xs text-muted-foreground">
-            No notes yet. Add what you tried or who you called, so whoever picks this up next has the context.
+            No notes yet. Add what you tried or who you called, so whoever picks this up next has
+            the context.
           </p>
         )}
         <form action={noteAction} className="space-y-2">
           <input type="hidden" name="conversationId" value={conversationId} />
-          <Textarea name="note" rows={2} required maxLength={4000} placeholder="Add an internal note…" />
+          <FormField label="Add a note for your team" htmlFor={`note-${conversationId}`} required>
+            <Textarea
+              name="note"
+              rows={2}
+              required
+              maxLength={4000}
+              placeholder="What you tried, or who you called…"
+            />
+          </FormField>
           {noteState.error ? <p className="text-sm text-destructive">{noteState.error}</p> : null}
           <NoteSubmit />
         </form>

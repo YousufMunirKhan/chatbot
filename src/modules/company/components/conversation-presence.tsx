@@ -32,8 +32,8 @@ export function ConversationPresence({ conversationId }: { conversationId: strin
   if (!otherViewer) return null;
   return (
     <div className="rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-900">
-      ⚠️ <strong>{otherViewer}</strong> is also viewing this conversation. Coordinate before replying to avoid
-      double responses.
+      ⚠️ <strong>{otherViewer}</strong> is also viewing this conversation. Coordinate before
+      replying to avoid double responses.
     </div>
   );
 }

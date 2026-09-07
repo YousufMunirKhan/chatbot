@@ -22,7 +22,10 @@ export function AgentInviteForm() {
           <Input name="email" type="email" required placeholder="agent@company.com" />
         </FormField>
       </div>
-      <FormMessage state={state} okText="Invite sent. The agent will set their password from email." />
+      <FormMessage
+        state={state}
+        okText="Invite sent. The agent will set their password from email."
+      />
       <SubmitButton pendingLabel="Inviting…">Add agent</SubmitButton>
     </form>
   );

@@ -1,0 +1,33 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "crons": [
+    {
+      "path": "/api/cron/sla",
+      "schedule": "* * * * *"
+    },
+    {
+      "path": "/api/cron/channels",
+      "schedule": "*/2 * * * *"
+    },
+    {
+      "path": "/api/cron/automations",
+      "schedule": "*/5 * * * *"
+    },
+    {
+      "path": "/api/cron/broadcasts",
+      "schedule": "*/5 * * * *"
+    },
+    {
+      "path": "/api/cron/billing",
+      "schedule": "*/15 * * * *"
+    },
+    {
+      "path": "/api/cron/retention",
+      "schedule": "0 3 * * *"
+    },
+    {
+      "path": "/api/cron/insights",
+      "schedule": "0 6 * * 1"
+    }
+  ]
+}

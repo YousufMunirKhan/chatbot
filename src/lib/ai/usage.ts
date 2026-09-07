@@ -7,7 +7,7 @@ import { deductAiCreditForUsage } from '@/lib/billing/credits';
  * estimated cost into ai_usage_logs, powering company analytics and the
  * super-admin profit/loss view.
  */
-type Operation = 'chat' | 'embedding' | 'rerank' | 'contextualize' | 'tool_call';
+type Operation = 'chat' | 'embedding' | 'rerank' | 'contextualize' | 'tool_call' | 'insights';
 
 // USD per 1M tokens [input, output]. Matched by model-name substring.
 const PRICING: Array<[RegExp, number, number]> = [

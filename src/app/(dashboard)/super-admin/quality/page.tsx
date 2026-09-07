@@ -59,7 +59,11 @@ export default async function SuperAdminQualityPage() {
         </Alert>
       ) : null}
 
-      <div className="grid gap-6 lg:grid-cols-2">
+      {/* `min-w-0` on the grid items: a grid child defaults to min-width:auto,
+          so the wide table inside these cards stretched the column and pushed
+          the whole page 5px past the viewport on a phone. The table's own
+          overflow-auto cannot help until its ancestor is allowed to shrink. */}
+      <div className="grid gap-6 lg:grid-cols-2 [&>*]:min-w-0">
         <Card>
           <CardHeader>
             <CardTitle>Worst-performing companies</CardTitle>

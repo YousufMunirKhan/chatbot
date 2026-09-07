@@ -7,15 +7,16 @@ conversational order placement, a live-chat inbox with **human takeover**, and
 deep **Shopify / WooCommerce / POS / CRM / custom API** integrations — with
 super-admin **cost / revenue / profit** control.
 
-> **Voice-ready architecture.** Voice is _not_ built in this phase, but the
-> engine, data, tools, inbox, orders, leads, and analytics are channel-agnostic
-> so future **voice, WhatsApp, and social DM** channels reuse the same core.
+> **Channel-agnostic core.** One engine answers on the website widget, WhatsApp,
+> Messenger, Instagram, Telegram, Viber, LINE, TikTok, YouTube and email — the
+> inbox, orders, leads, flows and analytics never know which channel a message
+> arrived on.
 
-> **Status: all 25 modules implemented ✅** — runs end-to-end in *mock mode* with
-> no external keys (Supabase only). Add an `OPENAI_API_KEY`/`ANTHROPIC_API_KEY`
-> for real AI + autonomous tool use; provider creds for live store sync; Stripe
-> for self-service billing. 13 DB migrations, verified with `npm run test:all`
-> (+ `test:chat`, `test:inbox` against a running dev server).
+> **Status: implemented ✅** — runs end-to-end in *mock mode* with no external
+> keys (Supabase only). Add an `OPENAI_API_KEY`/`ANTHROPIC_API_KEY` for real AI +
+> autonomous tool use; provider creds for live store sync; Stripe for
+> self-service billing. Verified with `npm run test:units` (pure logic, no
+> network) and `npm run test:db` (against the real database).
 
 ---
 
@@ -29,6 +30,8 @@ super-admin **cost / revenue / profit** control.
 | [docs/DATABASE.md](docs/DATABASE.md) | Full schema overview & migration plan |
 | [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md) | Accounts to create, env vars, Vercel + Supabase deploy |
 | [src/modules/README.md](src/modules/README.md) | How code folders map to modules |
+| [docs/CHANNELS_AND_FLOWS.md](docs/CHANNELS_AND_FLOWS.md) | The message pipeline, every channel, the flow builder, service levels |
+| [docs/PUBLIC_API.md](docs/PUBLIC_API.md) | Public REST API, authentication, rate limits, the JS SDK |
 
 **Build the project module by module — never all at once.** Start with
 [Module 1](docs/modules/module-01-project-foundation.md).

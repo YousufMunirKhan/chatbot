@@ -81,6 +81,9 @@ export interface ConversationContext {
   id: string;
   aiEnabled: boolean;
   status: string;
+  /** True when this call created the conversation — the customer's first message.
+   *  Flow "welcome" triggers depend on knowing this without a second query. */
+  isNew?: boolean;
 }
 
 export async function getOrCreateConversation(params: {
@@ -103,7 +106,7 @@ export async function getOrCreateConversation(params: {
       .eq('id', params.conversationId)
       .eq('company_id', params.companyId)
       .maybeSingle();
-    if (data) return { id: data.id, aiEnabled: Boolean(data.ai_enabled), status: data.status };
+    if (data) return { id: data.id, aiEnabled: Boolean(data.ai_enabled), status: data.status, isNew: false };
   }
   if (params.reuseByVisitor) {
     const { data } = await sb
@@ -117,7 +120,7 @@ export async function getOrCreateConversation(params: {
       .order('last_message_at', { ascending: false })
       .limit(1)
       .maybeSingle();
-    if (data) return { id: data.id, aiEnabled: Boolean(data.ai_enabled), status: data.status };
+    if (data) return { id: data.id, aiEnabled: Boolean(data.ai_enabled), status: data.status, isNew: false };
   }
   const { data, error } = await sb
     .from('conversations')
@@ -133,7 +136,7 @@ export async function getOrCreateConversation(params: {
     .select('id, ai_enabled, status')
     .single();
   if (error || !data) throw new Error('Could not create conversation: ' + error?.message);
-  return { id: data.id, aiEnabled: Boolean(data.ai_enabled), status: data.status };
+  return { id: data.id, aiEnabled: Boolean(data.ai_enabled), status: data.status, isNew: true };
 }
 
 export async function saveMessage(params: {

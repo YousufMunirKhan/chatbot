@@ -76,7 +76,10 @@ export function AgentReplyForm({
               ))}
             </Select>
           ) : (
-            <a href="/company/inbox/canned" className="text-xs text-muted-foreground hover:text-foreground hover:underline">
+            <a
+              href="/company/inbox/canned"
+              className="text-xs text-muted-foreground hover:text-foreground hover:underline"
+            >
               No saved replies yet — set one up
             </a>
           )}

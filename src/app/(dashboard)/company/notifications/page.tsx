@@ -1,5 +1,12 @@
 import { requireRole } from '@/lib/auth';
-import { ROLES } from '@/lib/constants';
+import {
+  ROLES,
+  CHANNEL_LABELS,
+  DELIVERY_STATUS_LABELS,
+  PROVIDER_LABELS,
+  humanizeToken,
+  labelFor,
+} from '@/lib/constants';
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -15,13 +22,25 @@ import {
   listNotificationDeliveryLogs,
 } from '@/modules/company/notification-settings';
 import { NotificationSettingsForm } from '@/modules/company/components/notification-settings-form';
+import { PushAlertsCard } from '@/modules/company/components/push-alerts-card';
+import { getPushOverview } from '@/modules/company/push-data';
 import { RefreshOnFocus } from '@/components/refresh-on-focus';
 
 const tabs = [
-  { key: 'inbox', label: 'Inbox' },
-  { key: 'settings', label: 'Delivery settings' },
-  { key: 'logs', label: 'Delivery logs' },
+  { key: 'inbox', label: 'Your alerts' },
+  { key: 'settings', label: 'Who gets told' },
+  { key: 'logs', label: 'What was sent' },
 ];
+
+/**
+ * A delivery row names the app the alert went out through — `whatsapp_cloud`,
+ * `webhook`, `slack`. Two different vocabularies land in that column (our
+ * conversation channels and our outbound providers), so both maps are tried
+ * before falling back to the prettifier.
+ */
+function deliveryChannelLabel(value: string): string {
+  return CHANNEL_LABELS[value] ?? PROVIDER_LABELS[value] ?? humanizeToken(value);
+}
 
 export default async function NotificationsPage({
   searchParams,
@@ -33,19 +52,29 @@ export default async function NotificationsPage({
   const visibleTabs = canManageDelivery ? tabs : tabs.filter((tab) => tab.key === 'inbox');
   const requestedTab = searchParams?.tab;
   const activeTab = visibleTabs.some((tab) => tab.key === requestedTab) ? requestedTab : 'inbox';
-  const [notifications, unread, settings, logs] = await Promise.all([
+  const [notifications, unread, settings, logs, push] = await Promise.all([
     listNotifications(),
     unreadCount(),
     canManageDelivery ? getCompanyNotificationSettings() : Promise.resolve(null),
     canManageDelivery ? listNotificationDeliveryLogs() : Promise.resolve([]),
+    getPushOverview(),
   ]);
 
+  // Phone alerts are a per-DEVICE, per-person setting, so agents need it too —
+  // and they never see the "Who gets told" tab. Admins get it there, alongside
+  // the delivery grid whose new "Phone alert" column it switches on.
+  const showPushCard = activeTab === 'settings' || (activeTab === 'inbox' && !canManageDelivery);
+
   return (
-    <div className="mx-auto max-w-6xl space-y-6">
+    <div className="mx-auto max-w-7xl space-y-6">
       <RefreshOnFocus />
       <PageHeader
-        title="Notifications"
-        description={unread > 0 ? `${unread} unread` : 'All caught up.'}
+        title="Alerts"
+        description={
+          unread > 0
+            ? `${unread} you have not read yet. We tell you here whenever a customer leaves their details, books something, or asks for a person.`
+            : 'You are up to date. We tell you here whenever a customer leaves their details, books something, or asks for a person.'
+        }
         actions={
           activeTab === 'inbox' && unread > 0 ? (
             <form action={markAllReadAction}>
@@ -72,6 +101,14 @@ export default async function NotificationsPage({
           </Link>
         ))}
       </div>
+
+      {showPushCard ? (
+        <PushAlertsCard
+          devices={push.myDevices}
+          companyDeviceCount={push.companyDeviceCount}
+          configured={push.configured}
+        />
+      ) : null}
 
       {activeTab === 'settings' && settings ? (
         <Card>
@@ -101,24 +138,24 @@ export default async function NotificationsPage({
                   <TableRow>
                     <TableHead>Time</TableHead>
                     <TableHead>Event</TableHead>
-                    <TableHead>Channel</TableHead>
-                    <TableHead>Recipient</TableHead>
+                    <TableHead>Sent by</TableHead>
+                    <TableHead>Sent to</TableHead>
                     <TableHead>Status</TableHead>
-                    <TableHead>Error</TableHead>
+                    <TableHead>What went wrong</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {logs.map((log) => (
                     <TableRow key={log.id}>
                       <TableCell className="text-muted-foreground">{formatDate(log.createdAt)}</TableCell>
-                      <TableCell>{log.eventType.replace(/_/g, ' ')}</TableCell>
-                      <TableCell>{log.channel}</TableCell>
+                      <TableCell>{humanizeToken(log.eventType)}</TableCell>
+                      <TableCell>{deliveryChannelLabel(log.channel)}</TableCell>
                       <TableCell className="max-w-[220px] truncate">{log.recipient ?? '-'}</TableCell>
                       <TableCell>
                         <Badge
                           variant={log.status === 'sent' ? 'default' : log.status === 'failed' ? 'destructive' : 'secondary'}
                         >
-                          {log.status}
+                          {labelFor(DELIVERY_STATUS_LABELS, log.status)}
                         </Badge>
                       </TableCell>
                       <TableCell className="max-w-[260px] truncate text-muted-foreground">
@@ -131,8 +168,8 @@ export default async function NotificationsPage({
             ) : (
               // Module 1 — nothing has been sent yet; point at the rules that decide sending.
               <EmptyState
-                title="No delivery attempts yet."
-                body="Every email, WhatsApp, Slack, and webhook alert this workspace sends is recorded here, with the reason when one is skipped or fails."
+                title="Nothing has been sent yet"
+                body="Every email, WhatsApp and Slack alert you send out is listed here, along with the reason whenever one does not arrive."
                 action={
                   <Button asChild size="sm" variant="outline">
                     <Link href="/company/notifications?tab=settings">Check delivery settings</Link>
@@ -171,7 +208,7 @@ export default async function NotificationsPage({
                 <div className="min-w-0 space-y-1">
                   <div className="flex flex-wrap items-center gap-2">
                     <span className="font-medium">{n.title || '—'}</span>
-                    <Badge variant="secondary">{n.type.replace(/_/g, ' ')}</Badge>
+                    <Badge variant="secondary">{humanizeToken(n.type)}</Badge>
                     {n.read ? null : <Badge variant="default">Unread</Badge>}
                   </div>
                   {n.body ? <p className="text-sm text-muted-foreground">{n.body}</p> : null}

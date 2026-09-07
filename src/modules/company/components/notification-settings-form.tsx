@@ -6,10 +6,11 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
-import { saveNotificationSettingsAction, type NotificationSettingsActionState } from '../notifications-actions';
 import {
-  type CompanyNotificationSettingsView,
-} from '../notification-settings';
+  saveNotificationSettingsAction,
+  type NotificationSettingsActionState,
+} from '../notifications-actions';
+import { type CompanyNotificationSettingsView } from '../notification-settings';
 import { DELIVERY_CHANNELS, NOTIFICATION_EVENTS } from '../notification-options';
 import { FormField } from '@/components/ui/form-field';
 import { Select } from '@/components/ui/select';
@@ -18,10 +19,18 @@ const initial: NotificationSettingsActionState = {};
 
 function SubmitButton() {
   const { pending } = useFormStatus();
-  return <Button type="submit" disabled={pending}>{pending ? 'Saving...' : 'Save notification settings'}</Button>;
+  return (
+    <Button type="submit" disabled={pending}>
+      {pending ? 'Saving...' : 'Save notification settings'}
+    </Button>
+  );
 }
 
-export function NotificationSettingsForm({ settings }: { settings: CompanyNotificationSettingsView }) {
+export function NotificationSettingsForm({
+  settings,
+}: {
+  settings: CompanyNotificationSettingsView;
+}) {
   const [state, formAction] = useFormState(saveNotificationSettingsAction, initial);
 
   return (
@@ -45,7 +54,12 @@ export function NotificationSettingsForm({ settings }: { settings: CompanyNotifi
         </div>
         <div className="grid gap-4 sm:grid-cols-2">
           <label className="flex items-center gap-2 rounded-md border p-3 text-sm">
-            <input type="checkbox" name="emailEnabled" defaultChecked={settings.emailEnabled} className="h-4 w-4" />
+            <input
+              type="checkbox"
+              name="emailEnabled"
+              defaultChecked={settings.emailEnabled}
+              className="h-4 w-4"
+            />
             Send email notifications
           </label>
           <FormField label="Sender mode" htmlFor="emailSenderMode">
@@ -55,10 +69,20 @@ export function NotificationSettingsForm({ settings }: { settings: CompanyNotifi
             </Select>
           </FormField>
           <FormField label="To recipients" htmlFor="emailTo">
-            <Textarea name="emailTo" rows={3} defaultValue={settings.emailTo.join('\n')} placeholder="owner@example.com" />
+            <Textarea
+              name="emailTo"
+              rows={3}
+              defaultValue={settings.emailTo.join('\n')}
+              placeholder="owner@example.com"
+            />
           </FormField>
           <FormField label="CC recipients" htmlFor="emailCc">
-            <Textarea name="emailCc" rows={3} defaultValue={settings.emailCc.join('\n')} placeholder="manager@example.com" />
+            <Textarea
+              name="emailCc"
+              rows={3}
+              defaultValue={settings.emailCc.join('\n')}
+              placeholder="manager@example.com"
+            />
           </FormField>
           <FormField label="BCC recipients" htmlFor="emailBcc">
             <Textarea name="emailBcc" rows={3} defaultValue={settings.emailBcc.join('\n')} />
@@ -93,7 +117,12 @@ export function NotificationSettingsForm({ settings }: { settings: CompanyNotifi
               />
             </FormField>
             <label className="flex items-center gap-2 rounded-md border p-3 text-sm">
-              <input type="checkbox" name="smtpSecure" defaultChecked={settings.smtpSecure} className="h-4 w-4" />
+              <input
+                type="checkbox"
+                name="smtpSecure"
+                defaultChecked={settings.smtpSecure}
+                className="h-4 w-4"
+              />
               Use secure SMTP connection
             </label>
           </div>
@@ -110,29 +139,32 @@ export function NotificationSettingsForm({ settings }: { settings: CompanyNotifi
         </div>
         <div className="grid gap-4 sm:grid-cols-2">
           <label className="flex items-center gap-2 rounded-md border p-3 text-sm">
-            <input type="checkbox" name="whatsappEnabled" defaultChecked={settings.whatsappEnabled} className="h-4 w-4" />
+            <input
+              type="checkbox"
+              name="whatsappEnabled"
+              defaultChecked={settings.whatsappEnabled}
+              className="h-4 w-4"
+            />
             Send WhatsApp notifications
           </label>
           <FormField label="Sender owner" htmlFor="whatsappSenderMode">
-            <Select
-              name="whatsappSenderMode"
-              defaultValue={settings.whatsappSenderMode}
-            >
+            <Select name="whatsappSenderMode" defaultValue={settings.whatsappSenderMode}>
               <option value="company">Company-managed sender</option>
               <option value="platform_managed">Platform-managed sender (support add-on)</option>
             </Select>
           </FormField>
           <FormField label="WhatsApp provider" htmlFor="whatsappProvider">
-            <Select
-              name="whatsappProvider"
-              defaultValue={settings.whatsappProvider}
-            >
+            <Select name="whatsappProvider" defaultValue={settings.whatsappProvider}>
               <option value="disabled">Disabled</option>
               <option value="meta_cloud">Meta Cloud API</option>
               <option value="twilio">Twilio WhatsApp</option>
             </Select>
           </FormField>
-          <FormField label="WhatsApp recipient numbers" htmlFor="whatsappRecipients" className="sm:col-span-2">
+          <FormField
+            label="WhatsApp recipient numbers"
+            htmlFor="whatsappRecipients"
+            className="sm:col-span-2"
+          >
             <Textarea
               name="whatsappRecipients"
               rows={3}
@@ -154,10 +186,18 @@ export function NotificationSettingsForm({ settings }: { settings: CompanyNotifi
                 />
               </FormField>
               <FormField label="Template name" htmlFor="metaTemplateName">
-                <Input name="metaTemplateName" defaultValue={settings.metaTemplateName} placeholder="lead_alert" />
+                <Input
+                  name="metaTemplateName"
+                  defaultValue={settings.metaTemplateName}
+                  placeholder="lead_alert"
+                />
               </FormField>
               <FormField label="Template language" htmlFor="metaTemplateLanguage">
-                <Input name="metaTemplateLanguage" defaultValue={settings.metaTemplateLanguage} placeholder="en_GB" />
+                <Input
+                  name="metaTemplateLanguage"
+                  defaultValue={settings.metaTemplateLanguage}
+                  placeholder="en_GB"
+                />
               </FormField>
             </div>
           </div>
@@ -175,7 +215,11 @@ export function NotificationSettingsForm({ settings }: { settings: CompanyNotifi
                 />
               </FormField>
               <FormField label="WhatsApp from number" htmlFor="twilioWhatsappFrom">
-                <Input name="twilioWhatsappFrom" defaultValue={settings.twilioWhatsappFrom} placeholder="+14155238886" />
+                <Input
+                  name="twilioWhatsappFrom"
+                  defaultValue={settings.twilioWhatsappFrom}
+                  placeholder="+14155238886"
+                />
               </FormField>
             </div>
           </div>
@@ -202,40 +246,64 @@ export function NotificationSettingsForm({ settings }: { settings: CompanyNotifi
             <Link href="/company/webhooks" className="font-medium underline underline-offset-4">
               Webhooks
             </Link>{' '}
-            is where Slack and outgoing webhooks live now — it adds per-endpoint event
-            selection, signing secrets, delivery logs and a test button. Anything you set
-            up there takes over from the fields below, so you will not get duplicate
-            alerts. These fields will be removed in a future release.
+            is where Slack and outgoing webhooks live now — it adds per-endpoint event selection,
+            signing secrets, delivery logs and a test button. Anything you set up there takes over
+            from the fields below, so you will not get duplicate alerts. These fields will be
+            removed in a future release.
           </p>
         </div>
         <div className="grid gap-4 sm:grid-cols-2">
           <label className="flex items-center gap-2 rounded-md border p-3 text-sm">
-            <input type="checkbox" name="slackEnabled" defaultChecked={settings.slackEnabled} className="h-4 w-4" />
+            <input
+              type="checkbox"
+              name="slackEnabled"
+              defaultChecked={settings.slackEnabled}
+              className="h-4 w-4"
+            />
             Send Slack notifications (legacy)
           </label>
           <FormField label="Slack incoming webhook" htmlFor="slackWebhookUrl">
             <Input
               name="slackWebhookUrl"
               type="url"
-              placeholder={settings.hasSlackWebhook ? 'Saved. Leave blank to keep.' : 'https://hooks.slack.com/...'}
+              placeholder={
+                settings.hasSlackWebhook
+                  ? 'Saved. Leave blank to keep.'
+                  : 'https://hooks.slack.com/...'
+              }
             />
           </FormField>
           <label className="flex items-center gap-2 rounded-md border p-3 text-sm">
-            <input type="checkbox" name="webhookEnabled" defaultChecked={settings.webhookEnabled} className="h-4 w-4" />
+            <input
+              type="checkbox"
+              name="webhookEnabled"
+              defaultChecked={settings.webhookEnabled}
+              className="h-4 w-4"
+            />
             Send generic webhook (legacy)
           </label>
           <FormField label="Webhook URL" htmlFor="genericWebhookUrl">
             <Input
               name="genericWebhookUrl"
               type="url"
-              placeholder={settings.hasGenericWebhookUrl ? 'Saved. Leave blank to keep.' : 'https://example.com/webhook'}
+              placeholder={
+                settings.hasGenericWebhookUrl
+                  ? 'Saved. Leave blank to keep.'
+                  : 'https://example.com/webhook'
+              }
             />
           </FormField>
-          <FormField label="Webhook signing secret" htmlFor="genericWebhookSecret" className="sm:col-span-2">
+          <FormField
+            label="Webhook signing secret"
+            htmlFor="genericWebhookSecret"
+            className="sm:col-span-2"
+          >
             <Input
               name="genericWebhookSecret"
               type="password"
-              placeholder={settings.hasGenericWebhookSecret ? 'Saved. Leave blank to keep.' : 'Optional'}
+              placeholder={
+                settings.hasGenericWebhookSecret ? 'Saved. Leave blank to keep.' : 'Optional'
+              }
             />
           </FormField>
         </div>
@@ -244,9 +312,7 @@ export function NotificationSettingsForm({ settings }: { settings: CompanyNotifi
       <section className="space-y-4">
         <div>
           <h2 className="text-base font-semibold">Event rules</h2>
-          <p className="text-sm text-muted-foreground">
-            Choose which events go to each channel.
-          </p>
+          <p className="text-sm text-muted-foreground">Choose which events go to each channel.</p>
         </div>
         <div className="overflow-x-auto rounded-md border">
           <table className="w-full min-w-[620px] text-sm">
@@ -254,7 +320,9 @@ export function NotificationSettingsForm({ settings }: { settings: CompanyNotifi
               <tr>
                 <th className="px-3 py-2 text-start font-medium">Event</th>
                 {DELIVERY_CHANNELS.map((channel) => (
-                  <th key={channel.key} className="px-3 py-2 text-start font-medium">{channel.label}</th>
+                  <th key={channel.key} className="px-3 py-2 text-start font-medium">
+                    {channel.label}
+                  </th>
                 ))}
               </tr>
             </thead>

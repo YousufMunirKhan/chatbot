@@ -30,22 +30,53 @@ export const captureLead: AssistantTool = {
       return { saved: false, error: 'Collect an email or phone number before saving the lead.' };
     }
     const sb = createSupabaseServiceClient();
-    const { data, error } = await sb
+
+    const fields = {
+      company_id: ctx.companyId,
+      bot_id: ctx.botId,
+      conversation_id: ctx.conversationId,
+      name: str(input, 'name'),
+      email: email || null,
+      phone: phone || null,
+      enquiry_type: str(input, 'enquiry_type') || null,
+      message: str(input, 'message') || null,
+      source: 'chat',
+    };
+
+    // ONE enquiry per conversation.
+    //
+    // The model calls this tool whenever it has the details in hand, which in a
+    // normal chat is several times — one real customer was saved four times
+    // inside the same minute, so the shop owner saw four "new enquiries" and
+    // would have rung the same person four times. A second call for the same
+    // conversation updates the row it already created and stays silent.
+    const { data: existing } = await sb
       .from('leads')
-      .insert({
-        company_id: ctx.companyId,
-        bot_id: ctx.botId,
-        conversation_id: ctx.conversationId,
-        name: str(input, 'name'),
-        email: email || null,
-        phone: phone || null,
-        enquiry_type: str(input, 'enquiry_type') || null,
-        message: str(input, 'message') || null,
-        source: 'chat',
-      })
       .select('id')
-      .single();
+      .eq('company_id', ctx.companyId)
+      .eq('conversation_id', ctx.conversationId)
+      .limit(1)
+      .maybeSingle();
+
+    if (existing) {
+      const id = (existing as { id: string }).id;
+      // Only overwrite with something: a later call that has forgotten the phone
+      // number must not erase the one captured earlier.
+      const update: Record<string, unknown> = {};
+      for (const [key, value] of Object.entries(fields)) {
+        if (key === 'company_id' || key === 'conversation_id' || key === 'source') continue;
+        if (value !== null && value !== '') update[key] = value;
+      }
+      if (Object.keys(update).length > 0) {
+        await sb.from('leads').update(update).eq('company_id', ctx.companyId).eq('id', id);
+      }
+      return { saved: true, lead_id: id, already_captured: true };
+    }
+
+    const { data, error } = await sb.from('leads').insert(fields).select('id').single();
     if (error) return { saved: false };
+
+    // Notify only on a genuinely new enquiry — the whole point of the guard.
     await notify({
       companyId: ctx.companyId,
       type: 'new_lead',

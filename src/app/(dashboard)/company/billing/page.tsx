@@ -9,6 +9,12 @@ import { getReplyAllowanceUsage, getSubscription } from '@/lib/billing';
 import { formatDate, formatNumber } from '@/lib/format';
 import { BillingUpgrade } from '@/modules/company/components/billing-upgrade';
 import { listBillingPlans } from '@/modules/super-admin/billing-data';
+import {
+  getAutoTopUpSettings,
+  getCreditBalance,
+  listAutoTopUpAttempts,
+} from '@/modules/company/auto-topup-data';
+import { AutoTopUpForm } from '@/modules/company/components/auto-topup-form';
 
 function lim(n: number | null) {
   return n == null ? 'Unlimited' : formatNumber(n);
@@ -22,6 +28,11 @@ function gbp(value: number) {
   }).format(value);
 }
 
+/** Exact pounds and pence — a top-up of £2.50 must not render as £3. */
+function gbpExact(cents: number) {
+  return new Intl.NumberFormat('en-GB', { style: 'currency', currency: 'GBP' }).format(cents / 100);
+}
+
 function statusVariant(status: string | null): 'success' | 'warning' | 'secondary' {
   if (status === 'active') return 'success';
   if (status === 'trialing') return 'warning';
@@ -31,11 +42,22 @@ function statusVariant(status: string | null): 'success' | 'warning' | 'secondar
 export default async function BillingPage() {
   await requireRole([ROLES.COMPANY_ADMIN]);
   const companyId = await getCompanyId();
-  const [{ subscription }, sub, replyUsage, publicPlans] = await Promise.all([
+  const [
+    { subscription },
+    sub,
+    replyUsage,
+    publicPlans,
+    autoTopUp,
+    autoTopUpAttempts,
+    creditBalance,
+  ] = await Promise.all([
     getCurrentCompany(),
     getSubscription(companyId),
     getReplyAllowanceUsage(companyId),
     listBillingPlans({ publicOnly: true }),
+    getAutoTopUpSettings(),
+    listAutoTopUpAttempts(),
+    getCreditBalance(),
   ]);
 
   const plan = subscription.plan;
@@ -54,7 +76,7 @@ export default async function BillingPage() {
     <div className="mx-auto max-w-6xl space-y-6">
       <PageHeader
         title="Billing"
-        description="Your package, monthly message allowance, and subscription status."
+        description="What you are on, how many replies that includes each month, and where your subscription stands."
       />
 
       <Card>
@@ -103,6 +125,43 @@ export default async function BillingPage() {
           <p className="text-xs text-muted-foreground">
             Unused monthly replies expire at the end of each billing month and do not roll over.
           </p>
+        </CardContent>
+      </Card>
+
+      {/* Migration 0057 — automatic credit top-up. Sits between usage and the
+          plan picker because it is the answer to the number directly above it. */}
+      <Card id="auto-topup">
+        <CardHeader>
+          <CardTitle>Automatic top-up</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-6">
+          <AutoTopUpForm config={autoTopUp} balance={creditBalance} />
+
+          <div className="space-y-2 border-t pt-4">
+            <p className="text-sm font-medium">Recent top-ups</p>
+            {autoTopUpAttempts.length === 0 ? (
+              <p className="text-sm text-muted-foreground">No top-up attempts yet.</p>
+            ) : (
+              <ul className="divide-y text-sm">
+                {autoTopUpAttempts.map((attempt) => (
+                  <li key={attempt.id} className="flex flex-wrap items-center justify-between gap-2 py-2">
+                    <div className="min-w-0">
+                      <span className="font-medium">
+                        {gbpExact(attempt.amountCents)}
+                      </span>{' '}
+                      <span className="text-muted-foreground">{formatDate(attempt.createdAt)}</span>
+                      {attempt.error ? (
+                        <p className="text-xs text-danger-fg">{attempt.error}</p>
+                      ) : null}
+                    </div>
+                    <Badge variant={attempt.status === 'succeeded' ? 'success' : 'destructive'}>
+                      {attempt.status}
+                    </Badge>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
         </CardContent>
       </Card>
 

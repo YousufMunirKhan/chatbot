@@ -1,4 +1,6 @@
 import { z } from 'zod';
+import { runFlowTurn } from '@/lib/flows/runtime';
+import { blocksToText } from '@/lib/channels/types';
 import {
   loadBotByPublicId,
   getOrCreateConversation,
@@ -206,6 +208,42 @@ export async function POST(req: Request) {
         return;
       }
 
+      // Flows answer before the AI on the website widget too, so a published
+      // sequence behaves identically here and on WhatsApp/Messenger/Telegram.
+      // This runs before the quota and budget checks on purpose: a scripted
+      // flow costs no model tokens, so it must keep working at the limit.
+      const flowTurn = await runFlowTurn({
+        companyId: bot.companyId,
+        botId: bot.id,
+        conversationId: convo.id,
+        channel: 'web_chat',
+        text: body.text,
+        visitorId: body.visitorId,
+        isFirstMessage: Boolean(convo.isNew),
+      });
+
+      let flowPrefix = '';
+      if (flowTurn && flowTurn.blocks.length > 0) {
+        flowPrefix = blocksToText(flowTurn.blocks);
+        // `blocks` carries buttons and galleries for widgets that can render
+        // them; `token` keeps older widget builds working unchanged.
+        send({ type: 'blocks', blocks: flowTurn.blocks });
+        if (flowPrefix) send({ type: 'token', value: flowPrefix });
+        await saveMessage({
+          companyId: bot.companyId,
+          conversationId: convo.id,
+          senderType: 'ai',
+          text: flowPrefix,
+          language,
+        });
+      }
+      if (flowTurn && !flowTurn.handoffToAi) {
+        if (flowTurn.handoffToHuman) send({ type: 'human' });
+        send({ type: 'done' });
+        controller.close();
+        return;
+      }
+
       // Plan enforcement (Module 19): stop AI replies once the monthly message
       // limit is reached (visitor messages are still saved for the inbox).
       if (!(await withinMessageQuota(bot.companyId))) {
@@ -239,7 +277,7 @@ export async function POST(req: Request) {
           type: 'token',
           value:
             language === 'ar'
-              ? 'Ø¹Ø°Ø±Ø§Ù‹ØŒ Ø§Ù„Ù…Ø³Ø§Ø¹Ø¯ ØºÙŠØ± Ù…ØªØ§Ø­ Ù…Ø¤Ù‚ØªØ§Ù‹. Ø³ÙŠØªÙˆØ§ØµÙ„ Ù…Ø¹Ùƒ Ø£Ø­Ø¯ Ø§Ù„ÙØ±ÙŠÙ‚.'
+              ? 'عذراً، المساعد غير متاح مؤقتاً. سيتواصل معك أحد أفراد الفريق.'
               : 'Sorry, the assistant is temporarily unavailable. A team member will follow up.',
         });
         send({ type: 'done' });

@@ -1,7 +1,16 @@
 'use client';
 
 import { useMemo, useState } from 'react';
-import { AlertTriangle, ArrowRight, ExternalLink, LifeBuoy, Loader2, Play, Route, Sparkles } from 'lucide-react';
+import {
+  AlertTriangle,
+  ArrowRight,
+  ExternalLink,
+  LifeBuoy,
+  Loader2,
+  Play,
+  Route,
+  Sparkles,
+} from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { companyLabel, humanizeEnum } from '@/lib/labels';
@@ -9,7 +18,13 @@ import type { HelpdeskChatSettings } from '@/lib/helpdesk/chat-settings';
 import type { ReplyAllowanceUsage } from '@/lib/billing';
 
 type Pill = { id: string; label: string; message: string; source: string; contextMode: string };
-type NavigationTarget = { label: string; routeId: string; path: string | null; module: string; screen: string };
+type NavigationTarget = {
+  label: string;
+  routeId: string;
+  path: string | null;
+  module: string;
+  screen: string;
+};
 type GuidedAction = {
   id: string;
   name: string;
@@ -68,17 +83,27 @@ function formatNumber(value: number | null): string {
 }
 
 function formatReset(value: string): string {
-  return new Intl.DateTimeFormat(undefined, { month: 'short', day: 'numeric', year: 'numeric' }).format(new Date(value));
+  return new Intl.DateTimeFormat(undefined, {
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric',
+  }).format(new Date(value));
 }
 
-function helpdeskEvents(actions: ChatResponse['uiActions']): Array<{ eventId: string; actionName: string; status: string }> {
+function helpdeskEvents(
+  actions: ChatResponse['uiActions'],
+): Array<{ eventId: string; actionName: string; status: string }> {
   return (actions ?? [])
-    .filter((item) => item.action === 'helpdesk_event' && item.payload && typeof item.payload === 'object')
+    .filter(
+      (item) =>
+        item.action === 'helpdesk_event' && item.payload && typeof item.payload === 'object',
+    )
     .map((item) => item.payload as Record<string, unknown>)
-    .filter((payload): payload is { eventId: string; actionName: string; status: string } =>
-      typeof payload.eventId === 'string' &&
-      typeof payload.actionName === 'string' &&
-      typeof payload.status === 'string',
+    .filter(
+      (payload): payload is { eventId: string; actionName: string; status: string } =>
+        typeof payload.eventId === 'string' &&
+        typeof payload.actionName === 'string' &&
+        typeof payload.status === 'string',
     );
 }
 
@@ -89,7 +114,9 @@ function issueSubject(text: string): string {
 }
 
 function shouldOfferTicketFromError(text: string): boolean {
-  return /\b(failed|error|hidden|not available|could not|cannot|unable|timeout|stuck|queued)\b/i.test(text);
+  return /\b(failed|error|hidden|not available|could not|cannot|unable|timeout|stuck|queued)\b/i.test(
+    text,
+  );
 }
 
 export function HelpdeskInternalChat({
@@ -152,7 +179,10 @@ export function HelpdeskInternalChat({
       const data = await res.json();
       if (data.replyUsage) setReplyUsage(data.replyUsage);
       if (!res.ok) {
-        if (data.error === 'helpdesk_chat_not_available_here' || data.error === 'helpdesk_chat_hidden_by_visibility_rules') {
+        if (
+          data.error === 'helpdesk_chat_not_available_here' ||
+          data.error === 'helpdesk_chat_hidden_by_visibility_rules'
+        ) {
           throw new Error(
             `Help Desk is hidden on "${route}" by visibility settings. Leave route targeting empty to show it everywhere, or remove this route from blocked routes.`,
           );
@@ -162,7 +192,10 @@ export function HelpdeskInternalChat({
       setLast(data);
       if (data.conversationId) setConversationId(data.conversationId);
       if (data.replyUsage) setReplyUsage(data.replyUsage);
-      setMessages((current) => [...current, { role: 'assistant', text: data.answer || 'No answer.' }]);
+      setMessages((current) => [
+        ...current,
+        { role: 'assistant', text: data.answer || 'No answer.' },
+      ]);
       if (data.shouldSuggestTicket) {
         setTicketPrompt({
           subject: issueSubject(clean),
@@ -177,10 +210,7 @@ export function HelpdeskInternalChat({
       followQueuedEvents(helpdeskEvents(data.uiActions));
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Help Desk chat failed.';
-      setMessages((current) => [
-        ...current,
-        { role: 'assistant', text: message },
-      ]);
+      setMessages((current) => [...current, { role: 'assistant', text: message }]);
       setTicketPrompt({
         subject: issueSubject(clean || 'Help Desk chat failed'),
         severity: 'high',
@@ -191,7 +221,9 @@ export function HelpdeskInternalChat({
     }
   }
 
-  function followQueuedEvents(events: Array<{ eventId: string; actionName: string; status: string }>) {
+  function followQueuedEvents(
+    events: Array<{ eventId: string; actionName: string; status: string }>,
+  ) {
     for (const event of events) {
       if (!['queued', 'running'].includes(event.status)) continue;
       void pollEventResult(event);
@@ -229,7 +261,10 @@ export function HelpdeskInternalChat({
           ...current,
           {
             role: 'assistant',
-            text: error instanceof Error ? error.message : `Could not check ${title(event.actionName)} result.`,
+            text:
+              error instanceof Error
+                ? error.message
+                : `Could not check ${title(event.actionName)} result.`,
           },
         ]);
         return;
@@ -237,7 +272,10 @@ export function HelpdeskInternalChat({
     }
     setMessages((current) => [
       ...current,
-      { role: 'assistant', text: `${title(event.actionName)} is still running. Check the Help Desk logs for the result.` },
+      {
+        role: 'assistant',
+        text: `${title(event.actionName)} is still running. Check the Help Desk logs for the result.`,
+      },
     ]);
     setTicketPrompt({
       subject: `${title(event.actionName)} still running`,
@@ -283,7 +321,10 @@ export function HelpdeskInternalChat({
     } catch (error) {
       setMessages((current) => [
         ...current,
-        { role: 'assistant', text: error instanceof Error ? error.message : 'Could not create ticket.' },
+        {
+          role: 'assistant',
+          text: error instanceof Error ? error.message : 'Could not create ticket.',
+        },
       ]);
     } finally {
       setTicketLoading(false);
@@ -321,16 +362,22 @@ export function HelpdeskInternalChat({
             <span className="ms-2 text-muted-foreground">
               {formatNumber(replyUsage.used)} / {formatNumber(replyUsage.totalAvailable)}
             </span>
-            <span className="ms-2 text-muted-foreground">resets {formatReset(replyUsage.resetAt)}</span>
+            <span className="ms-2 text-muted-foreground">
+              resets {formatReset(replyUsage.resetAt)}
+            </span>
           </div>
           <div className="flex items-center gap-2">
             <Route className="h-4 w-4 text-muted-foreground" />
-            <Input value={route} onChange={(event) => setRoute(event.target.value)} className="h-9 w-48" />
+            <Input
+              value={route}
+              onChange={(event) => setRoute(event.target.value)}
+              className="h-9 w-48"
+            />
           </div>
         </div>
       </div>
 
-      <div className="grid gap-4 p-4 lg:grid-cols-[minmax(0,1fr)_320px]">
+      <div className="grid gap-4 p-4 lg:grid-cols-[minmax(0,1fr)_320px] [&>*]:min-w-0">
         <div className="space-y-4">
           {connectorHealthAlerts.length ? (
             <div className="rounded-md border border-amber-200 bg-amber-50 p-3 text-sm text-amber-950">
@@ -340,23 +387,34 @@ export function HelpdeskInternalChat({
               </div>
               <div className="mt-2 space-y-2">
                 {connectorHealthAlerts.slice(0, 3).map((alert) => (
-                  <div key={alert.id} className="rounded-md border border-amber-200 bg-white/60 p-2">
-                    <p className="font-medium">{alert.name}: {alert.message}</p>
-                    <p className="text-xs text-amber-900">
-                      {companyLabel('connectionState', alert.state)}. Anything your team asks for may sit
-                      waiting until this is back online.
+                  <div
+                    key={alert.id}
+                    className="rounded-md border border-amber-200 bg-white/60 p-2"
+                  >
+                    <p className="font-medium">
+                      {alert.name}: {alert.message}
                     </p>
-                    {alert.lastError ? <p className="mt-1 text-xs text-destructive">{alert.lastError}</p> : null}
+                    <p className="text-xs text-amber-900">
+                      {companyLabel('connectionState', alert.state)}. Anything your team asks for
+                      may sit waiting until this is back online.
+                    </p>
+                    {alert.lastError ? (
+                      <p className="mt-1 text-xs text-destructive">{alert.lastError}</p>
+                    ) : null}
                   </div>
                 ))}
                 {connectorHealthAlerts.length > 3 ? (
-                  <p className="text-xs text-amber-900">{connectorHealthAlerts.length - 3} more connector warning(s) hidden.</p>
+                  <p className="text-xs text-amber-900">
+                    {connectorHealthAlerts.length - 3} more connector warning(s) hidden.
+                  </p>
                 ) : null}
               </div>
             </div>
           ) : null}
           <div className="rounded-md border bg-muted/30 p-3 text-xs leading-5 text-muted-foreground">
-            Test route: <span className="font-mono text-foreground">{route}</span>. Leave route targeting empty to allow all staff screens, then block only screens like login or checkout.
+            Test route: <span className="font-mono text-foreground">{route}</span>. Leave route
+            targeting empty to allow all staff screens, then block only screens like login or
+            checkout.
           </div>
           <div className="h-[420px] overflow-y-auto rounded-md border bg-slate-50 p-3">
             <div className="space-y-3">
@@ -367,7 +425,11 @@ export function HelpdeskInternalChat({
                      bubbles carry meaning by which side they sit on — "mine" vs
                      "theirs" — so under Arabic the physical properties would pin
                      both roles to the wrong edges and swap who is speaking. */
-                  className={message.role === 'staff' ? 'ms-auto max-w-[82%] rounded-md bg-primary p-3 text-sm text-primary-foreground' : 'me-auto max-w-[88%] rounded-md bg-white p-3 text-sm leading-6 shadow-sm'}
+                  className={
+                    message.role === 'staff'
+                      ? 'ms-auto max-w-[82%] rounded-md bg-primary p-3 text-sm text-primary-foreground'
+                      : 'me-auto max-w-[88%] rounded-md bg-white p-3 text-sm leading-6 shadow-sm'
+                  }
                 >
                   {message.text}
                 </div>
@@ -389,7 +451,11 @@ export function HelpdeskInternalChat({
                 disabled={ticketLoading}
                 className="inline-flex items-center gap-1 rounded-full border border-amber-300 bg-amber-50 px-3 py-1.5 text-xs font-semibold text-amber-950 hover:bg-amber-100 disabled:opacity-60"
               >
-                {ticketLoading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <LifeBuoy className="h-3.5 w-3.5" />}
+                {ticketLoading ? (
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                ) : (
+                  <LifeBuoy className="h-3.5 w-3.5" />
+                )}
                 Create support ticket
               </button>
             ) : null}
@@ -427,9 +493,17 @@ export function HelpdeskInternalChat({
               void ask(text);
             }}
           >
-            <Input value={text} onChange={(event) => setText(event.target.value)} placeholder="Ask staff helpdesk..." />
+            <Input
+              value={text}
+              onChange={(event) => setText(event.target.value)}
+              placeholder="Ask staff helpdesk..."
+            />
             <Button type="submit" disabled={loading} size="icon" aria-label="Ask">
-              {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <ArrowRight className="h-4 w-4" />}
+              {loading ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <ArrowRight className="h-4 w-4" />
+              )}
             </Button>
           </form>
         </div>
@@ -439,7 +513,9 @@ export function HelpdeskInternalChat({
             <div className="mb-2 text-sm font-semibold">Go to a screen</div>
             <div className="space-y-2">
               {(last?.navigationTargets ?? []).length === 0 ? (
-                <p className="text-xs text-muted-foreground">Buttons appear here once your shop system tells us which screens it has.</p>
+                <p className="text-xs text-muted-foreground">
+                  Buttons appear here once your shop system tells us which screens it has.
+                </p>
               ) : (
                 last!.navigationTargets.map((target) => (
                   <button
@@ -475,13 +551,17 @@ export function HelpdeskInternalChat({
                 >
                   <span>
                     <span className="block font-medium">{action.label}</span>
-                    <span className="text-muted-foreground">{companyLabel('actionRisk', action.risk)}</span>
+                    <span className="text-muted-foreground">
+                      {companyLabel('actionRisk', action.risk)}
+                    </span>
                   </span>
                   <Play className="h-3.5 w-3.5" />
                 </button>
               ))}
               {(last?.guidedActions ?? []).length === 0 ? (
-                <p className="text-xs text-muted-foreground">Ask a question first, and the tasks you have approved appear here.</p>
+                <p className="text-xs text-muted-foreground">
+                  Ask a question first, and the tasks you have approved appear here.
+                </p>
               ) : null}
             </div>
           </div>
@@ -496,7 +576,9 @@ export function HelpdeskInternalChat({
                     key={field}
                     placeholder={`${title(field)}${activeAction.requiredFields.includes(field) ? ' *' : ''}`}
                     value={formValues[field] ?? ''}
-                    onChange={(event) => setFormValues((current) => ({ ...current, [field]: event.target.value }))}
+                    onChange={(event) =>
+                      setFormValues((current) => ({ ...current, [field]: event.target.value }))
+                    }
                   />
                 ))}
               </div>
@@ -512,13 +594,23 @@ export function HelpdeskInternalChat({
                 </label>
               ) : null}
               <div className="mt-3 flex gap-2">
-                <Button type="button" size="sm" onClick={submitGuidedAction} disabled={activeAction.needsConfirmation && !actionConfirmed}>
+                <Button
+                  type="button"
+                  size="sm"
+                  onClick={submitGuidedAction}
+                  disabled={activeAction.needsConfirmation && !actionConfirmed}
+                >
                   {activeAction.needsConfirmation ? 'Confirm and run' : 'Run'}
                 </Button>
-                <Button type="button" size="sm" variant="outline" onClick={() => {
-                  setActiveAction(null);
-                  setActionConfirmed(false);
-                }}>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  onClick={() => {
+                    setActiveAction(null);
+                    setActionConfirmed(false);
+                  }}
+                >
                   Cancel
                 </Button>
               </div>

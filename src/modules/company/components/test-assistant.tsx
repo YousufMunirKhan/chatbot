@@ -3,6 +3,7 @@
 import { useFormState } from 'react-dom';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { FormField } from '@/components/ui/form-field';
 import { FormMessage } from '@/components/ui/form-message';
 import { SubmitButton } from '@/components/ui/submit-button';
 import { testAssistantAction, type TestAssistantState } from '../test-assistant-actions';
@@ -17,15 +18,17 @@ export function TestAssistant() {
       <CardHeader>
         <CardTitle className="text-base">Test your assistant</CardTitle>
         <p className="text-sm text-muted-foreground">
-          Ask a question the way a customer would. Not sure it answers right? Add the missing knowledge, then ask
-          again here to see it improve — before customers do.
+          Ask a question the way a customer would. Not sure it answers right? Add the missing
+          knowledge, then ask again here to see it improve — before customers do.
         </p>
       </CardHeader>
       <CardContent className="space-y-3">
-        <form action={action} className="flex flex-col gap-2 sm:flex-row">
-          <Input name="question" placeholder="e.g. How much is your starter package?" className="flex-1" />
+        <form action={action} className="flex flex-col gap-2 sm:flex-row sm:items-end">
+          <FormField label="Your question" htmlFor="test-question" className="flex-1">
+            <Input name="question" placeholder="e.g. How much is your starter package?" />
+          </FormField>
           <SubmitButton className="shrink-0" pendingLabel="Asking…">
-            Ask
+            Ask the assistant
           </SubmitButton>
         </form>
         {/* Success here is the answer block below, not a confirmation line, so
