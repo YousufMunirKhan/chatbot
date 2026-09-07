@@ -98,7 +98,7 @@ export function ConnectIntegrationForm() {
               required
               hint="In WordPress: WooCommerce → Settings → Advanced → REST API → Add key, with Read permission. It starts ck_."
             >
-              <Input name="consumer_key" required placeholder="ck_..." />
+              <Input name="consumer_key" autoComplete="off" required placeholder="ck_..." />
             </FormField>
             <FormField
               label="Consumer secret"
@@ -106,7 +106,7 @@ export function ConnectIntegrationForm() {
               required
               hint="Shown once, next to the consumer key, when you create it. It starts cs_."
             >
-              <Input name="consumer_secret" type="password" required placeholder="cs_..." />
+              <Input name="consumer_secret" type="password" autoComplete="new-password" required placeholder="cs_..." />
             </FormField>
             <FormField
               label="Default currency"
@@ -143,7 +143,7 @@ export function ConnectIntegrationForm() {
               required
               hint="Shopify admin → Settings → Apps and sales channels → Develop apps → your app → API credentials. It starts shpat_ and is shown only once."
             >
-              <Input name="access_token" type="password" required placeholder="shpat_..." />
+              <Input name="access_token" type="password" autoComplete="new-password" required placeholder="shpat_..." />
             </FormField>
             <FormField
               label="Shopify API version"
@@ -194,7 +194,7 @@ export function ConnectIntegrationForm() {
               required
               hint="A Google OAuth access token for the account that owns the calendar. Without one, no times are ever offered (src/lib/integrations/google-calendar.ts:25)."
             >
-              <Input name="access_token" type="password" required />
+              <Input name="access_token" type="password" autoComplete="new-password" required />
             </FormField>
           </>
         ) : null}
@@ -213,7 +213,7 @@ export function ConnectIntegrationForm() {
               htmlFor="token"
               hint="Sent as a bearer token on every request. Leave empty if your API needs no authentication."
             >
-              <Input name="token" type="password" />
+              <Input name="token" type="password" autoComplete="new-password" />
             </FormField>
             {/* The four paths default server-side to /products, /inventory,
                 /orders and /customers, so the placeholder was showing a value
@@ -286,7 +286,7 @@ export function ConnectIntegrationForm() {
             htmlFor="extra_secret"
             hint="The password that goes with the extra key above. Stored encrypted, and never shown again. Most shops leave this empty."
           >
-            <Input name="extra_secret" type="password" />
+            <Input name="extra_secret" type="password" autoComplete="new-password" />
           </FormField>
         </div>
       </details>

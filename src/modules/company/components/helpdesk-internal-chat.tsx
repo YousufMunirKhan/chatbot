@@ -121,7 +121,7 @@ function shouldOfferTicketFromError(text: string): boolean {
 
 export function HelpdeskInternalChat({
   initialPills,
-  settings,
+  settings: _settings,
   initialReplyUsage,
   connectorHealthAlerts = [],
 }: {

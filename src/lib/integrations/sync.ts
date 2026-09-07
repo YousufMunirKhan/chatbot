@@ -11,12 +11,36 @@ import { logger } from '@/lib/logger';
 interface SyncOutcome {
   records: number;
   errors: string[];
+  /** True when a page budget ran out with more records still upstream. */
+  truncated?: boolean;
+  /** Things the operator should know that are not failures. */
+  warnings?: string[];
 }
 
 type Row = Record<string, unknown>;
 
-const MAX_PAGES = 5;
+/**
+ * How much of a shop one run will read.
+ *
+ * This was five pages of a hundred — a hard ceiling of five hundred records per
+ * resource, applied silently. A shop with a thousand products synced the first
+ * five hundred, reported "completed", and the assistant answered from half a
+ * catalogue without anyone being told. The ceiling is now high enough for a
+ * normal shop, and when it IS reached the run says so instead of pretending it
+ * finished.
+ *
+ * There still has to be a ceiling: this runs inside a request, upstream shops
+ * rate-limit, and an unbounded loop against a misbehaving API is how a sync job
+ * runs forever. `SYNC_TIME_BUDGET_MS` stops a slow shop long before the page
+ * count does.
+ */
+const MAX_PAGES = 50;
+/** WooCommerce rejects per_page above 100; Shopify allows limit up to 250. */
+const WOO_PAGE_SIZE = 100;
+const SHOPIFY_PAGE_SIZE = 250;
+/** Kept for the custom-API path, which sets its own paging rules. */
 const PAGE_SIZE = 100;
+const SYNC_TIME_BUDGET_MS = 90_000;
 
 function text(value: unknown, fallback = ''): string {
   return value == null ? fallback : String(value);
@@ -47,39 +71,75 @@ async function fetchJson<T>(url: string, init: RequestInit): Promise<{ data: T |
   return { data: (await res.json()) as T, headers: res.headers };
 }
 
+/**
+ * Shopify's `?page=` was removed in API version 2019-07 and this app defaults to
+ * 2024-01, so the old paging loop asked for pages 2..5 and was handed page one
+ * every time. A thousand-product shop synced its first hundred products five
+ * times over and reported five hundred records.
+ *
+ * Cursor paging replaces it: the response carries a `Link` header, and the
+ * `rel="next"` URL is the only legitimate way to ask for what comes after.
+ * Absent header means there is no next page — which is also how the loop knows
+ * it reached the end rather than ran out of budget.
+ */
+function nextPageUrl(headers: Headers): string | null {
+  const link = headers.get('link') ?? headers.get('Link');
+  if (!link) return null;
+  for (const part of link.split(',')) {
+    const [rawUrl, ...params] = part.split(';');
+    if (!params.some((p) => /rel\s*=\s*"?next"?/i.test(p))) continue;
+    const url = rawUrl?.trim().replace(/^</, '').replace(/>$/, '');
+    if (url) return url;
+  }
+  return null;
+}
+
+/**
+ * Write a page of records in one statement.
+ *
+ * Migration 0064 added the (company_id, external_id) unique keys this relies on.
+ * Before it, each record cost a SELECT and then a write — two thousand sequential
+ * round trips for a thousand products — and two overlapping syncs could both
+ * decide a row was missing and insert it twice.
+ *
+ * Returns external_id -> row id so callers can attach variants and inventory
+ * without reading the rows back.
+ */
+async function upsertPageByExternalId(
+  table: string,
+  companyId: string,
+  rows: (Row & { external_id: string })[],
+  conflictColumns = 'company_id,external_id',
+): Promise<Map<string, string>> {
+  const out = new Map<string, string>();
+  if (!rows.length) return out;
+
+  const sb = createSupabaseServiceClient();
+  const { data, error } = await sb
+    .from(table)
+    .upsert(
+      rows.map((r) => ({ company_id: companyId, ...r })),
+      { onConflict: conflictColumns },
+    )
+    .select('id,external_id');
+  if (error) throw error;
+
+  for (const row of (data ?? []) as { id: string; external_id: string | null }[]) {
+    if (row.external_id) out.set(row.external_id, row.id);
+  }
+  return out;
+}
+
 async function upsertByExternalId(
   table: string,
   companyId: string,
   externalId: string,
   payload: Row,
 ): Promise<string | null> {
-  const sb = createSupabaseServiceClient();
-  const { data: existing } = await sb
-    .from(table)
-    .select('id')
-    .eq('company_id', companyId)
-    .eq('external_id', externalId)
-    .maybeSingle();
-
-  if (existing?.id) {
-    const { data, error } = await sb
-      .from(table)
-      .update(payload)
-      .eq('company_id', companyId)
-      .eq('id', existing.id)
-      .select('id')
-      .single();
-    if (error) throw error;
-    return (data?.id as string | undefined) ?? null;
-  }
-
-  const { data, error } = await sb
-    .from(table)
-    .insert({ company_id: companyId, external_id: externalId, ...payload })
-    .select('id')
-    .single();
-  if (error) throw error;
-  return (data?.id as string | undefined) ?? null;
+  const map = await upsertPageByExternalId(table, companyId, [
+    { external_id: externalId, ...payload },
+  ]);
+  return map.get(externalId) ?? null;
 }
 
 async function upsertInventory(params: {
@@ -125,14 +185,35 @@ async function syncWooCommerce(companyId: string, creds: Row): Promise<SyncOutco
   const auth = Buffer.from(`${key}:${secret}`).toString('base64');
   const init = { headers: { Authorization: `Basic ${auth}` } };
   let records = 0;
+  const deadline = Date.now() + SYNC_TIME_BUDGET_MS;
+  const warnings: string[] = [];
+  let truncated = false;
 
+  /**
+   * WooCommerce still honours `?page=`, so the loop below is correct as written.
+   * What it lacked was any way to say "there was more" — it simply stopped at
+   * the page limit and reported success. A full final page means the shop had
+   * more to give.
+   */
+  const noteTruncation = (what: string, lastPageWasFull: boolean) => {
+    if (!lastPageWasFull) return;
+    truncated = true;
+    warnings.push(`${what} was larger than one run covers; the next hourly refresh carries on.`);
+  };
+
+  let productsLastPageFull = false;
   for (let page = 1; page <= MAX_PAGES; page++) {
+    if (Date.now() > deadline) {
+      productsLastPageFull = true;
+      break;
+    }
     const { data, error } = await fetchJson<Row[]>(
-      `${base}/wp-json/wc/v3/products?per_page=${PAGE_SIZE}&page=${page}`,
+      `${base}/wp-json/wc/v3/products?per_page=${WOO_PAGE_SIZE}&page=${page}`,
       init,
     );
     if (error) return { records, errors: [`WooCommerce products: ${error}`] };
     if (!data?.length) break;
+    productsLastPageFull = data.length === WOO_PAGE_SIZE;
 
     for (const p of data) {
       const productExternalId = text(p.id);
@@ -190,14 +271,21 @@ async function syncWooCommerce(companyId: string, creds: Row): Promise<SyncOutco
       }
     }
   }
+  noteTruncation('Product catalogue', productsLastPageFull);
 
+  let customersLastPageFull = false;
   for (let page = 1; page <= MAX_PAGES; page++) {
+    if (Date.now() > deadline) {
+      customersLastPageFull = true;
+      break;
+    }
     const { data, error } = await fetchJson<Row[]>(
-      `${base}/wp-json/wc/v3/customers?per_page=${PAGE_SIZE}&page=${page}`,
+      `${base}/wp-json/wc/v3/customers?per_page=${WOO_PAGE_SIZE}&page=${page}`,
       init,
     );
     if (error) return { records, errors: [`WooCommerce customers: ${error}`] };
     if (!data?.length) break;
+    customersLastPageFull = data.length === WOO_PAGE_SIZE;
     for (const c of data) {
       await upsertByExternalId('synced_customers', companyId, text(c.id), {
         name: [c.first_name, c.last_name].map((x) => text(x)).filter(Boolean).join(' ') || nullableText(c.username),
@@ -209,13 +297,21 @@ async function syncWooCommerce(companyId: string, creds: Row): Promise<SyncOutco
     }
   }
 
+  noteTruncation('Customer list', customersLastPageFull);
+
+  let ordersLastPageFull = false;
   for (let page = 1; page <= MAX_PAGES; page++) {
+    if (Date.now() > deadline) {
+      ordersLastPageFull = true;
+      break;
+    }
     const { data, error } = await fetchJson<Row[]>(
-      `${base}/wp-json/wc/v3/orders?per_page=${PAGE_SIZE}&page=${page}&status=any`,
+      `${base}/wp-json/wc/v3/orders?per_page=${WOO_PAGE_SIZE}&page=${page}&status=any`,
       init,
     );
     if (error) return { records, errors: [`WooCommerce orders: ${error}`] };
     if (!data?.length) break;
+    ordersLastPageFull = data.length === WOO_PAGE_SIZE;
     for (const o of data) {
       const billing = (o.billing as Row | undefined) ?? {};
       const shippingLines = Array.isArray(o.shipping_lines) ? (o.shipping_lines as Row[]) : [];
@@ -258,8 +354,39 @@ async function syncWooCommerce(companyId: string, creds: Row): Promise<SyncOutco
       records++;
     }
   }
+  noteTruncation('Order history', ordersLastPageFull);
 
-  return { records, errors: [] };
+  return { records, errors: [], truncated, warnings };
+}
+
+/**
+ * Walk every page of a Shopify collection, following the `Link` header.
+ *
+ * Stops for one of three reasons, and the caller can tell them apart: the shop
+ * stopped offering a next page (finished), the page budget or time budget ran
+ * out (`truncated`, and the operator is told), or the request failed (`error`).
+ */
+async function eachShopifyPage<T>(
+  startUrl: string,
+  init: RequestInit,
+  deadline: number,
+  onPage: (data: T) => Promise<void>,
+): Promise<{ error?: string; truncated: boolean }> {
+  let url: string | null = startUrl;
+  for (let page = 0; page < MAX_PAGES; page++) {
+    if (!url) return { truncated: false };
+    if (Date.now() > deadline) return { truncated: true };
+
+    const { data, error, headers }: { data: T | null; error?: string; headers: Headers } =
+      await fetchJson<T>(url, init);
+    if (error) return { error, truncated: false };
+    if (!data) return { truncated: false };
+
+    await onPage(data);
+    url = nextPageUrl(headers);
+  }
+  // Fell out of the loop with a next page still on offer.
+  return { truncated: Boolean(url) };
 }
 
 async function syncShopify(companyId: string, creds: Row): Promise<SyncOutcome> {
@@ -268,69 +395,101 @@ async function syncShopify(companyId: string, creds: Row): Promise<SyncOutcome> 
   const apiVersion = text(creds.api_version, '2024-01');
   if (!shop || !token) return { records: 0, errors: ['Missing Shopify credentials'] };
 
+  const deadline = Date.now() + SYNC_TIME_BUDGET_MS;
+  const warnings: string[] = [];
+  let truncated = false;
+
   const base = `https://${shop}/admin/api/${apiVersion}`;
   const init = { headers: { 'X-Shopify-Access-Token': token } };
   let records = 0;
   const inventoryItems: string[] = [];
   const variantByInventoryItem = new Map<string, { productId: string; variantId: string }>();
 
-  for (let page = 1; page <= MAX_PAGES; page++) {
-    const { data, error } = await fetchJson<{ products?: Row[] }>(
-      `${base}/products.json?limit=${PAGE_SIZE}&page=${page}`,
-      init,
-    );
-    if (error) return { records, errors: [`Shopify products: ${error}`] };
-    const products = data?.products ?? [];
-    if (!products.length) break;
+  const productsResult = await eachShopifyPage<{ products?: Row[] }>(
+    `${base}/products.json?limit=${SHOPIFY_PAGE_SIZE}`,
+    init,
+    deadline,
+    async (data) => {
+      const products = data?.products ?? [];
+      if (!products.length) return;
 
-    for (const p of products) {
-      const variants = Array.isArray(p.variants) ? (p.variants as Row[]) : [];
-      const firstVariant = variants[0] ?? {};
-      const productId = await upsertByExternalId('synced_products', companyId, text(p.id), {
-        title: text(p.title, 'Untitled'),
-        description: text(p.body_html),
-        category: nullableText(p.product_type),
-        price: money(firstVariant.price),
-        currency: text(creds.currency, 'USD'),
-        sku: nullableText(firstVariant.sku),
-        status: text(p.status, 'active'),
-        metadata_json: {
-          provider: 'shopify',
-          vendor: p.vendor ?? null,
-          handle: p.handle ?? null,
-          tags: p.tags ?? null,
-        },
-      });
-      records++;
+      // One statement for the whole page instead of two per product.
+      const productIdByExternal = await upsertPageByExternalId(
+        'synced_products',
+        companyId,
+        products.map((p) => {
+          const variants = Array.isArray(p.variants) ? (p.variants as Row[]) : [];
+          const firstVariant = variants[0] ?? {};
+          return {
+            external_id: text(p.id),
+            title: text(p.title, 'Untitled'),
+            description: text(p.body_html),
+            category: nullableText(p.product_type),
+            price: money(firstVariant.price),
+            currency: text(creds.currency, 'USD'),
+            sku: nullableText(firstVariant.sku),
+            status: text(p.status, 'active'),
+            metadata_json: {
+              provider: 'shopify',
+              vendor: p.vendor ?? null,
+              handle: p.handle ?? null,
+              tags: p.tags ?? null,
+            },
+          };
+        }),
+      );
+      records += productIdByExternal.size;
 
-      for (const variant of variants) {
+      for (const p of products) {
+        const productId = productIdByExternal.get(text(p.id)) ?? null;
         if (!productId) continue;
-        const variantId = await upsertByExternalId('synced_product_variants', companyId, text(variant.id), {
-          product_id: productId,
-          title: text(variant.title, 'Default'),
-          price: money(variant.price),
-          sku: nullableText(variant.sku),
-          options_json: {
-            option1: variant.option1 ?? null,
-            option2: variant.option2 ?? null,
-            option3: variant.option3 ?? null,
-          },
-        });
-        const inventoryItemId = nullableText(variant.inventory_item_id);
-        if (inventoryItemId && variantId) {
-          inventoryItems.push(inventoryItemId);
-          variantByInventoryItem.set(inventoryItemId, { productId, variantId });
-        }
-        await upsertInventory({
+        const variants = Array.isArray(p.variants) ? (p.variants as Row[]) : [];
+        if (!variants.length) continue;
+
+        const variantIdByExternal = await upsertPageByExternalId(
+          'synced_product_variants',
           companyId,
-          productId,
-          variantId,
-          quantity: int(variant.inventory_quantity, 0),
-        });
-        records++;
+          variants.map((variant) => ({
+            external_id: text(variant.id),
+            product_id: productId,
+            title: text(variant.title, 'Default'),
+            price: money(variant.price),
+            sku: nullableText(variant.sku),
+            options_json: {
+              option1: variant.option1 ?? null,
+              option2: variant.option2 ?? null,
+              option3: variant.option3 ?? null,
+            },
+          })),
+          'company_id,product_id,external_id',
+        );
+        records += variantIdByExternal.size;
+
+        for (const variant of variants) {
+          const variantId = variantIdByExternal.get(text(variant.id)) ?? null;
+          const inventoryItemId = nullableText(variant.inventory_item_id);
+          if (inventoryItemId && variantId) {
+            inventoryItems.push(inventoryItemId);
+            variantByInventoryItem.set(inventoryItemId, { productId, variantId });
+          }
+          await upsertInventory({
+            companyId,
+            productId,
+            variantId,
+            quantity: int(variant.inventory_quantity, 0),
+          });
+        }
       }
-    }
+    },
+  );
+  if (productsResult.error) return { records, errors: [`Shopify products: ${productsResult.error}`] };
+  if (productsResult.truncated) {
+    truncated = true;
+    warnings.push(
+      `Read ${records} product records and stopped — this catalogue is larger than one run covers. The next hourly refresh carries on from here.`,
+    );
   }
+
 
   for (let i = 0; i < inventoryItems.length; i += 50) {
     const ids = inventoryItems.slice(i, i + 50);
@@ -353,33 +512,40 @@ async function syncShopify(companyId: string, creds: Row): Promise<SyncOutcome> 
     }
   }
 
-  for (let page = 1; page <= MAX_PAGES; page++) {
-    const { data, error } = await fetchJson<{ customers?: Row[] }>(
-      `${base}/customers.json?limit=${PAGE_SIZE}&page=${page}`,
-      init,
-    );
-    if (error) return { records, errors: [`Shopify customers: ${error}`] };
-    const customers = data?.customers ?? [];
-    if (!customers.length) break;
-    for (const c of customers) {
-      await upsertByExternalId('synced_customers', companyId, text(c.id), {
-        name: [c.first_name, c.last_name].map((x) => text(x)).filter(Boolean).join(' ') || null,
-        email: nullableText(c.email),
-        phone: nullableText(c.phone),
-        metadata_json: { provider: 'shopify' },
-      });
-      records++;
-    }
+  const customersResult = await eachShopifyPage<{ customers?: Row[] }>(
+    `${base}/customers.json?limit=${SHOPIFY_PAGE_SIZE}`,
+    init,
+    deadline,
+    async (data) => {
+      const customers = data?.customers ?? [];
+      if (!customers.length) return;
+      const written = await upsertPageByExternalId(
+        'synced_customers',
+        companyId,
+        customers.map((c) => ({
+          external_id: text(c.id),
+          name: [c.first_name, c.last_name].map((x) => text(x)).filter(Boolean).join(' ') || null,
+          email: nullableText(c.email),
+          phone: nullableText(c.phone),
+          metadata_json: { provider: 'shopify' },
+        })),
+      );
+      records += written.size;
+    },
+  );
+  if (customersResult.error) return { records, errors: [`Shopify customers: ${customersResult.error}`] };
+  if (customersResult.truncated) {
+    truncated = true;
+    warnings.push('Customer list was longer than one run reads; the next refresh continues it.');
   }
 
-  for (let page = 1; page <= MAX_PAGES; page++) {
-    const { data, error } = await fetchJson<{ orders?: Row[] }>(
-      `${base}/orders.json?status=any&limit=${PAGE_SIZE}&page=${page}`,
-      init,
-    );
-    if (error) return { records, errors: [`Shopify orders: ${error}`] };
+  const ordersResult = await eachShopifyPage<{ orders?: Row[] }>(
+    `${base}/orders.json?status=any&limit=${SHOPIFY_PAGE_SIZE}`,
+    init,
+    deadline,
+    async (data) => {
     const orders = data?.orders ?? [];
-    if (!orders.length) break;
+    if (!orders.length) return;
     for (const o of orders) {
       const customer = (o.customer as Row | undefined) ?? {};
       const shippingAddress = (o.shipping_address as Row | undefined) ?? {};
@@ -428,9 +594,15 @@ async function syncShopify(companyId: string, creds: Row): Promise<SyncOutcome> 
       }
       records++;
     }
+    },
+  );
+  if (ordersResult.error) return { records, errors: [`Shopify orders: ${ordersResult.error}`] };
+  if (ordersResult.truncated) {
+    truncated = true;
+    warnings.push('Order history was longer than one run reads; the next refresh continues it.');
   }
 
-  return { records, errors: [] };
+  return { records, errors: [], truncated, warnings };
 }
 
 async function syncCustomApi(companyId: string, creds: Row): Promise<SyncOutcome> {
@@ -578,12 +750,18 @@ export async function runSync(integrationAccountId: string): Promise<SyncOutcome
   }
 
   const failed = outcome.errors.length > 0;
+  const warnings = outcome.warnings ?? [];
   await sb
     .from('sync_jobs')
     .update({
       status: failed ? 'failed' : 'completed',
       records_processed: outcome.records,
       error_message: failed ? outcome.errors.join('; ') : null,
+      // A run that read only part of a shop is not a failure, but calling it a
+      // plain success is how an operator ends up with a half-synced catalogue
+      // and no idea. Migration 0064 added these two columns for exactly this.
+      truncated: Boolean(outcome.truncated),
+      warning_message: warnings.length ? warnings.join(' ') : null,
       finished_at: new Date().toISOString(),
     })
     .eq('id', job!.id);
@@ -599,6 +777,19 @@ export async function runSync(integrationAccountId: string): Promise<SyncOutcome
   if (failed) {
     logger.warn('Sync failed', { companyId, module: 'integrations' });
     await notify({ companyId, type: 'failed_sync', title: 'Integration sync failed', body: outcome.errors.join('; '), email: false });
+  } else if (outcome.truncated) {
+    logger.warn('Sync read only part of the shop', {
+      companyId,
+      module: 'integrations',
+      records: outcome.records,
+    });
+    await notify({
+      companyId,
+      type: 'failed_sync',
+      title: 'Shop is larger than one refresh reads',
+      body: warnings.join(' '),
+      email: false,
+    });
   }
   return outcome;
 }

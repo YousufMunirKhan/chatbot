@@ -55,16 +55,32 @@ export function NewFlowForm() {
   );
 }
 
-/** `useFormStatus` is scoped to its own `<form>`, so each card spins alone. */
+/**
+ * `useFormStatus` is scoped to its own `<form>`, so each card spins alone.
+ *
+ * `w-full` is load-bearing, not decoration. "Use this template" needs about
+ * 140px; an auto-width button in a column narrower than that overflows the card
+ * and the label is clipped mid-word — which is exactly what happened when this
+ * grid was rendered three-across inside a sidebar. Full width makes the button
+ * shrink with its card instead of spilling out of it, whatever the layout does.
+ */
 function TemplateButton() {
   const { pending } = useFormStatus();
   return (
-    <Button type="submit" size="sm" variant="outline" disabled={pending}>
+    <Button type="submit" size="sm" variant="outline" disabled={pending} className="w-full">
       {pending ? 'Building…' : 'Use this template'}
     </Button>
   );
 }
 
+/**
+ * The five starter flows.
+ *
+ * Sized for a full-width container: two across on a tablet, three on a desktop,
+ * which leaves roughly 360px per card at this page's `max-w-6xl`. Do not nest
+ * this inside a narrow column — the descriptions are full sentences and need
+ * the room to read as sentences.
+ */
 export function FlowTemplateGrid() {
   const { state, action } = useCreateFlow();
   const templates = FLOW_TEMPLATES.filter((t) => t.key !== 'blank');
@@ -72,15 +88,17 @@ export function FlowTemplateGrid() {
   return (
     <div className="space-y-3">
       <FormMessage state={{ error: state.error }} />
-      <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
         {templates.map((template) => (
           <Card key={template.key} className="flex flex-col">
             <CardContent className="flex flex-1 flex-col gap-3 p-4">
-              <div className="space-y-1">
-                <h3 className="text-sm font-semibold">{template.name}</h3>
-                <p className="text-sm text-muted-foreground">{template.description}</p>
+              <div className="space-y-1.5">
+                <h3 className="text-sm font-semibold leading-snug">{template.name}</h3>
+                <p className="text-sm leading-relaxed text-muted-foreground">
+                  {template.description}
+                </p>
               </div>
-              <form action={action} className="mt-auto">
+              <form action={action} className="mt-auto pt-1">
                 <input type="hidden" name="name" value={template.name} />
                 <input type="hidden" name="description" value={template.description} />
                 <input type="hidden" name="templateKey" value={template.key} />

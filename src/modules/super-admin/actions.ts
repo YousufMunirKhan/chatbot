@@ -9,6 +9,11 @@ import { createSupabaseServiceClient } from '@/lib/db/server';
 import { logger } from '@/lib/logger';
 import { runEval } from '@/lib/ai/eval';
 import { currentMonthEndIso } from '@/lib/billing';
+import {
+  classifyMembers,
+  getCompanyDeletionPreview,
+  type CompanyDeletionPreview,
+} from './deletion-data';
 import { sendImprovementEmail } from './improvements-data';
 import { PLANS, PLAN_KEYS, SUBSCRIPTION_STATUSES } from './plans';
 
@@ -636,4 +641,149 @@ export async function runCompanyGradedEvalAction(formData: FormData): Promise<vo
   revalidatePath(`/super-admin/companies/${companyId}`);
   revalidatePath(`/super-admin/companies/${companyId}/manage`);
   revalidatePath('/super-admin/quality');
+}
+
+/**
+ * Permanently delete a company and everything belonging to it.
+ *
+ * The data itself needs no orchestration: all 108 `company_id` foreign keys are
+ * `on delete cascade`, so removing the `companies` row removes conversations,
+ * messages, leads, documents, bots, orders, settings and the rest in one
+ * statement. What does need care is everything the cascade cannot reach.
+ *
+ * Login accounts. `public.users` has no foreign key to `companies` — the link is
+ * `company_users`, and only that join row cascades. Deleting a company would
+ * otherwise leave people able to sign in to nothing. So the members are
+ * classified BEFORE the delete (afterwards the membership rows are gone) and
+ * the ones who exist solely for this company are removed from auth as well.
+ * A member who is a platform super admin, or who belongs to another company,
+ * keeps their login — removing it would take away access they still need.
+ *
+ * The audit record. `audit_logs.company_id` is `on delete set null`, so the row
+ * survives the cascade but loses the only thing identifying it. The company id
+ * and name therefore go into the metadata, where they cannot be nulled.
+ */
+export async function deleteCompanyAction(
+  _prev: ActionState,
+  formData: FormData,
+): Promise<ActionState> {
+  const admin = await requireRole([ROLES.SUPER_ADMIN]);
+  const sb = createSupabaseServiceClient();
+
+  const parsed = z
+    .object({
+      companyId: z.string().uuid('Pick a company'),
+      confirmation: z.string(),
+    })
+    .safeParse({
+      companyId: formData.get('companyId'),
+      confirmation: formData.get('confirmation'),
+    });
+  if (!parsed.success) {
+    return { error: parsed.error.issues[0]?.message ?? 'Could not read the form' };
+  }
+
+  // Typing the word is the whole safeguard. Accept it with stray spaces or a
+  // capital D, and nothing else.
+  if (parsed.data.confirmation.trim().toLowerCase() !== 'delete') {
+    return { error: 'Type delete to confirm. Nothing has been removed.' };
+  }
+
+  const { data: company } = await sb
+    .from('companies')
+    .select('id,name')
+    .eq('id', parsed.data.companyId)
+    .maybeSingle();
+  if (!company) return { error: 'That company no longer exists.' };
+  const target = company as { id: string; name: string };
+
+  // Must happen first: company_users is cascaded away by the delete below.
+  const { data: memberRows } = await sb
+    .from('company_users')
+    .select('user_id,role')
+    .eq('company_id', target.id);
+  const fates = await classifyMembers(
+    sb,
+    target.id,
+    (memberRows ?? []) as { user_id: string; role: string }[],
+  );
+  const loginsToRemove = fates
+    .filter((u) => u.fate === 'delete')
+    .map((u) => ({ id: u.id, email: u.email }))
+    // Belt and braces: whoever is doing the deleting never loses their own login.
+    .filter((u) => u.id !== admin.userId);
+
+  const { error: deleteError } = await sb.from('companies').delete().eq('id', target.id);
+  if (deleteError) {
+    return { error: `Could not delete the company: ${deleteError.message}` };
+  }
+
+  // The company is gone from here on. A failure below leaves an orphaned login,
+  // which is recoverable and logged — so it must not abort or be reported as a
+  // failed deletion.
+  const removedLogins: string[] = [];
+  const failedLogins: string[] = [];
+  for (const login of loginsToRemove) {
+    const { error: authError } = await sb.auth.admin.deleteUser(login.id);
+    if (authError) {
+      failedLogins.push(login.email);
+      logger.error('Could not delete a login after removing its company', {
+        userId: login.id,
+        error: authError.message,
+      });
+      continue;
+    }
+    // `public.users` is a separate table with no cascade from auth.
+    await sb.from('users').delete().eq('id', login.id);
+    removedLogins.push(login.email);
+  }
+
+  await writeAudit(sb, {
+    // Not target.id: the row is gone, and the foreign key would reject it.
+    companyId: null,
+    actorId: admin.userId,
+    action: 'company.deleted',
+    targetType: 'company',
+    targetId: target.id,
+    metadata: {
+      companyName: target.name,
+      companyId: target.id,
+      loginsRemoved: removedLogins,
+      loginsKept: fates.filter((u) => u.fate === 'keep').map((u) => ({
+        email: u.email,
+        reason: u.keptBecause,
+      })),
+      loginsFailed: failedLogins,
+    },
+  });
+
+  logger.warn('Company deleted', {
+    companyId: target.id,
+    actorId: admin.userId,
+    loginsRemoved: removedLogins.length,
+  });
+
+  revalidatePath('/super-admin/companies');
+  revalidatePath('/super-admin');
+
+  if (failedLogins.length) {
+    return {
+      error: `${target.name} was deleted, but these logins could not be removed and still exist: ${failedLogins.join(', ')}`,
+    };
+  }
+  redirect('/super-admin/companies');
+}
+
+/**
+ * What deleting a company would destroy, fetched when the confirmation opens.
+ *
+ * Deliberately not computed for every row of the companies list: the preview
+ * runs six counts and two membership reads per company, which is wasted work on
+ * a page where most rows will never be deleted.
+ */
+export async function companyDeletionPreviewAction(
+  companyId: string,
+): Promise<CompanyDeletionPreview | null> {
+  await requireRole([ROLES.SUPER_ADMIN]);
+  return getCompanyDeletionPreview(companyId);
 }

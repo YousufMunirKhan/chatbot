@@ -3,25 +3,65 @@
 // files. Each migration runs in its own transaction; a failure rolls back and
 // stops.
 //
-// Usage: node scripts/migrate.mjs            (reads DATABASE_URL from .env.local)
+// Usage: node scripts/migrate.mjs                      (uses .env.local)
+//        node scripts/migrate.mjs --env .env.production (uses that file instead)
+//
+// It always prints which database it is about to change before changing it.
+// That is not decoration. There is more than one Supabase project now, this
+// script reads whichever DATABASE_URL an env file happens to hold, and applying
+// a migration to the wrong one is silent — the run succeeds, and production
+// simply never receives the change.
 import { config } from 'dotenv';
-import { readdirSync, readFileSync } from 'node:fs';
+import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 import dns from 'node:dns/promises';
 import pg from 'pg';
 
-config({ path: '.env.local' });
+const argv = process.argv.slice(2);
+const envFlag = argv.indexOf('--env');
+const ENV_FILE = envFlag === -1 ? '.env.local' : argv[envFlag + 1];
+if (envFlag !== -1 && !ENV_FILE) {
+  console.error('❌ --env needs a file, e.g. --env .env.production');
+  process.exit(1);
+}
+if (!existsSync(ENV_FILE)) {
+  console.error(`❌ ${ENV_FILE} does not exist.`);
+  process.exit(1);
+}
+config({ path: ENV_FILE });
 
 const DATABASE_URL = process.env.DATABASE_URL;
 if (!DATABASE_URL || DATABASE_URL.includes('[YOUR-PASSWORD]')) {
   console.error(
-    '❌ DATABASE_URL is not set in .env.local.\n' +
+    `❌ DATABASE_URL is not set in ${ENV_FILE}.\n` +
       '   Supabase dashboard → Settings → Database → Connection string → URI\n' +
       '   Use the Session pooler (port 5432) URI and replace [YOUR-PASSWORD].',
   );
   process.exit(1);
 }
+
+// Supabase pooler credentials carry the project ref in the username
+// (postgres.<ref>), and the region is the first two segments of the host. Both
+// are safe to print; neither is a secret.
+function describeTarget(url) {
+  try {
+    const u = new URL(url);
+    const ref = decodeURIComponent(u.username).split('.')[1] ?? '(unknown)';
+    const region = u.hostname.split('.')[0] ?? u.hostname;
+    return { ref, region, host: u.hostname };
+  } catch {
+    return { ref: '(unparseable)', region: '(unparseable)', host: '(unparseable)' };
+  }
+}
+
+const target = describeTarget(DATABASE_URL);
+console.log('┌─────────────────────────────────────────────────────────────');
+console.log(`│ env file : ${ENV_FILE}`);
+console.log(`│ project  : ${target.ref}`);
+console.log(`│ region   : ${target.region}`);
+console.log('└─────────────────────────────────────────────────────────────');
+console.log('');
 
 const dir = join(dirname(fileURLToPath(import.meta.url)), '..', 'supabase', 'migrations');
 const files = readdirSync(dir)

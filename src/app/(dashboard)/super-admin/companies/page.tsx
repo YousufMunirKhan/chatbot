@@ -9,6 +9,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { listCompanies } from '@/modules/super-admin/data';
 import { planLabel } from '@/modules/super-admin/plans';
 import { CompanyStatusBadge, SubStatusBadge } from '@/modules/super-admin/components/badges';
+import { DeleteCompanyDialog } from '@/modules/super-admin/components/delete-company-dialog';
 import { formatDate, formatNumber } from '@/lib/format';
 // Was a second, byte-for-byte pair of local `gbp`/`usd` formatters at the foot
 // of this file. The shared module is the one the currency work landed in.
@@ -54,12 +55,15 @@ export default async function CompaniesPage() {
                 <TableHead>Members</TableHead>
                 <TableHead>Bots</TableHead>
                 <TableHead>Created</TableHead>
+                <TableHead>
+                  <span className="sr-only">Actions</span>
+                </TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {companies.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={13} className="py-0">
+                  <TableCell colSpan={14} className="py-0">
                     <EmptyState
                       title={
                         <>
@@ -105,6 +109,9 @@ export default async function CompaniesPage() {
                     <TableCell>{formatNumber(c.memberCount)}</TableCell>
                     <TableCell>{formatNumber(c.botCount)}</TableCell>
                     <TableCell className="text-muted-foreground">{formatDate(c.createdAt)}</TableCell>
+                    <TableCell className="text-right">
+                      <DeleteCompanyDialog companyId={c.id} companyName={c.name} />
+                    </TableCell>
                   </TableRow>
                 ))
               )}
