@@ -5,7 +5,6 @@ import Link from 'next/link';
 import { useFormState, useFormStatus } from 'react-dom';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { BOT_TYPES } from '@/lib/constants';
 import { companyLabel } from '@/lib/labels';
@@ -219,7 +218,15 @@ export function BotForm({
         </div>
 
         <div className="grid gap-4 sm:grid-cols-2">
-          <FormField label="Assistant name *" htmlFor="name">
+          {/* The asterisk was doing the job `FormField`'s `required` prop
+              already does — and doing it only visually, so a screen reader
+              heard "Assistant name star". */}
+          <FormField
+            label="Assistant name"
+            htmlFor="name"
+            required
+            hint="Customers see this at the top of the chat, so use something they will recognise."
+          >
             <Input
               name="name"
               required
@@ -228,9 +235,12 @@ export function BotForm({
             />
           </FormField>
           {assistantAudience === 'internal' ? (
+            // Not a control at all — a staff assistant has exactly one type, so
+            // this states it. It used to be a bare `<Label>` with no `htmlFor`,
+            // which renders a `<label>` element pointing at nothing.
             <div className="space-y-1.5">
               <input type="hidden" name="botType" value="help_desk" />
-              <Label>Type</Label>
+              <p className="text-sm font-medium leading-none">Type</p>
               <div className="rounded-md border bg-muted/30 px-3 py-2 text-sm font-medium">
                 Staff assistant
               </div>
@@ -239,7 +249,14 @@ export function BotForm({
               </p>
             </div>
           ) : (
-            <FormField label="Type" htmlFor="botType">
+            // The explanation moved into `hint`: a second child made `FormField`
+            // skip its cloning step entirely, so the select got no `id` and the
+            // label above it was associated with nothing.
+            <FormField
+              label="Type"
+              htmlFor="botType"
+              hint="This sets its general style. What it can help with is up to you, below."
+            >
               <Select key="customer-bot-type" name="botType" defaultValue={customerBotType}>
                 {BOT_TYPES.filter((t) => t !== 'help_desk').map((t) => (
                   <option key={t} value={t}>
@@ -247,16 +264,23 @@ export function BotForm({
                   </option>
                 ))}
               </Select>
-              <p className="text-xs text-muted-foreground">
-                This sets its general style. What it can help with is up to you, below.
-              </p>
             </FormField>
           )}
-          <FormField label="Default language" htmlFor="languageDefault">
+          {/* The other half of the "Default language" collision: this is
+              `bots.language_default`, which decides what language the assistant
+              answers a customer in. The company profile's field of the same
+              name decides what language the dashboard is in. Both labels now
+              name their own subject. Unlike the dashboard one, `auto` here is
+              real — the reply language follows whatever the customer wrote. */}
+          <FormField
+            label="Language it answers in"
+            htmlFor="languageDefault"
+            hint="Auto-detect replies in whatever language the customer wrote in, which is what most shops want. Pick one to answer in that language whatever they use."
+          >
             <Select name="languageDefault" defaultValue={bot?.languageDefault ?? 'auto'}>
-              <option value="auto">Auto-detect</option>
-              <option value="en">English</option>
-              <option value="ar">Arabic</option>
+              <option value="auto">Auto-detect — match the customer</option>
+              <option value="en">Always English</option>
+              <option value="ar">Always Arabic</option>
             </Select>
           </FormField>
         </div>
@@ -343,22 +367,31 @@ export function BotForm({
               </span>
             </span>
           </label>
-          <label className="flex items-start gap-2 rounded-md border p-3 text-sm">
-            <input type="hidden" name="enableConnectorGeneratedPills" value="off" />
-            <input
-              type="checkbox"
-              name="enableConnectorGeneratedPills"
-              defaultChecked={enableConnectorGeneratedPills}
-              disabled={assistantAudience !== 'internal'}
-              className="mt-0.5 h-4 w-4"
-            />
-            <span>
-              <span className="block font-medium">Questions from your shop system</span>
-              <span className="block text-xs text-muted-foreground">
-                Suggests questions about the screens and tasks it found in your own software.
+          {/* This one only ever applies to a staff assistant — it suggests
+              questions about screens found in the company's own software, which
+              a customer assistant never sees. It used to render for a customer
+              assistant too, greyed out with nothing saying why. The hidden
+              "off" is what the action already stored for it in that case, so
+              nothing about the saved value changes. */}
+          {assistantAudience === 'internal' ? (
+            <label className="flex items-start gap-2 rounded-md border p-3 text-sm">
+              <input type="hidden" name="enableConnectorGeneratedPills" value="off" />
+              <input
+                type="checkbox"
+                name="enableConnectorGeneratedPills"
+                defaultChecked={enableConnectorGeneratedPills}
+                className="mt-0.5 h-4 w-4"
+              />
+              <span>
+                <span className="block font-medium">Questions from your shop system</span>
+                <span className="block text-xs text-muted-foreground">
+                  Suggests questions about the screens and tasks it found in your own software.
+                </span>
               </span>
-            </span>
-          </label>
+            </label>
+          ) : (
+            <input type="hidden" name="enableConnectorGeneratedPills" value="off" />
+          )}
         </div>
       </section>
 
@@ -391,19 +424,24 @@ export function BotForm({
           <h2 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground">
             Your website
           </h2>
-          <FormField label="Website addresses it can appear on" htmlFor="domainAllowlist">
+          {/* Second `FormField` here with two children — the textarea got no
+              `id`, so "Website addresses it can appear on" labelled nothing. */}
+          <FormField
+            label="Website addresses it can appear on"
+            htmlFor="domainAllowlist"
+            hint={
+              'One address per line, without https:// — acme.com, not https://acme.com/shop. The chat only shows up on these.' +
+              (isNewCustomerBot && domainAllowlistDefault
+                ? ' Filled in from your company website — edit it if the widget goes somewhere else.'
+                : '')
+            }
+          >
             <Textarea
               name="domainAllowlist"
               defaultValue={domainAllowlistDefault}
               placeholder={'acme.com\nwww.acme.com'}
               rows={3}
             />
-            <p className="text-xs text-muted-foreground">
-              One address per line. The chat only shows up on these.
-              {isNewCustomerBot && domainAllowlistDefault
-                ? ' Filled in from your company website — edit it if the widget goes somewhere else.'
-                : ''}
-            </p>
           </FormField>
           <div className="rounded-md border bg-muted/30 p-3 text-sm text-muted-foreground">
             <p className="font-medium text-foreground">

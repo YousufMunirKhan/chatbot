@@ -328,14 +328,33 @@ async function listUnansweredQuestions(companyId: string, from: string): Promise
   return [...counts.values()].sort((a, b) => b.timesAsked - a.timesAsked).slice(0, 3);
 }
 
-export async function getCompanyDashboardSummary(): Promise<CompanyDashboardSummary> {
-  const companyId = await getCompanyId();
-  const now = Date.now();
-  const currentFrom = new Date(now - WEEK_MS).toISOString();
-  const previousFrom = new Date(now - 2 * WEEK_MS).toISOString();
+/** Every number on this page except the unanswered-question list. */
+interface DashboardCounts {
+  needsReply: number;
+  openChats: number;
+  chatsThisWeek: number;
+  chatsLastWeek: number;
+  aiThisWeek: number;
+  aiLastWeek: number;
+  workThisWeek: number;
+  workLastWeek: number;
+  uncontactedEnquiries: number;
+  overdueReplies: number;
+  failedAutomations: number;
+  csat: { average: number | null; responses: number };
+}
 
+/**
+ * The original shape: fourteen separate requests, each asking the database for
+ * one integer. Kept as the fallback for an environment that has not run
+ * migration 0062, and as the definition the RPC has to agree with.
+ */
+async function readDashboardCountsSeparately(
+  companyId: string,
+  currentFrom: string,
+  previousFrom: string,
+): Promise<DashboardCounts> {
   const [
-    company,
     needsReply,
     openChats,
     chatsThisWeek,
@@ -344,14 +363,11 @@ export async function getCompanyDashboardSummary(): Promise<CompanyDashboardSumm
     aiLastWeek,
     workThisWeek,
     workLastWeek,
-    unansweredQuestions,
     uncontactedEnquiries,
     overdueReplies,
     failedAutomations,
     csat,
-    bots,
   ] = await Promise.all([
-    getCurrentCompany(),
     countNeedsReply(companyId),
     countOpenChats(companyId),
     countChatsStarted(companyId, currentFrom),
@@ -360,13 +376,100 @@ export async function getCompanyDashboardSummary(): Promise<CompanyDashboardSumm
     countChatsAnsweredByAi(companyId, previousFrom, currentFrom),
     countCustomerWork(companyId, currentFrom),
     countCustomerWork(companyId, previousFrom, currentFrom),
-    listUnansweredQuestions(companyId, currentFrom),
     optional(() => countUncontactedEnquiries(companyId), 0),
     optional(() => countOverdueReplies(companyId), 0),
     optional(() => countFailedAutomations(companyId, currentFrom), 0),
     optional(() => readCsat(companyId, currentFrom), { average: null, responses: 0 }),
+  ]);
+  return {
+    needsReply,
+    openChats,
+    chatsThisWeek,
+    chatsLastWeek,
+    aiThisWeek,
+    aiLastWeek,
+    workThisWeek,
+    workLastWeek,
+    uncontactedEnquiries,
+    overdueReplies,
+    failedAutomations,
+    csat,
+  };
+}
+
+/**
+ * All of it in ONE round trip.
+ *
+ * The counts above are individually trivial — indexed `count(*)` over one
+ * tenant's rows — but on this deployment a round trip costs ~230 ms whatever it
+ * asks for, so fourteen of them was ~3.2 s of the home page spent waiting for
+ * fourteen integers. `company_dashboard_counts` (migration 0062) computes them
+ * in a single pass, reusing one materialised scan of the tenant's conversations
+ * for the six numbers that come from it.
+ *
+ * `p_company_id` is the session user's own company and every branch of the
+ * function filters on it, so the tenant scope is exactly what the individual
+ * `.eq('company_id', …)` filters gave.
+ */
+async function readDashboardCounts(
+  companyId: string,
+  currentFrom: string,
+  previousFrom: string,
+): Promise<DashboardCounts> {
+  const sb = createSupabaseServiceClient();
+  const { data, error } = await sb.rpc('company_dashboard_counts', {
+    p_company_id: companyId,
+    p_current_from: currentFrom,
+    p_previous_from: previousFrom,
+  });
+  const row = error ? null : ((Array.isArray(data) ? data[0] : data) as Record<string, unknown> | null);
+  if (!row) return readDashboardCountsSeparately(companyId, currentFrom, previousFrom);
+
+  const n = (key: string): number => Number(row[key] ?? 0) || 0;
+  const responses = n('csat_responses');
+  const average = row.csat_average === null || row.csat_average === undefined ? null : Number(row.csat_average);
+  return {
+    needsReply: n('needs_reply'),
+    openChats: n('open_chats'),
+    chatsThisWeek: n('chats_started_current'),
+    chatsLastWeek: n('chats_started_previous'),
+    aiThisWeek: n('ai_answered_current'),
+    aiLastWeek: n('ai_answered_previous'),
+    workThisWeek: n('leads_current') + n('appointments_current') + n('chat_orders_current'),
+    workLastWeek: n('leads_previous') + n('appointments_previous') + n('chat_orders_previous'),
+    uncontactedEnquiries: n('uncontacted_enquiries'),
+    overdueReplies: n('overdue_replies'),
+    failedAutomations: n('failed_automations'),
+    csat: { average: responses > 0 ? average : null, responses },
+  };
+}
+
+export async function getCompanyDashboardSummary(): Promise<CompanyDashboardSummary> {
+  const companyId = await getCompanyId();
+  const now = Date.now();
+  const currentFrom = new Date(now - WEEK_MS).toISOString();
+  const previousFrom = new Date(now - 2 * WEEK_MS).toISOString();
+
+  const [company, counts, unansweredQuestions, bots] = await Promise.all([
+    getCurrentCompany(),
+    readDashboardCounts(companyId, currentFrom, previousFrom),
+    listUnansweredQuestions(companyId, currentFrom),
     optional(() => listBots(), []),
   ]);
+  const {
+    needsReply,
+    openChats,
+    chatsThisWeek,
+    chatsLastWeek,
+    aiThisWeek,
+    aiLastWeek,
+    workThisWeek,
+    workLastWeek,
+    uncontactedEnquiries,
+    overdueReplies,
+    failedAutomations,
+    csat,
+  } = counts;
 
   // Built in urgency order, then filtered — so the page never has to decide
   // which of four zeroes to hide, and an empty array means "you are clear".

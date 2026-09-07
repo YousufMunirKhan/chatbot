@@ -1,5 +1,6 @@
 'use client';
 
+import Link from 'next/link';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useFormState } from 'react-dom';
 import { CopyButton } from '@/components/copy-button';
@@ -74,16 +75,49 @@ export function ChannelForm({
       </FormField>
 
       {channel === 'whatsapp' ? (
-        <FormField label="Provider" htmlFor="provider">
-          <Select
-            name="provider"
-            value={provider}
-            onChange={(e) => setProvider(e.target.value as typeof provider)}
+        <>
+          <FormField
+            label="Who runs the number"
+            htmlFor="provider"
+            hint={
+              provider === 'twilio'
+                ? 'Twilio resells a WhatsApp number and handles the Meta paperwork for you. Replies go out through Twilio.'
+                : 'Straight from Meta. Cheaper per message, but you have to get the number verified with Meta yourself first.'
+            }
           >
-            <option value="meta_cloud">Meta WhatsApp Cloud API (direct)</option>
-            <option value="twilio">Twilio (no Meta verification)</option>
-          </Select>
-        </FormField>
+            <Select
+              name="provider"
+              value={provider}
+              onChange={(e) => setProvider(e.target.value as typeof provider)}
+            >
+              <option value="meta_cloud">Meta WhatsApp Cloud API (direct)</option>
+              <option value="twilio">Twilio (no Meta verification)</option>
+            </Select>
+          </FormField>
+          {/*
+            The same WhatsApp number and token are asked for again on
+            /company/notifications, into a different table
+            (`company_notification_settings`, not `channel_identities`), and
+            nothing copies one to the other. What you connect here answers
+            CUSTOMERS; that screen sends alerts to YOUR OWN phone
+            (src/lib/notification-delivery.ts:174). A shop that filled in only
+            this form got no staff alerts and nothing anywhere said why.
+          */}
+          <div className="rounded-md border bg-muted/30 p-3 text-xs text-muted-foreground">
+            <p className="font-medium text-foreground">
+              This is the number your customers message
+            </p>
+            <p className="mt-1">
+              Getting a WhatsApp message <em>yourself</em> when a new enquiry or order comes in is a
+              separate setting, on{' '}
+              <Link href="/company/notifications" className="underline">
+                Alerts
+              </Link>
+              , and it asks for these same details again. Connecting the number here does not switch
+              those alerts on.
+            </p>
+          </div>
+        </>
       ) : (
         <input type="hidden" name="provider" value="meta_cloud" />
       )}

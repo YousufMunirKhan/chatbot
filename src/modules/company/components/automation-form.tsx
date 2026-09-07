@@ -41,6 +41,12 @@ export interface AutomationFormValues {
 export function AutomationForm({ rule }: { rule?: AutomationFormValues }) {
   const [state, action] = useFormState(saveAutomationRuleAction, initial);
   const [event, setEvent] = useState<AutomationEvent>(rule?.triggerEvent ?? 'order_paid');
+  const [channel, setChannel] = useState(rule?.channel ?? 'whatsapp');
+  // `customer_created` is the one event whose entity carries no money — its
+  // `AutomationEntity.total` is never set, so `evaluateConditions`
+  // (src/lib/commerce/automation-templates.ts:212) compares a minimum against 0
+  // and the rule never fires again. Offering the field there was a trap.
+  const supportsOrderTotal = event !== 'customer_created';
   const formRef = useRef<HTMLFormElement>(null);
   const messageRef = useRef<HTMLTextAreaElement>(null);
 
@@ -67,7 +73,12 @@ export function AutomationForm({ rule }: { rule?: AutomationFormValues }) {
     <form ref={formRef} action={action} className="space-y-4">
       {rule ? <input type="hidden" name="id" value={rule.id} /> : null}
 
-      <FormField label="Name" htmlFor="name" required>
+      <FormField
+        label="Name"
+        htmlFor="name"
+        required
+        hint="Only you see this — it is how you will find this rule in the list."
+      >
         <Input
           name="name"
           defaultValue={rule?.name}
@@ -92,8 +103,16 @@ export function AutomationForm({ rule }: { rule?: AutomationFormValues }) {
           </Select>
         </FormField>
 
-        <FormField label="Send on" htmlFor="channel">
-          <Select name="channel" defaultValue={rule?.channel ?? 'whatsapp'}>
+        <FormField
+          label="Send it on"
+          htmlFor="channel"
+          hint="Reaches the phone number or email address that came through with the order."
+        >
+          <Select
+            name="channel"
+            value={channel}
+            onChange={(e) => setChannel(e.target.value as typeof channel)}
+          >
             <option value="whatsapp">WhatsApp</option>
             <option value="email">Email</option>
           </Select>
@@ -129,30 +148,49 @@ export function AutomationForm({ rule }: { rule?: AutomationFormValues }) {
               defaultValue={abandonAfter ?? 60}
             />
           </FormField>
-        ) : (
+        ) : supportsOrderTotal ? (
           <FormField
             label="Only above this order total"
             htmlFor="minTotal"
-            hint="Optional. Leave empty to send for every order."
+            hint="Optional. Leave empty to send for every order, whatever it was worth."
           >
             <Input
               name="minTotal"
               type="number"
+              inputMode="decimal"
               min={0}
               step="0.01"
+              placeholder="Any amount"
               defaultValue={minTotal ?? ''}
             />
           </FormField>
-        )}
+        ) : null}
       </div>
 
-      <FormField
-        label="Subject / template name"
-        htmlFor="templateName"
-        hint="Used as the email subject line. Placeholders work here too."
-      >
-        <Input name="templateName" defaultValue={rule?.templateName ?? ''} maxLength={200} />
-      </FormField>
+      {/*
+        `template_name` is only ever read as the email subject line
+        (src/lib/commerce/automations.ts:289). On WhatsApp nothing reads it at
+        all, so on that channel this box did nothing — and its label, "Subject /
+        template name", read as if it might be the name of an approved WhatsApp
+        template, which is a completely different thing. It is now an email-only
+        field that says so, with a hidden input keeping anything already saved.
+      */}
+      {channel === 'email' ? (
+        <FormField
+          label="Email subject line"
+          htmlFor="templateName"
+          hint="What the customer sees in their inbox before opening it. The same {{placeholders}} work here as in the message."
+        >
+          <Input
+            name="templateName"
+            defaultValue={rule?.templateName ?? ''}
+            maxLength={200}
+            placeholder="Your order {{order_number}} is confirmed"
+          />
+        </FormField>
+      ) : (
+        <input type="hidden" name="templateName" value={rule?.templateName ?? ''} />
+      )}
 
       <FormField label="Message" htmlFor="messageTemplate" required>
         <Textarea
@@ -187,7 +225,7 @@ export function AutomationForm({ rule }: { rule?: AutomationFormValues }) {
           defaultChecked={rule ? rule.isActive : true}
           className="h-4 w-4 rounded border-input"
         />
-        Active — send this automation
+        Send this message to customers from now on
       </label>
 
       <FormMessage state={state} okText={rule ? 'Automation updated.' : 'Automation created.'} />

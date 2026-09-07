@@ -182,13 +182,72 @@ export function messagePreview(content: string, max = 120): string {
 }
 
 /**
+ * How many message rows the no-RPC fallback below is allowed to pull back.
+ * Forty per conversation on a page of 25 — generous enough that a conversation
+ * only loses its preview if it is buried under a thousand newer messages from
+ * its page-mates, which is the case the RPC exists to remove entirely.
+ */
+const FALLBACK_MESSAGE_SCAN = 1000;
+
+/**
+ * The newest message of each conversation in the page — ONE round trip.
+ *
+ * This used to be one single-row lookup per conversation, and the comment
+ * explaining why said a single `in(...)` query could not be trusted: one busy
+ * thread would swallow the whole row budget and every other row would come back
+ * blank. That objection was correct, so it is answered rather than ignored.
+ * `inbox_last_messages` (migration 0062) is `distinct on (conversation_id)`, so
+ * Postgres returns exactly one row per conversation and there is no shared
+ * budget for a busy thread to consume. It walks the same
+ * `idx_messages_conversation_created_desc` the 25 lookups were using — once.
+ *
+ * At ~230 ms per round trip on this deployment, that is 25 trips (≈5.7 s) down
+ * to 1.
+ *
+ * If the function is missing (an environment that has not run 0062) the old
+ * objection comes back, so the fallback is the bounded `in(...)` scan with a
+ * budget of {@link FALLBACK_MESSAGE_SCAN} rows: still one round trip, and the
+ * worst case is a missing preview on a row rather than a wrong one.
+ */
+async function lastMessageByConversation(
+  companyId: string,
+  ids: string[],
+): Promise<Map<string, { preview: string; sender: string }>> {
+  const sb = createSupabaseServiceClient();
+  const { data, error } = await sb.rpc('inbox_last_messages', {
+    p_company_id: companyId, // tenant scope lives inside the function too
+    p_conversation_ids: ids,
+  });
+
+  let rows = (data ?? []) as Array<Record<string, unknown>>;
+  if (error) {
+    const { data: scanned } = await sb
+      .from('messages')
+      .select('conversation_id,sender_type,content_text,created_at')
+      .eq('company_id', companyId)
+      .in('conversation_id', ids)
+      .order('created_at', { ascending: false })
+      .limit(FALLBACK_MESSAGE_SCAN);
+    rows = (scanned ?? []) as Array<Record<string, unknown>>;
+  }
+
+  // Newest-first either way, so the first row seen for a conversation wins.
+  const previewById = new Map<string, { preview: string; sender: string }>();
+  for (const row of rows) {
+    const key = row.conversation_id as string;
+    if (!key || previewById.has(key)) continue;
+    previewById.set(key, {
+      preview: messagePreview((row.content_text as string) ?? ''),
+      sender: (row.sender_type as string) ?? 'visitor',
+    });
+  }
+  return previewById;
+}
+
+/**
  * Fills in the three things the row needs but the conversations table does not
  * hold: the last message, the assigned agent's name, and any captured lead.
- *
- * The last message is fetched one conversation at a time. A single `in(...)`
- * query cannot be trusted here — one busy thread would swallow the whole row
- * budget and the other rows would come back blank — and with a page of 25 these
- * are 25 parallel single-row lookups on `idx_messages_conversation_created_desc`.
+ * Three round trips for a page of any size (two when nothing is assigned).
  */
 async function enrichConversations(companyId: string, rows: ConversationRow[]): Promise<ConversationRow[]> {
   if (rows.length === 0) return rows;
@@ -196,20 +255,8 @@ async function enrichConversations(companyId: string, rows: ConversationRow[]): 
   const ids = rows.map((r) => r.id);
   const agentIds = [...new Set(rows.map((r) => r.assignedAgentId).filter((id): id is string => Boolean(id)))];
 
-  const [lastMessages, leadsRes, agentsRes] = await Promise.all([
-    Promise.all(
-      ids.map(async (id) => {
-        const { data } = await sb
-          .from('messages')
-          .select('conversation_id,sender_type,content_text')
-          .eq('company_id', companyId)
-          .eq('conversation_id', id)
-          .order('created_at', { ascending: false })
-          .limit(1)
-          .maybeSingle();
-        return data as Record<string, unknown> | null;
-      }),
-    ),
+  const [previewById, leadsRes, agentsRes] = await Promise.all([
+    lastMessageByConversation(companyId, ids),
     sb
       .from('leads')
       .select('conversation_id,name,email,phone,created_at')
@@ -220,15 +267,6 @@ async function enrichConversations(companyId: string, rows: ConversationRow[]): 
       ? sb.from('users').select('id,full_name,email').in('id', agentIds)
       : Promise.resolve({ data: [] as unknown[] }),
   ]);
-
-  const previewById = new Map<string, { preview: string; sender: string }>();
-  for (const message of lastMessages) {
-    if (!message) continue;
-    previewById.set(message.conversation_id as string, {
-      preview: messagePreview((message.content_text as string) ?? ''),
-      sender: (message.sender_type as string) ?? 'visitor',
-    });
-  }
 
   // Rows arrive newest-first, so the first lead seen for a conversation wins.
   const leadById = new Map<string, { name: string | null; contact: string | null }>();
@@ -375,14 +413,55 @@ function queueQuery(scope: QueueScope, options: { head: boolean }) {
   return query;
 }
 
+const EMPTY_QUEUE_COUNTS: InboxQueueCounts = {
+  waiting: 0,
+  mine: 0,
+  everything: 0,
+  urgent: 0,
+  poor: 0,
+  closed: 0,
+};
+
+/**
+ * The six numbers on the queue rail.
+ *
+ * Was six `head: true, count: exact` requests — six round trips, ~1.4 s here,
+ * to produce six integers over the same set of rows. `inbox_queue_counts`
+ * (migration 0062) counts all six in one pass with the filters copied from
+ * {@link queueQuery}, so the rail still cannot disagree with the list.
+ *
+ * The six counts remain as the fallback for an environment without 0062.
+ */
 export async function getInboxQueueCounts(): Promise<InboxQueueCounts> {
   const [companyId, user] = await Promise.all([getCompanyId(), getSessionUser()]);
   const scope = { companyId, userId: user?.userId ?? null };
+  const sb = createSupabaseServiceClient();
+
+  const { data, error } = await sb.rpc('inbox_queue_counts', {
+    p_company_id: companyId, // tenant scope lives inside the function too
+    p_user_id: scope.userId,
+    p_conversation_ids: null,
+  });
+
+  if (!error) {
+    const row = (Array.isArray(data) ? data[0] : data) as Record<string, unknown> | null;
+    if (row) {
+      return {
+        waiting: Number(row.waiting ?? 0),
+        mine: Number(row.mine ?? 0),
+        everything: Number(row.everything ?? 0),
+        urgent: Number(row.urgent ?? 0),
+        poor: Number(row.poor ?? 0),
+        closed: Number(row.closed ?? 0),
+      };
+    }
+    return EMPTY_QUEUE_COUNTS;
+  }
 
   const entries = await Promise.all(
     INBOX_QUEUES.map(async ({ key }) => {
-      const { count, error } = await queueQuery({ ...scope, queue: key }, { head: true });
-      if (error) throw error;
+      const { count, error: countError } = await queueQuery({ ...scope, queue: key }, { head: true });
+      if (countError) throw countError;
       return [key, count ?? 0] as const;
     }),
   );
@@ -409,18 +488,34 @@ export async function listConversationsPaged(options?: {
   }
 
   const scope: QueueScope = { companyId, queue, userId: user?.userId ?? null, ids };
-  const { count: totalCount, error: countError } = await queueQuery(scope, { head: true });
-  if (countError) throw countError;
+  const requestedPage = Math.max(1, options?.page ?? 1);
+  const rowsFor = (index: number) =>
+    queueQuery(scope, { head: false })
+      .order('last_message_at', { ascending: false })
+      .range((index - 1) * pageSize, index * pageSize - 1);
 
-  const total = totalCount ?? 0;
+  // The count only decides whether the requested page EXISTS, so it does not
+  // have to be waited for before asking for the rows. Fetching both together
+  // turns two sequential round trips into one — and the retry below only runs
+  // for the rare stale deep link that points past the end of the queue.
+  const [countRes, optimisticRes] = await Promise.all([
+    queueQuery(scope, { head: true }),
+    rowsFor(requestedPage),
+  ]);
+  if (countRes.error) throw countRes.error;
+
+  const total = countRes.count ?? 0;
   const pageCount = Math.max(1, Math.ceil(total / pageSize));
-  const page = Math.min(Math.max(1, options?.page ?? 1), pageCount);
-  const from = (page - 1) * pageSize;
+  const page = Math.min(requestedPage, pageCount);
 
-  const { data, error } = await queueQuery(scope, { head: false })
-    .order('last_message_at', { ascending: false })
-    .range(from, from + pageSize - 1);
-  if (error) throw error;
+  let data = optimisticRes.data;
+  if (page !== requestedPage) {
+    const clamped = await rowsFor(page);
+    if (clamped.error) throw clamped.error;
+    data = clamped.data;
+  } else if (optimisticRes.error) {
+    throw optimisticRes.error;
+  }
 
   const rows = await enrichConversations(companyId, (data ?? []).map(mapConversationRow));
   return { rows, total, page, pageCount, pageSize };

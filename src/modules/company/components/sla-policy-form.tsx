@@ -97,11 +97,18 @@ export function SlaPolicyForm({
       </div>
 
       <div className="grid gap-4 sm:grid-cols-2">
+        {/* The other half of the pair described in support-settings-form.tsx.
+            This column (`sla_policies.first_response_minutes`) is the one the
+            clock, the warning and the escalation all read
+            (src/lib/sla/index.ts:60-83). The number on Inbox rules is a
+            different column that only colours a chip in the inbox. Both screens
+            now say which is which, so nobody sets 5 on one and 15 on the other
+            and wonders why the warnings never match the badges. */}
         <FormField
           label="Answer within (minutes)"
           htmlFor="sla-first"
           required
-          hint="The clock starts the moment a chat needs a person, not when the customer first wrote. 15 means someone on your team should have replied within a quarter of an hour."
+          hint="The clock starts the moment a chat needs a person, not when the customer first wrote. 15 means someone on your team should have replied within a quarter of an hour. This is the number that decides the warnings and escalations below — the one on Inbox rules only colours the badge in your inbox and is set separately."
         >
           <Input
             id="sla-first"

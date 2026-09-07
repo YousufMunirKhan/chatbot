@@ -261,9 +261,12 @@ export function WidgetDesignStudio({
             <div className="grid gap-3">
               {/* Not `FormField`: there is no single control here to label, and
                   a `htmlFor` pointing at a button group would be a broken
-                  association rather than a missing one. */}
-              <div className="space-y-1.5">
-                <Label>Theme presets</Label>
+                  association rather than a missing one. `fieldset`/`legend` is
+                  what names a group of controls — a bare `<Label>` with no
+                  `htmlFor` renders a `<label>` that labels nothing at all, so a
+                  screen reader announced six unnamed buttons. */}
+              <fieldset className="space-y-1.5">
+                <legend className="text-sm font-medium leading-none">Theme presets</legend>
                 <div className="flex flex-wrap gap-2">
                   {themePresets.map((preset) => (
                     <button
@@ -280,7 +283,7 @@ export function WidgetDesignStudio({
                     </button>
                   ))}
                 </div>
-              </div>
+              </fieldset>
 
               <div className="grid gap-3 sm:grid-cols-2">
                 <FormField label="Widget title" htmlFor="title">
@@ -368,22 +371,54 @@ export function WidgetDesignStudio({
                   <option value="gradient">Soft gradient</option>
                 </Select>
               </FormField>
-              <FormField label="Alert dot color" htmlFor="launcherDotColor">
-                <Input
-                  name="launcherDotColor"
-                  type="color"
-                  value={launcherDotColor}
-                  onChange={(e) => setLauncherDotColor(e.target.value)}
-                  className="h-10 w-16 p-1"
-                />
-              </FormField>
+              {/*
+                Only the settings that actually do something on the current
+                choice are shown. Everything hidden this way keeps a hidden
+                input carrying its current value, because
+                `updateWidgetDesignAction` rebuilds the whole appearance blob
+                from the submitted form — a field simply removed from the DOM is
+                read as empty and would wipe the saved value on the next save.
+                `widget.js:903` skips the dot entirely when the mode is hidden,
+                so its colour is unreachable then.
+              */}
+              {launcherDotMode === 'hidden' ? (
+                <input type="hidden" name="launcherDotColor" value={launcherDotColor} />
+              ) : (
+                <FormField
+                  label="Alert dot color"
+                  htmlFor="launcherDotColor"
+                  hint="The small dot on the launcher that says there is something to read."
+                >
+                  <Input
+                    name="launcherDotColor"
+                    type="color"
+                    value={launcherDotColor}
+                    onChange={(e) => setLauncherDotColor(e.target.value)}
+                    className="h-10 w-16 p-1"
+                  />
+                </FormField>
+              )}
             </div>
           </section>
 
           <section className="rounded-md border bg-card p-4">
             <h2 className="mb-4 text-base font-semibold">Launcher and avatar</h2>
             <div className="grid gap-3 sm:grid-cols-2">
-              <FormField label="Launcher label" htmlFor="launcherLabel">
+              <FormField
+                label="Launcher label"
+                htmlFor="launcherLabel"
+                // Not hidden on a circle launcher, because `widget.js:899` still
+                // uses this text to work out the initials when the icon is set to
+                // Initials. It just says so instead of leaving the owner to type
+                // into a box that changes nothing they can see.
+                hint={
+                  launcherStyle === 'pill'
+                    ? 'The words next to the icon on the closed chat button.'
+                    : launcherIcon === 'initials'
+                      ? 'A circle launcher shows no words — this text is only used to work out the initials.'
+                      : 'Not shown while the launcher is a circle. Switch Launcher style to Pill to show it.'
+                }
+              >
                 <Input
                   name="launcherLabel"
                   value={launcherLabel}
@@ -439,39 +474,76 @@ export function WidgetDesignStudio({
                   <option value="image">Use avatar image</option>
                 </Select>
               </FormField>
-              <FormField label="Alert dot" htmlFor="launcherDotMode">
+              {/*
+                Three options, two behaviours. `widget.js:903` is the only place
+                that reads this and its only test is `=== 'hidden'`, and there
+                is no unread tracking anywhere in the widget — grep `unread` in
+                public/widget/widget.js and the stored default is the sole hit.
+                So "Show" and "Always show" painted exactly the same dot, and an
+                owner picking between them was choosing nothing.
+
+                Collapsed to the one real choice. The stored value is untouched:
+                a company already on `always` keeps `always` and still reads as
+                "Show it", because that is what `always` does.
+              */}
+              <FormField
+                label="Alert dot"
+                htmlFor="launcherDotMode"
+                hint="The small coloured dot on the closed chat button. It is always on show — the widget does not yet count unread replies, so it cannot appear only when there is one."
+              >
                 <Select
                   name="launcherDotMode"
-                  value={launcherDotMode}
+                  value={launcherDotMode === 'hidden' ? 'hidden' : launcherDotMode}
                   onChange={(e) => setLauncherDotMode(e.target.value)}
                 >
-                  <option value="unread">Show</option>
-                  <option value="always">Always show</option>
-                  <option value="hidden">Hide</option>
+                  {launcherDotMode === 'always' ? (
+                    <option value="always">Show it</option>
+                  ) : (
+                    <option value="unread">Show it</option>
+                  )}
+                  <option value="hidden">Never show it</option>
                 </Select>
               </FormField>
-              <FormField
-                label="Avatar image URL"
-                htmlFor="agentAvatarUrl"
-                hint="Only used when avatar style is image."
-              >
-                <Input
-                  name="agentAvatarUrl"
-                  value={agentAvatarUrl}
-                  onChange={(e) => setAgentAvatarUrl(e.target.value)}
-                />
-              </FormField>
-              <FormField
-                label="Launcher image URL"
-                htmlFor="launcherImageUrl"
-                hint="Only used when launcher icon is custom image."
-              >
-                <Input
-                  name="launcherImageUrl"
-                  value={launcherImageUrl}
-                  onChange={(e) => setLauncherImageUrl(e.target.value)}
-                />
-              </FormField>
+              {/* Both of these were shown whatever the two pickers above said,
+                  each carrying a hint admitting it was probably doing nothing.
+                  `widget.js:442` and `:896` only ever read them on those exact
+                  choices, so they are now shown on those choices and nowhere
+                  else. The hidden input preserves an address already saved, so
+                  switching away and back does not lose it. */}
+              {avatarMode === 'image' ? (
+                <FormField
+                  label="Avatar image address"
+                  htmlFor="agentAvatarUrl"
+                  hint="A direct link to a square image, e.g. https://example.com/team.png. It appears next to every reply."
+                >
+                  <Input
+                    name="agentAvatarUrl"
+                    type="url"
+                    placeholder="https://example.com/team.png"
+                    value={agentAvatarUrl}
+                    onChange={(e) => setAgentAvatarUrl(e.target.value)}
+                  />
+                </FormField>
+              ) : (
+                <input type="hidden" name="agentAvatarUrl" value={agentAvatarUrl} />
+              )}
+              {launcherIcon === 'custom' ? (
+                <FormField
+                  label="Launcher image address"
+                  htmlFor="launcherImageUrl"
+                  hint="A direct link to the image to use instead of an icon, e.g. https://example.com/logo.png."
+                >
+                  <Input
+                    name="launcherImageUrl"
+                    type="url"
+                    placeholder="https://example.com/logo.png"
+                    value={launcherImageUrl}
+                    onChange={(e) => setLauncherImageUrl(e.target.value)}
+                  />
+                </FormField>
+              ) : (
+                <input type="hidden" name="launcherImageUrl" value={launcherImageUrl} />
+              )}
             </div>
           </section>
 
@@ -523,34 +595,56 @@ export function WidgetDesignStudio({
                   <option value="left">Bottom left of the visitor&apos;s screen</option>
                 </Select>
               </FormField>
-              <FormField
-                label="Desktop auto-open delay"
-                htmlFor="autoOpenDelayDesktopSeconds"
-                hint="Seconds before the chat opens on laptops/desktops."
-              >
-                <Input
+              {/* `widget.js:1246` only reads the delay for a device whose
+                  auto-open is switched on, so each delay follows its own switch
+                  rather than sitting there asking for a number that will never
+                  be counted. The switches themselves are just below. */}
+              {autoOpenDesktop ? (
+                <FormField
+                  label="Desktop auto-open delay"
+                  htmlFor="autoOpenDelayDesktopSeconds"
+                  hint="Seconds after the page loads before the chat opens itself on a laptop or desktop. 0 opens it straight away."
+                >
+                  <Input
+                    name="autoOpenDelayDesktopSeconds"
+                    type="number"
+                    inputMode="numeric"
+                    min={0}
+                    max={120}
+                    value={autoOpenDelayDesktopSeconds}
+                    onChange={(e) => setAutoOpenDelayDesktopSeconds(e.target.value)}
+                  />
+                </FormField>
+              ) : (
+                <input
+                  type="hidden"
                   name="autoOpenDelayDesktopSeconds"
-                  type="number"
-                  min={0}
-                  max={120}
                   value={autoOpenDelayDesktopSeconds}
-                  onChange={(e) => setAutoOpenDelayDesktopSeconds(e.target.value)}
                 />
-              </FormField>
-              <FormField
-                label="Mobile auto-open delay"
-                htmlFor="autoOpenDelayMobileSeconds"
-                hint="Seconds before the chat opens on phones (e.g. 60)."
-              >
-                <Input
+              )}
+              {autoOpenMobile ? (
+                <FormField
+                  label="Mobile auto-open delay"
+                  htmlFor="autoOpenDelayMobileSeconds"
+                  hint="Seconds before the chat opens itself on a phone. Longer than the desktop one is usual — 60 gives someone time to read the page first."
+                >
+                  <Input
+                    name="autoOpenDelayMobileSeconds"
+                    type="number"
+                    inputMode="numeric"
+                    min={0}
+                    max={600}
+                    value={autoOpenDelayMobileSeconds}
+                    onChange={(e) => setAutoOpenDelayMobileSeconds(e.target.value)}
+                  />
+                </FormField>
+              ) : (
+                <input
+                  type="hidden"
                   name="autoOpenDelayMobileSeconds"
-                  type="number"
-                  min={0}
-                  max={600}
                   value={autoOpenDelayMobileSeconds}
-                  onChange={(e) => setAutoOpenDelayMobileSeconds(e.target.value)}
                 />
-              </FormField>
+              )}
               {/* These two are pixels and said so nowhere, so "20" could have
                   meant anything. The unit goes in the hint, matching how the
                   two auto-open delays above spell out their seconds. */}
@@ -604,16 +698,24 @@ export function WidgetDesignStudio({
                 />
                 Auto-open on mobile
               </label>
-              <label className="flex items-center gap-2 rounded-md border p-2.5 text-sm">
-                <input
-                  type="checkbox"
-                  name="autoOpenOnce"
-                  checked={autoOpenOnce}
-                  onChange={(e) => setAutoOpenOnce(e.target.checked)}
-                  className="h-4 w-4"
-                />
-                Auto-open once per visitor
-              </label>
+              {/* "Once per visitor" qualifies the two switches above it: with
+                  neither on, nothing ever opens itself and this decides
+                  nothing. Same for the glow sub-option below. Both keep a hidden
+                  input so the setting survives being switched off and on. */}
+              {autoOpenDesktop || autoOpenMobile ? (
+                <label className="flex items-center gap-2 rounded-md border p-2.5 text-sm">
+                  <input
+                    type="checkbox"
+                    name="autoOpenOnce"
+                    checked={autoOpenOnce}
+                    onChange={(e) => setAutoOpenOnce(e.target.checked)}
+                    className="h-4 w-4"
+                  />
+                  Open by itself only the first time someone visits
+                </label>
+              ) : (
+                <input type="hidden" name="autoOpenOnce" value={autoOpenOnce ? 'on' : ''} />
+              )}
               <label className="flex items-center gap-2 rounded-md border p-2.5 text-sm">
                 <input
                   type="checkbox"
@@ -622,18 +724,26 @@ export function WidgetDesignStudio({
                   onChange={(e) => setLauncherGlow(e.target.checked)}
                   className="h-4 w-4"
                 />
-                Glowing launcher
+                Make the chat button glow until it is opened
               </label>
-              <label className="flex items-center gap-2 rounded-md border p-2.5 text-sm">
+              {launcherGlow ? (
+                <label className="flex items-center gap-2 rounded-md border p-2.5 text-sm">
+                  <input
+                    type="checkbox"
+                    name="launcherGlowMobileOnly"
+                    checked={launcherGlowMobileOnly}
+                    onChange={(e) => setLauncherGlowMobileOnly(e.target.checked)}
+                    className="h-4 w-4"
+                  />
+                  Only glow on phones
+                </label>
+              ) : (
                 <input
-                  type="checkbox"
+                  type="hidden"
                   name="launcherGlowMobileOnly"
-                  checked={launcherGlowMobileOnly}
-                  onChange={(e) => setLauncherGlowMobileOnly(e.target.checked)}
-                  className="h-4 w-4"
+                  value={launcherGlowMobileOnly ? 'on' : ''}
                 />
-                Glow on mobile only
-              </label>
+              )}
               <label className="flex items-center gap-2 rounded-md border p-2.5 text-sm">
                 <input
                   type="checkbox"
@@ -660,28 +770,55 @@ export function WidgetDesignStudio({
           <section className="rounded-md border bg-card p-4">
             <h2 className="mb-4 text-base font-semibold">Status labels and footer</h2>
             <div className="grid gap-3">
-              <FormField label="Online label" htmlFor="onlineLabel">
+              <FormField
+                label="Status line under the title"
+                htmlFor="onlineLabel"
+                hint="Shown at the top of the chat the whole time it is open."
+              >
                 <Input
                   name="onlineLabel"
                   value={onlineLabel}
                   onChange={(e) => setOnlineLabel(e.target.value)}
                 />
               </FormField>
-              <FormField label="Offline label" htmlFor="offlineLabel">
+              {/*
+                "Offline label" is stored, sent to the browser and assigned to
+                the widget's state — and then never rendered. `onlineLabel` is
+                the only status text `widget.js` ever writes into the header
+                (`:343` and `:586`); `state.offlineLabel` is set at `:546` and
+                read nowhere. The widget has no offline state to show it in.
+
+                It is left editable rather than deleted, because the value is
+                real and the widget would only need one line to use it — but the
+                label no longer implies it is on screen anywhere, which is what
+                sent owners hunting for the state that would reveal it.
+              */}
+              <FormField
+                label="Out-of-hours status line — not shown yet"
+                htmlFor="offlineLabel"
+                hint="Saved, but the chat does not currently have an out-of-hours state to show it in: the line above is displayed at all times. Nothing you type here reaches a visitor today."
+              >
                 <Input
                   name="offlineLabel"
                   value={offlineLabel}
                   onChange={(e) => setOfflineLabel(e.target.value)}
                 />
               </FormField>
-              <FormField label="Typing label" htmlFor="typingLabel">
+              <FormField
+                label="What it says while a reply is being written"
+                htmlFor="typingLabel"
+              >
                 <Input
                   name="typingLabel"
                   value={typingLabel}
                   onChange={(e) => setTypingLabel(e.target.value)}
                 />
               </FormField>
-              <FormField label="Footer text" htmlFor="footerBranding">
+              <FormField
+                label="Small print at the bottom of the chat"
+                htmlFor="footerBranding"
+                hint="Where the AI disclaimer and your data-protection note go. Visitors see it under the message box."
+              >
                 <Textarea
                   name="footerBranding"
                   rows={2}
@@ -709,30 +846,56 @@ export function WidgetDesignStudio({
                 />
                 Ask for a rating after the conversation
               </label>
-              <label className="flex items-center gap-2 rounded-md border p-2.5 text-sm">
-                <input
-                  type="checkbox"
-                  name="csatCommentEnabled"
-                  checked={csatCommentEnabled}
-                  onChange={(e) => setCsatCommentEnabled(e.target.checked)}
-                  className="h-4 w-4"
-                />
-                Allow an optional comment
-              </label>
-              <FormField label="Rating prompt" htmlFor="csatPrompt">
-                <Input
-                  name="csatPrompt"
-                  value={csatPrompt}
-                  onChange={(e) => setCsatPrompt(e.target.value)}
-                />
-              </FormField>
-              <FormField label="Thank-you message" htmlFor="csatThanks">
-                <Input
-                  name="csatThanks"
-                  value={csatThanks}
-                  onChange={(e) => setCsatThanks(e.target.value)}
-                />
-              </FormField>
+              {/* The comment switch and the two pieces of wording are only ever
+                  reached once ratings are on (`widget.js:1370`), so with the box
+                  above unticked all three were asking the owner to write text no
+                  visitor would read. */}
+              {csatEnabled ? (
+                <>
+                  <label className="flex items-center gap-2 rounded-md border p-2.5 text-sm">
+                    <input
+                      type="checkbox"
+                      name="csatCommentEnabled"
+                      checked={csatCommentEnabled}
+                      onChange={(e) => setCsatCommentEnabled(e.target.checked)}
+                      className="h-4 w-4"
+                    />
+                    Let them add a comment as well as the stars
+                  </label>
+                  <FormField
+                    label="What to ask them"
+                    htmlFor="csatPrompt"
+                    hint="Shown above the five stars when the chat ends."
+                  >
+                    <Input
+                      name="csatPrompt"
+                      value={csatPrompt}
+                      onChange={(e) => setCsatPrompt(e.target.value)}
+                    />
+                  </FormField>
+                  <FormField
+                    label="What to say afterwards"
+                    htmlFor="csatThanks"
+                    hint="Shown in the chat the moment they have rated it."
+                  >
+                    <Input
+                      name="csatThanks"
+                      value={csatThanks}
+                      onChange={(e) => setCsatThanks(e.target.value)}
+                    />
+                  </FormField>
+                </>
+              ) : (
+                <>
+                  <input
+                    type="hidden"
+                    name="csatCommentEnabled"
+                    value={csatCommentEnabled ? 'on' : ''}
+                  />
+                  <input type="hidden" name="csatPrompt" value={csatPrompt} />
+                  <input type="hidden" name="csatThanks" value={csatThanks} />
+                </>
+              )}
             </div>
           </section>
         </div>

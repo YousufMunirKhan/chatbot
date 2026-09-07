@@ -1,6 +1,6 @@
 import { cache } from 'react';
 import { getSessionUser } from '@/lib/auth';
-import { createSupabaseServiceClient } from '@/lib/db/server';
+import { getCompanyCoreRow } from '@/lib/company/company-core';
 import { getDictionary, normalizeLocale, dirFor, type Dictionary, type Locale } from './index';
 
 /**
@@ -35,13 +35,9 @@ export const getCompanyLocaleInfo = cache(async function getCompanyLocaleInfo():
   try {
     const user = await getSessionUser();
     if (!user?.companyId) return fallback;
-    const sb = createSupabaseServiceClient();
-    const { data } = await sb
-      .from('companies')
-      .select('name,default_language')
-      .eq('id', user.companyId)
-      .maybeSingle();
-    const row = data as { name?: string; default_language?: string } | null;
+    // Shared with the layout's company header and with support settings, so the
+    // locale lookup adds no round trip of its own.
+    const row = (await getCompanyCoreRow()) as { name?: string; default_language?: string } | null;
     const locale = normalizeLocale(row?.default_language);
     return {
       companyId: user.companyId,

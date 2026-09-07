@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useFormState } from 'react-dom';
 import { Input } from '@/components/ui/input';
 import { Select } from '@/components/ui/select';
@@ -89,6 +89,12 @@ export function CatalogSettingsForm({
 
 export function SubscriberForm() {
   const [state, action] = useFormState(upsertSubscriberAction, initial);
+  // The one "Contact" box holds a phone number on two of the three channels and
+  // an email address on the third, and it always said `+971500000000` and
+  // "A phone number is required" (whatsapp-actions.ts:294). Someone adding an
+  // email contact was shown a phone number as the example of a correct value.
+  const [channel, setChannel] = useState<'whatsapp' | 'sms' | 'email'>('whatsapp');
+  const isEmail = channel === 'email';
   const ref = useRef<HTMLFormElement>(null);
   useEffect(() => {
     if (state.ok) ref.current?.reset();
@@ -100,15 +106,37 @@ export function SubscriberForm() {
       action={action}
       className="grid gap-4 sm:grid-cols-[1fr_auto_auto] sm:items-end"
     >
-      <FormField label="Contact" htmlFor="contact" required>
-        <Input name="contact" required maxLength={64} placeholder="+971500000000" />
-      </FormField>
-      <FormField label="Channel" htmlFor="channel">
-        <Select name="channel" defaultValue="whatsapp">
+      {/* Channel comes first now: it decides what the box beside it wants. */}
+      <FormField label="Reach them on" htmlFor="channel">
+        <Select
+          name="channel"
+          value={channel}
+          onChange={(e) => setChannel(e.target.value as typeof channel)}
+        >
           <option value="whatsapp">WhatsApp</option>
           <option value="sms">SMS</option>
           <option value="email">Email</option>
         </Select>
+      </FormField>
+      <FormField
+        label={isEmail ? 'Email address' : 'Phone number'}
+        htmlFor="contact"
+        required
+        hint={
+          isEmail
+            ? 'The address they receive your messages at.'
+            : 'With the country code and a leading +, exactly as it is saved on their phone.'
+        }
+      >
+        <Input
+          name="contact"
+          required
+          maxLength={64}
+          type={isEmail ? 'email' : 'tel'}
+          inputMode={isEmail ? 'email' : 'tel'}
+          pattern={isEmail ? undefined : '\\+[0-9 ]{6,}'}
+          placeholder={isEmail ? 'name@example.com' : '+971500000000'}
+        />
       </FormField>
       <div className="space-y-3">
         <label className="flex items-center gap-2 text-sm">
@@ -119,7 +147,7 @@ export function SubscriberForm() {
             defaultChecked
             className="h-4 w-4 rounded border-input"
           />
-          <span>Opted in</span>
+          <span>They agreed to be messaged</span>
         </label>
         <SubmitButton size="sm" pendingLabel="Saving…">
           Add contact

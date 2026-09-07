@@ -50,15 +50,39 @@ export function SupportSettingsForm({ settings }: { settings: SupportSettings })
           top of src/lib/labels.ts. The owner is setting a promise, not signing a
           service-level agreement. The hint carries the unit AND a worked
           example, because this is the field people get wrong by a factor of
-          sixty. */}
+          sixty.
+
+          This number and the "Answer within (minutes)" field on
+          /company/sla are two different stored values that both read as
+          "how fast do we answer": this one is `company_settings.
+          sla_response_minutes` and its ONLY reader is the late chip in the
+          inbox (src/app/(dashboard)/company/inbox/page.tsx:240), while
+          /company/sla writes `sla_policies.first_response_minutes`, which is
+          what the clock, the early warning and the escalation actually use
+          (src/lib/sla/index.ts:60-83). Set 5 here and 15 there and the inbox
+          marks chats late that nothing is warning you about. Neither screen
+          said so. The label now names the narrow thing this one does and
+          sends the owner to the screen that owns the rest. */}
       <FormField
-        label="Answer within"
+        label="Mark a chat late in the inbox after"
         htmlFor="slaResponseMinutes"
-        hint="Minutes. The clock starts the moment a chat needs a person — not when the chat started. Anything still unanswered after this shows as late in your inbox. 15 means a quarter of an hour; 120 means two hours."
+        hint={
+          <>
+            Minutes. The clock starts the moment a chat needs a person — not when the chat started.
+            15 means a quarter of an hour; 120 means two hours. This colours the inbox and nothing
+            else: to be <em>warned</em> before a chat goes late, or to have one escalated to
+            somebody, set that up on{' '}
+            <Link href="/company/sla" className="underline">
+              Reply-time targets
+            </Link>
+            , which keeps its own separate number.
+          </>
+        }
       >
         <Input
           name="slaResponseMinutes"
           type="number"
+          inputMode="numeric"
           min={1}
           max={1440}
           defaultValue={settings.slaResponseMinutes}
@@ -116,15 +140,30 @@ export function SupportSettingsForm({ settings }: { settings: SupportSettings })
       </div>
 
       <div className="space-y-3 rounded-md border p-4">
-        <label className="flex items-center gap-2 text-sm font-medium">
-          <input
-            type="checkbox"
-            name="businessHoursEnabled"
-            defaultChecked={bh.enabled}
-            className="h-4 w-4"
-          />
-          Only count the time while you are open
-        </label>
+        {/* This checkbox was written and never read. `settings-actions.ts:75`
+            saves it into `company_settings.business_hours.value_json.enabled`,
+            `support-settings-data.ts:163` reads it straight back out to fill in
+            this same box, and nothing else in the repository looks at it — the
+            local `isWithinBusinessHours` at support-settings-data.ts:179 has no
+            call sites anywhere. What actually pauses a clock outside opening
+            hours is the per-target "Only count the hours you are open" box on
+            /company/sla (`sla_policies.business_hours_only`, read at
+            src/lib/sla/index.ts:182). So the inert control is gone and the
+            section now says where the real one is. The stored value is carried
+            through unchanged rather than being cleared on the next save. */}
+        <input type="hidden" name="businessHoursEnabled" value={bh.enabled ? 'on' : ''} />
+        <div>
+          <h3 className="text-sm font-medium">The hours you are open</h3>
+          <p className="mt-1 text-xs text-muted-foreground">
+            To stop a reply-time clock running overnight, tick “Only count the hours you are open”
+            on the target itself, over on{' '}
+            <Link href="/company/sla" className="underline">
+              Reply-time targets
+            </Link>
+            . Each target decides that for itself, so a WhatsApp promise can run around the clock
+            while an email one does not.
+          </p>
+        </div>
         {bh.source === 'business_data' ? (
           // Opening hours are owned by My business info so the assistant and the
           // reply-time clock can never disagree about whether you are open.

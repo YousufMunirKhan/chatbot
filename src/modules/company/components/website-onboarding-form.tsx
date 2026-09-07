@@ -16,8 +16,23 @@ export function WebsiteOnboardingForm() {
   return (
     <div className="space-y-4">
       <form action={action} className="grid gap-3 sm:grid-cols-[1fr_auto] sm:items-end">
-        <FormField label="Website URL" htmlFor="websiteUrl">
-          <Input name="websiteUrl" type="text" placeholder="https://example.com" required />
+        {/* `type="text"` on a field whose placeholder is an address: the
+            browser offered no keyboard, no autofill and no format check, so
+            "example.com" and "www.example.com/" both got as far as the server
+            before failing. */}
+        <FormField
+          label="Your website address"
+          htmlFor="websiteUrl"
+          required
+          hint="The home page, with https:// at the front. We read up to 8 pages from this same domain."
+        >
+          <Input
+            name="websiteUrl"
+            type="url"
+            inputMode="url"
+            placeholder="https://example.com"
+            required
+          />
         </FormField>
         <SubmitButton pendingLabel="Importing website...">Import website</SubmitButton>
       </form>

@@ -1,3 +1,4 @@
+import { cache } from 'react';
 import { createSupabaseServiceClient } from '@/lib/db/server';
 import { getCompanyId } from './data';
 
@@ -72,14 +73,32 @@ export interface CatalogCounts {
   menuItems: number;
 }
 
-export async function catalogCounts(): Promise<CatalogCounts> {
+/**
+ * Four integers that used to cost four round trips (~0.9 s here) on the home
+ * page and the setup checklist. `company_catalog_counts` (migration 0062)
+ * returns them together; the four counts remain as the fallback. `cache()`d
+ * because both readers ask for them in the same render.
+ */
+export const catalogCounts = cache(async function catalogCounts(): Promise<CatalogCounts> {
   const companyId = await getCompanyId();
   const sb = createSupabaseServiceClient();
+
+  const { data, error } = await sb.rpc('company_catalog_counts', { p_company_id: companyId });
+  const row = error ? null : ((Array.isArray(data) ? data[0] : data) as Record<string, unknown> | null);
+  if (row) {
+    return {
+      products: Number(row.products ?? 0) || 0,
+      orders: Number(row.orders ?? 0) || 0,
+      customers: Number(row.customers ?? 0) || 0,
+      menuItems: Number(row.menu_items ?? 0) || 0,
+    };
+  }
+
   const countFor = async (table: string): Promise<number> => {
     const { count } = await sb
       .from(table)
       .select('id', { count: 'exact', head: true })
-      .eq('company_id', companyId);
+      .eq('company_id', companyId); // tenant scope
     return count ?? 0;
   };
   const [products, orders, customers, menuItems] = await Promise.all([
@@ -89,7 +108,7 @@ export async function catalogCounts(): Promise<CatalogCounts> {
     countFor('restaurant_menu_items'),
   ]);
   return { products, orders, customers, menuItems };
-}
+});
 
 export interface SyncedProductRow {
   id: string;

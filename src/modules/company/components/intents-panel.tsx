@@ -9,7 +9,6 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { FormField } from '@/components/ui/form-field';
 import { FormMessage } from '@/components/ui/form-message';
 import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
 import { Select } from '@/components/ui/select';
 import { SubmitButton } from '@/components/ui/submit-button';
 import { Textarea } from '@/components/ui/textarea';
@@ -92,7 +91,10 @@ function PhraseChips({
           <span className="text-xs text-muted-foreground">No examples yet.</span>
         ) : null}
       </div>
+      {/* Placeholder-only: this input announced as an unnamed text box, and
+          the placeholder disappears the moment anything is typed. */}
       <Input
+        aria-label="Add an example phrase"
         value={draft}
         onChange={(e) => setDraft(e.target.value)}
         onKeyDown={(e) => {
@@ -198,13 +200,17 @@ export function IntentEditor({ intents }: { intents: IntentRow[] }) {
           />
         </FormField>
 
-        <div className="space-y-1.5">
-          <Label>Example phrases</Label>
+        {/* A bare `<Label>` with no `htmlFor` renders a `<label>` bound to
+            nothing, so the chip list and its input announced as unnamed
+            controls. `fieldset`/`legend` is what names a group. */}
+        <fieldset className="space-y-1.5">
+          <legend className="text-sm font-medium leading-none">Example phrases</legend>
           <PhraseChips phrases={phrases} onChange={setPhrases} />
           <p className="text-xs text-muted-foreground">
-            {phrases.length} example(s). At least two are needed.
+            Different ways a customer might say the same thing. {phrases.length} added so far — at
+            least two are needed before this can be saved.
           </p>
-        </div>
+        </fieldset>
 
         {error ? (
           <p role="alert" className="text-sm font-medium text-danger-fg">
@@ -369,8 +375,11 @@ export function IntentTester() {
       </CardHeader>
       <CardContent className="space-y-3">
         <form action={action} className="flex flex-col gap-2 sm:flex-row">
+          {/* Placeholder-only. It reads as a label until the moment anyone
+              types, and a screen reader never got one at all. */}
           <Input
             name="phrase"
+            aria-label="A phrase to test"
             placeholder="e.g. hasn’t my parcel arrived yet?"
             className="flex-1"
           />

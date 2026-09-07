@@ -1,3 +1,5 @@
+import { cache } from 'react';
+import { getCompanyCoreRow } from '@/lib/company/company-core';
 import { createSupabaseServiceClient } from '@/lib/db/server';
 import { getCompanyId } from './data';
 
@@ -90,8 +92,20 @@ function summarizeSchedule(schedule: BusinessHoursDay[]): { days: number[]; star
   };
 }
 
-export async function getSupportSettingsFor(companyId: string): Promise<SupportSettings> {
+/**
+ * `options.timezone` lets a caller that has ALREADY read the company row hand
+ * the timezone over instead of making this reader fetch the same row again.
+ * Every dashboard page reads `companies` for the header and the locale, so on
+ * those pages the third read was pure waste — and a round trip here costs
+ * ~230 ms. Callers that only know a company id (the SLA sweep, webhooks) pass
+ * nothing and get the read.
+ */
+export async function getSupportSettingsFor(
+  companyId: string,
+  options?: { timezone?: string | null },
+): Promise<SupportSettings> {
   const sb = createSupabaseServiceClient();
+  const preloadedTimezone = options && 'timezone' in options;
   const [{ data }, { data: hourRows }, { data: company }] = await Promise.all([
     sb
       .from('company_settings')
@@ -111,7 +125,9 @@ export async function getSupportSettingsFor(companyId: string): Promise<SupportS
       .eq('company_id', companyId)
       .is('location_id', null)
       .order('day_of_week', { ascending: true }),
-    sb.from('companies').select('timezone').eq('id', companyId).maybeSingle(),
+    preloadedTimezone
+      ? Promise.resolve({ data: { timezone: options?.timezone ?? null } })
+      : sb.from('companies').select('timezone').eq('id', companyId).maybeSingle(),
   ]);
 
   const map = new Map<string, unknown>();
@@ -171,9 +187,12 @@ export async function getSupportSettingsFor(companyId: string): Promise<SupportS
   };
 }
 
-export async function getSupportSettings(): Promise<SupportSettings> {
-  return getSupportSettingsFor(await getCompanyId());
-}
+export const getSupportSettings = cache(async function getSupportSettings(): Promise<SupportSettings> {
+  const [companyId, company] = await Promise.all([getCompanyId(), getCompanyCoreRow()]);
+  return getSupportSettingsFor(companyId, {
+    timezone: (company?.timezone as string | null | undefined) ?? null,
+  });
+});
 
 /** Is `now` inside the configured business hours (in the configured timezone)? */
 export function isWithinBusinessHours(hours: BusinessHours, now: Date = new Date()): boolean {

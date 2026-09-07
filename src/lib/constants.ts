@@ -134,6 +134,26 @@ export function labelFor(
   return map[value] ?? humanizeToken(value);
 }
 
+/**
+ * Show an IANA timezone id as a place name.
+ *
+ * `Europe/London` → "London (Europe/London)". The id is stored, submitted and
+ * compared verbatim — only the text a person reads changes. The id stays in the
+ * text because an owner who was handed a specific one by their calendar admin
+ * has to be able to find it in a list of several hundred.
+ *
+ * This existed twice, character for character, in `profile-form.tsx` and
+ * `connect-integration-form.tsx`, each with a comment saying the duplication was
+ * deliberate because there was nowhere shared to put it. There is now: this file
+ * is not a `'use client'` module, so a server component may import from it, and
+ * `TIMEZONE_OPTIONS` (`src/modules/company/form-options.ts`) can go on holding
+ * only the list.
+ */
+export function timezoneLabel(id: string): string {
+  const place = id.split('/').pop()?.replace(/_/g, ' ') ?? id;
+  return `${place} (${id})`;
+}
+
 /** Order lifecycle, as the shop owner would say it out loud. */
 export const ORDER_STATUS_LABELS: Record<string, string> = {
   pending: 'Not started',

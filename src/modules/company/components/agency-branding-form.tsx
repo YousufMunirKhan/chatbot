@@ -71,16 +71,26 @@ export function AgencyBrandingForm({ branding }: { branding: AgencyBranding }) {
           <Input
             id="logoUrl"
             name="logoUrl"
+            type="url"
+            inputMode="url"
+            placeholder="https://example.com/logo.svg"
             maxLength={500}
             value={logoUrl}
             onChange={(e) => setLogoUrl(e.target.value)}
           />
         </FormField>
 
-        <FormField label="Login background URL" htmlFor="loginBackground">
+        <FormField
+          label="Login page background"
+          htmlFor="loginBackground"
+          hint="A wide image shown behind the sign-in box. Leave it empty for the plain background."
+        >
           <Input
             id="loginBackground"
             name="loginBackground"
+            type="url"
+            inputMode="url"
+            placeholder="https://example.com/background.jpg"
             maxLength={500}
             defaultValue={branding.loginBackground ?? ''}
           />

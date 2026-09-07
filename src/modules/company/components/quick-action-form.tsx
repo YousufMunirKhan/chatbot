@@ -393,13 +393,15 @@ export function QuickActionForm({
                   ))}
                 </Select>
               </FormField>
-              {/* The serving side does not read this yet — it is stored as a
-                  preference, so the hint says what it is based on rather than
-                  promising the button will disappear out of hours. */}
+              {/* This used to be inert and the hint was worded to avoid
+                  promising behaviour that did not happen. It is now honoured:
+                  `src/lib/quick-actions.ts:205` filters every button through
+                  `matchesBusinessHours` against `isOpenNow`, so the hint can
+                  say plainly what the choice does. */}
               <FormField
-                label="Business hours"
+                label="When to show it"
                 htmlFor={fid('businessHoursMode')}
-                hint="Based on the opening hours you saved in My business info. If you have not filled those in there are no hours to check, so the button simply shows at any time."
+                hint="Checked against the opening hours saved in My business info. With no hours saved there is nothing to check, so the button shows at any time whichever option you pick."
               >
                 <Select
                   id={fid('businessHoursMode')}
@@ -492,6 +494,8 @@ export function QuickActionForm({
                   <Input
                     id={fid('phone')}
                     name="phone"
+                    type="tel"
+                    inputMode="tel"
                     value={phone}
                     onChange={(event) => setPhone(event.target.value)}
                     placeholder="+447432391811"

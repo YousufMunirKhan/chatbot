@@ -1,3 +1,4 @@
+import { cache } from 'react';
 import { createSupabaseServiceClient } from '@/lib/db/server';
 import { getCompanyId } from './data';
 
@@ -127,10 +128,46 @@ const EMPTY_PROFILE: BusinessProfileMemory = {
   appointmentRules: null,
 };
 
-export async function getBusinessMemory(): Promise<BusinessMemoryData> {
-  const companyId = await getCompanyId();
-  const sb = createSupabaseServiceClient();
+interface BusinessMemoryRows {
+  profileRes: { data: unknown };
+  locationsRes: { data: unknown[] | null };
+  hoursRes: { data: unknown[] | null };
+  policiesRes: { data: unknown[] | null };
+  servicesRes: { data: unknown[] | null };
+  faqsRes: { data: unknown[] | null };
+}
 
+/**
+ * Six tables, one round trip.
+ *
+ * These are read together and only together — the assistant's memory is not
+ * useful in pieces — but they were six separate requests, which on this
+ * deployment is ~1.4 s of the home page and the Business Data page for six
+ * small reads. `company_business_memory` (migration 0062) returns all six as
+ * one jsonb payload, built with `to_jsonb()` so a new column keeps flowing
+ * through without anyone having to remember this function exists.
+ *
+ * Returns null when the function is missing, so the caller falls back.
+ */
+async function readBusinessMemoryBundle(companyId: string): Promise<BusinessMemoryRows | null> {
+  const sb = createSupabaseServiceClient();
+  const { data, error } = await sb.rpc('company_business_memory', { p_company_id: companyId });
+  if (error || !data || typeof data !== 'object') return null;
+  const bundle = data as Record<string, unknown>;
+  const list = (key: string): unknown[] => (Array.isArray(bundle[key]) ? (bundle[key] as unknown[]) : []);
+  return {
+    profileRes: { data: (bundle.profile as unknown) ?? null },
+    locationsRes: { data: list('locations') },
+    hoursRes: { data: list('hours') },
+    policiesRes: { data: list('policies') },
+    servicesRes: { data: list('services') },
+    faqsRes: { data: list('faqs') },
+  };
+}
+
+/** The original six requests, kept as the fallback for a database without 0062. */
+async function readBusinessMemorySeparately(companyId: string): Promise<BusinessMemoryRows> {
+  const sb = createSupabaseServiceClient();
   const [profileRes, locationsRes, hoursRes, policiesRes, servicesRes, faqsRes] = await Promise.all([
     sb.from('company_business_profiles').select('*').eq('company_id', companyId).maybeSingle(),
     sb.from('company_locations').select('*').eq('company_id', companyId).order('is_primary', { ascending: false }),
@@ -159,6 +196,13 @@ export async function getBusinessMemory(): Promise<BusinessMemoryData> {
       .eq('is_active', true)
       .order('created_at', { ascending: false }),
   ]);
+  return { profileRes, locationsRes, hoursRes, policiesRes, servicesRes, faqsRes };
+}
+
+export const getBusinessMemory = cache(async function getBusinessMemory(): Promise<BusinessMemoryData> {
+  const companyId = await getCompanyId();
+  const { profileRes, locationsRes, hoursRes, policiesRes, servicesRes, faqsRes } =
+    (await readBusinessMemoryBundle(companyId)) ?? (await readBusinessMemorySeparately(companyId));
 
   const p = rec(profileRes.data);
   const profile: BusinessProfileMemory = profileRes.data
@@ -286,4 +330,4 @@ export async function getBusinessMemory(): Promise<BusinessMemoryData> {
       items,
     },
   };
-}
+});

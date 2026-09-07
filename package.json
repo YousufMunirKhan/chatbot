@@ -37,12 +37,13 @@
     "test:all": "node scripts/test-auth.mjs && node scripts/test-onboarding.mjs && node scripts/test-company.mjs && node scripts/test-prompt.mjs && node scripts/test-business.mjs",
     "test:sla": "node scripts/test-sla.mjs",
     "test:push-embed": "node scripts/test-push-embed.mjs",
-    "test:units": "node scripts/test-flows.mjs && node scripts/test-sla.mjs && node scripts/test-insights.mjs && node scripts/test-reports.mjs && node scripts/test-channels.mjs && node scripts/test-whatsapp-suite.mjs && node scripts/test-automations.mjs && node scripts/test-public-api.mjs && node scripts/test-flow-builder.mjs && node scripts/test-platform-features.mjs",
+    "test:units": "node scripts/test-flows.mjs && node scripts/test-sla.mjs && node scripts/test-insights.mjs && node scripts/test-reports.mjs && node scripts/test-channels.mjs && node scripts/test-whatsapp-suite.mjs && node scripts/test-automations.mjs && node scripts/test-public-api.mjs && node scripts/test-flow-builder.mjs && node scripts/test-platform-features.mjs && node scripts/test-query-counts.mjs",
     "test:reports": "node scripts/test-reports.mjs",
     "test:flows-db": "node scripts/test-flows-db.mjs",
     "test:sla-db": "node scripts/test-sla-db.mjs",
     "test:db": "node scripts/test-flows-db.mjs && node scripts/test-sla-db.mjs",
     "test:insights": "node scripts/test-insights.mjs",
+    "test:query-counts": "node scripts/test-query-counts.mjs",
     "leads:dedupe": "node scripts/dedupe-leads.mjs"
   },
   "dependencies": {

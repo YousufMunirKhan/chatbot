@@ -368,9 +368,15 @@ export function HelpdeskInternalChat({
           </div>
           <div className="flex items-center gap-2">
             <Route className="h-4 w-4 text-muted-foreground" />
+            {/* An icon is not a label. This box had neither one nor a
+                placeholder, so it announced as an unnamed text field and gave a
+                sighted user nothing either. */}
             <Input
+              aria-label="Which screen you are pretending to be on"
+              title="Which screen you are pretending to be on"
               value={route}
               onChange={(event) => setRoute(event.target.value)}
+              placeholder="/orders"
               className="h-9 w-48"
             />
           </div>
@@ -493,7 +499,11 @@ export function HelpdeskInternalChat({
               void ask(text);
             }}
           >
+            {/* Placeholder-as-label. A visible label would break the composer
+                mock, so this is the one place `aria-label` is the right answer
+                rather than the lazy one. */}
             <Input
+              aria-label="Ask the staff help desk"
               value={text}
               onChange={(event) => setText(event.target.value)}
               placeholder="Ask staff helpdesk..."
@@ -572,8 +582,16 @@ export function HelpdeskInternalChat({
               <p className="mt-1 text-xs text-muted-foreground">{activeAction.description}</p>
               <div className="mt-3 space-y-2">
                 {[...activeAction.requiredFields, ...activeAction.optionalFields].map((field) => (
+                  /* The field name lived only in the placeholder, so it
+                     vanished the moment anyone typed and was never announced;
+                     the required marker was a bare "*" with no `required`
+                     behind it. Both are now real attributes. */
                   <Input
                     key={field}
+                    aria-label={`${title(field)}${
+                      activeAction.requiredFields.includes(field) ? ' (required)' : ' (optional)'
+                    }`}
+                    required={activeAction.requiredFields.includes(field)}
                     placeholder={`${title(field)}${activeAction.requiredFields.includes(field) ? ' *' : ''}`}
                     value={formValues[field] ?? ''}
                     onChange={(event) =>

@@ -25,13 +25,28 @@ export function SubAccountForm() {
         <Input id="name" name="name" required maxLength={120} />
       </FormField>
       <FormField label="Website" htmlFor="website">
-        <Input id="website" name="website" maxLength={200} placeholder="https://" />
+        <Input
+          id="website"
+          name="website"
+          type="url"
+          inputMode="url"
+          maxLength={200}
+          placeholder="https://example.com"
+        />
       </FormField>
-      <FormField label="Language" htmlFor="defaultLanguage">
+      {/* Same column as the company profile's `default_language`, so the same
+          wording: "Detect automatically" was a third phrasing of an option that
+          resolves to English (src/lib/i18n/index.ts:38), and one of the three
+          options was written in Arabic while the other two were in English. */}
+      <FormField
+        label="Dashboard language"
+        htmlFor="defaultLanguage"
+        hint="What language this client sees their own dashboard in. They can change it later."
+      >
         <Select id="defaultLanguage" name="defaultLanguage" defaultValue="auto">
-          <option value="auto">Detect automatically</option>
+          <option value="auto">English (the default)</option>
           <option value="en">English</option>
-          <option value="ar">العربية</option>
+          <option value="ar">Arabic — right-to-left</option>
         </Select>
       </FormField>
       <FormField label="Plan" htmlFor="plan">

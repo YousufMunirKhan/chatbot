@@ -42,7 +42,22 @@ export function EvalForm({ bots }: { bots: { id: string; name: string }[] }) {
             <option value="ar">Arabic</option>
           </Select>
         </FormField>
-        <FormField label="Expected source" htmlFor="expectedSource">
+        {/*
+          `expected_source` is written (eval-actions.ts:34) and selected by the
+          runner (src/lib/ai/eval.ts:72) — and then never used. The per-question
+          logic at eval.ts:110-125 reads `question`, `language`,
+          `must_not_answer_if_missing` and `bot_id`, and nothing compares what
+          was retrieved against what was expected. A pass/fail here is decided
+          purely by whether anything at all was found.
+
+          Left editable so nobody's notes are thrown away, but the label now
+          says it is a note to yourself rather than something being checked.
+        */}
+        <FormField
+          label="Where the answer should come from — your note"
+          htmlFor="expectedSource"
+          hint="A reminder for you when you read the results. The test does not check this: it only checks whether the assistant found anything to answer from."
+        >
           <Input name="expectedSource" placeholder="e.g. FAQ document" />
         </FormField>
       </div>

@@ -28,6 +28,92 @@ export interface SessionUser {
   } | null;
 }
 
+interface SecurityRow {
+  two_factor_enabled?: boolean | null;
+  two_factor_verified_at?: string | null;
+}
+
+interface MembershipRow {
+  company_id?: string | null;
+  role?: string | null;
+  created_at?: string | null;
+}
+
+interface ProfileBundle {
+  isSuperAdmin: boolean;
+  security: SecurityRow | null;
+  membership: MembershipRow | null;
+}
+
+const first = <T>(value: T | T[] | null | undefined): T | null =>
+  Array.isArray(value) ? (value[0] ?? null) : (value ?? null);
+
+/** Oldest membership wins — the same row `order(created_at).limit(1)` returned. */
+function earliestMembership(rows: MembershipRow | MembershipRow[] | null | undefined): MembershipRow | null {
+  const list = Array.isArray(rows) ? rows : rows ? [rows] : [];
+  if (list.length === 0) return null;
+  return [...list].sort((a, b) => (a.created_at ?? '').localeCompare(b.created_at ?? ''))[0] ?? null;
+}
+
+/**
+ * The platform flag, the 2FA state and the company membership, in ONE request.
+ *
+ * These are three single-row reads keyed by the same user id, and they ran one
+ * after another on every page load in the product — three sequential round
+ * trips at ~230 ms each on this deployment, before any page had asked for its
+ * own data. `user_security_settings.user_id` and `company_users.user_id` are
+ * both foreign keys to `users.id`, so PostgREST can embed them and return the
+ * lot in a single response.
+ *
+ * If the embed fails for any reason — a stale PostgREST schema cache is the
+ * realistic one — the three original queries run instead. Authentication is the
+ * one place in the app that must not have a single point of failure, so this
+ * degrades to slow rather than to signed out.
+ */
+async function loadProfileBundle(
+  supabase: ReturnType<typeof createSupabaseServerClient>,
+  userId: string,
+): Promise<ProfileBundle> {
+  const { data, error } = await supabase
+    .from('users')
+    .select(
+      'is_super_admin, user_security_settings(two_factor_enabled,two_factor_verified_at), company_users(company_id,role,created_at)',
+    )
+    .eq('id', userId)
+    .maybeSingle();
+
+  if (!error) {
+    const row = (data ?? {}) as Record<string, unknown>;
+    return {
+      isSuperAdmin: Boolean(row.is_super_admin),
+      security: first(row.user_security_settings as SecurityRow | SecurityRow[] | null),
+      membership: earliestMembership(row.company_users as MembershipRow | MembershipRow[] | null),
+    };
+  }
+
+  const [profileRes, securityRes, membershipRes] = await Promise.all([
+    supabase.from('users').select('is_super_admin').eq('id', userId).maybeSingle(),
+    supabase
+      .from('user_security_settings')
+      .select('two_factor_enabled,two_factor_verified_at')
+      .eq('user_id', userId)
+      .maybeSingle(),
+    supabase
+      .from('company_users')
+      .select('company_id, role')
+      .eq('user_id', userId)
+      .order('created_at', { ascending: true })
+      .limit(1)
+      .maybeSingle(),
+  ]);
+
+  return {
+    isSuperAdmin: Boolean((profileRes.data as { is_super_admin?: boolean } | null)?.is_super_admin),
+    security: (securityRes.data as SecurityRow | null) ?? null,
+    membership: (membershipRes.data as MembershipRow | null) ?? null,
+  };
+}
+
 /** Returns the current user (or null if not signed in). Read-only; never redirects. */
 export const getSessionUser = cache(async function getSessionUser(
   options?: { skipTwoFactorCheck?: boolean },
@@ -38,31 +124,13 @@ export const getSessionUser = cache(async function getSessionUser(
   } = await supabase.auth.getUser();
   if (!user) return null;
 
-  const { data: profile } = await supabase
-    .from('users')
-    .select('is_super_admin')
-    .eq('id', user.id)
-    .maybeSingle();
+  const { isSuperAdmin, security, membership } = await loadProfileBundle(supabase, user.id);
 
-  const isSuperAdmin = profile?.is_super_admin ?? false;
-  const { data: security } = await supabase
-    .from('user_security_settings')
-    .select('two_factor_enabled,two_factor_verified_at')
-    .eq('user_id', user.id)
-    .maybeSingle();
   if (!options?.skipTwoFactorCheck && security?.two_factor_enabled) {
     const verifiedAt = security.two_factor_verified_at ? new Date(security.two_factor_verified_at).getTime() : 0;
     const maxAgeMs = 12 * 60 * 60 * 1000;
     if (!verifiedAt || Date.now() - verifiedAt > maxAgeMs) redirect('/login/2fa');
   }
-
-  const { data: membership } = await supabase
-    .from('company_users')
-    .select('company_id, role')
-    .eq('user_id', user.id)
-    .order('created_at', { ascending: true })
-    .limit(1)
-    .maybeSingle();
 
   let impersonation: SessionUser['impersonation'] = null;
   if (isSuperAdmin) {

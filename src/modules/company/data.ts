@@ -1,6 +1,7 @@
 import { redirect } from 'next/navigation';
 import { cache } from 'react';
 import { getSessionUser, homePathFor } from '@/lib/auth';
+import { getCompanyCoreRow } from '@/lib/company/company-core';
 import { createSupabaseServiceClient } from '@/lib/db/server';
 import { NotFoundError } from '@/lib/errors';
 
@@ -45,17 +46,17 @@ export interface CompanyProfile {
   subscription: SubscriptionInfo;
 }
 
-export async function getCurrentCompany(): Promise<CompanyProfile> {
-  const companyId = await getCompanyId();
-  const sb = createSupabaseServiceClient();
-  const { data, error } = await sb
-    .from('companies')
-    .select('*, subscriptions(*)')
-    .eq('id', companyId)
-    .maybeSingle();
-  if (error) throw error;
+/**
+ * `cache()`d because the home page reads it twice (the summary and the setup
+ * checklist both want the company), and the layout's translation lookup wants
+ * the same row a third time. One request, one read — see
+ * {@link getCompanyCoreRow}.
+ */
+export const getCurrentCompany = cache(async function getCurrentCompany(): Promise<CompanyProfile> {
+  await getCompanyId(); // redirects a user with no company, as before
+  const data = await getCompanyCoreRow();
   if (!data) throw new NotFoundError('Company not found.');
-  const c = data as Record<string, unknown>;
+  const c = data;
   const s = rec(c.subscriptions);
   return {
     id: c.id as string,
@@ -75,7 +76,7 @@ export async function getCurrentCompany(): Promise<CompanyProfile> {
       integrationLimit: (s.integration_limit as number) ?? null,
     },
   };
-}
+});
 
 export interface BotRow {
   id: string;
@@ -116,7 +117,11 @@ function mapBot(b: Record<string, unknown>): BotRow {
   };
 }
 
-export async function listBots(): Promise<BotRow[]> {
+/**
+ * `cache()`d: the home page asks for the bot list from the dashboard summary,
+ * the setup checklist and the knowledge reader within one render.
+ */
+export const listBots = cache(async function listBots(): Promise<BotRow[]> {
   const companyId = await getCompanyId();
   const sb = createSupabaseServiceClient();
   const { data, error } = await sb
@@ -126,7 +131,7 @@ export async function listBots(): Promise<BotRow[]> {
     .order('created_at', { ascending: false });
   if (error) throw error;
   return (data ?? []).map((b) => mapBot(b as Record<string, unknown>));
-}
+});
 
 export async function getBot(botId: string): Promise<BotRow | null> {
   const companyId = await getCompanyId();
@@ -160,7 +165,8 @@ export interface AgentInviteRow {
   lastSentAt: string | null;
 }
 
-export async function listMembers(): Promise<MemberRow[]> {
+/** `cache()`d: the setup checklist and the agents/routing readers share it. */
+export const listMembers = cache(async function listMembers(): Promise<MemberRow[]> {
   const companyId = await getCompanyId();
   const sb = createSupabaseServiceClient();
   const { data, error } = await sb
@@ -193,7 +199,7 @@ export async function listMembers(): Promise<MemberRow[]> {
     });
   }
   return rows;
-}
+});
 
 export async function listAgentInvites(): Promise<AgentInviteRow[]> {
   const companyId = await getCompanyId();

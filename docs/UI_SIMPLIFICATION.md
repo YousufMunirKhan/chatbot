@@ -666,3 +666,187 @@ Both now use `FormMessage`.
   `PageHeader` would make the next width decision one edit rather than
   forty-five — `PageHeader`'s own comment records that the identical duplication
   problem was already solved this way once.
+
+---
+
+# Part three — the field-by-field audit
+
+Parts one and two renamed things. This pass asked a different question of every
+field on every company screen: **does this control do what it says, and does it
+apply at all right now?**
+
+Six defect classes, in the order they cost an owner money:
+
+1. A picker chooses a mode and every mode's fields render anyway.
+2. The same underlying value is settable in two places.
+3. A setting is saved and nothing ever reads it.
+4. A field accepts the wrong thing, or its placeholder shows a wrong example.
+5. A label does not say what happens.
+6. A control is not programmatically labelled.
+
+The archetype for class 1 was already fixed before this pass —
+`notification-settings-form.tsx` rendered Meta's credential block and Twilio's
+at the same time, so a company on Twilio was asked for Meta's phone-number-id
+and one account put an email address in it. This pass swept for the rest.
+
+## 12. The pattern for hiding a field that does not apply
+
+Almost every action in this codebase **rebuilds its whole settings object from
+the submitted form**. `updateWidgetDesignAction` is the clearest case: a field
+absent from the FormData becomes `undefined`, `textOrNull(undefined)` returns
+`null`, and the stored value is gone. A checkbox that is not rendered is
+indistinguishable from one that was unticked.
+
+So *removing* an inapplicable field from the DOM silently deletes data the
+owner had saved. Everything below hides the visible control and leaves a hidden
+input carrying the current value:
+
+```tsx
+{avatarMode === 'image' ? (
+  <FormField label="Avatar image address" htmlFor="agentAvatarUrl" hint="...">
+    <Input name="agentAvatarUrl" type="url" value={agentAvatarUrl} />
+  </FormField>
+) : (
+  <input type="hidden" name="agentAvatarUrl" value={agentAvatarUrl} />
+)}
+```
+
+Switch away and back and the address is still there. For a checkbox the hidden
+value is `checked ? 'on' : ''`, because every one of these schemas parses with
+`z.preprocess((x) => x === 'on', z.boolean())`.
+
+## 13. Findings
+
+| Screen | Field | What was wrong | What was done |
+| --- | --- | --- | --- |
+| **Website chat** | Avatar image address | Rendered whatever the avatar style was, with a hint admitting *"only used when avatar style is image"*. `widget.js:442` reads it on that one value. | Shown only when the style is Image. Gained `type="url"` and a real example. |
+| Website chat | Launcher image address | Same shape — hint said *"only used when launcher icon is custom image"* (`widget.js:896`). | Shown only when the icon is Custom image. `type="url"`. |
+| Website chat | Alert dot colour | Offered while the dot was set to Hidden, where `widget.js:903` skips the dot entirely. | Hidden when the dot mode is Never. |
+| Website chat | **Alert dot mode** | Three options, **two behaviours**. The only branch anywhere is `=== 'hidden'`, and the widget has no unread tracking at all, so "Show" and "Always show" painted an identical dot. | Collapsed to *Show it* / *Never show it*. The stored value is untouched — a company on `always` keeps `always` and reads as "Show it", which is what it does. |
+| Website chat | Desktop / mobile auto-open delay | Both asked for a number regardless of whether that device's auto-open was on; `widget.js:1246` only reads the delay for a device whose switch is on. | Each delay follows its own switch. |
+| Website chat | Auto-open once per visitor | Qualified two switches that could both be off. | Shown only when at least one auto-open is on. |
+| Website chat | Glow on mobile only | Sub-option of a switch that could be off. | Shown only when the glow is on. |
+| Website chat | CSAT comment / prompt / thank-you | All three rendered with ratings switched off, so an owner wrote wording no visitor would ever see (`widget.js:1370`). | Shown only when ratings are on. |
+| Website chat | **Offline label** | **Dead.** Stored, serialised, assigned to `state.offlineLabel` at `widget.js:546` — and never rendered. `onlineLabel` is the only status text the header ever gets (`:343`, `:586`). | Relabelled *"Out-of-hours status line — not shown yet"*, hint says plainly that nothing typed there reaches a visitor. Left editable: the column is real and one line of widget work would use it. |
+| Website chat | Launcher label | Invisible on a circle launcher (CSS at `widget.js:174`), but still used to derive the initials when the icon is Initials — so not simply inapplicable. | Kept, with a hint that changes per launcher style and says which of the three situations you are in. |
+| Website chat | Theme presets | `<Label>` with no `htmlFor` over six buttons — a `<label>` bound to nothing. | `fieldset` + `legend`. |
+| Website chat | Status labels, footer | Labelled by their variable names — "Online label", "Typing label", "Footer text". | Named by where they appear: *Status line under the title*, *What it says while a reply is being written*, *Small print at the bottom of the chat*. |
+| **Chat invites** | Open the chat automatically | **Dead.** `scheduleProactiveCampaign` (`widget.js:1260-1280`) reads `message`, `matchUrl` and `delaySeconds` off the rule and then calls `openWidget(true)` **unconditionally**. Unticking it produced an invite that opened the chat anyway. | Control removed — opening the chat *is* what a chat invite is. Hidden input keeps `auto_open` true; one sentence explains the difference from Chat buttons. |
+| Chat invites | Every other field | "Campaign name", "Show on pages containing (optional)", "Delay (seconds)" — no hints, and `matchUrl` reads as a URL but is a substring match. | Renamed and hinted; the match field says explicitly it is a fragment, not a link. |
+| **Staff help desk / chat rules** | Auto-open when allowed | **Dead.** `canShowHelpdeskChat` (`chat-settings.ts:62-72`) reads `enabled`, `showMode === 'hidden'`, `blockedRoutes`, `allowedRoutes`. Nothing anywhere reads `auto_open`. | Removed; value carried in a hidden input. |
+| Staff help desk / chat rules | Position (Right / Left) | **Dead.** Same evidence. Not the widget's `position`, which is a different column and *is* used. | Removed; value carried. |
+| Staff help desk / chat rules | Show mode | Only `hidden` is ever branched on, so "Floating bubble" and "Embedded panel" were behaviourally identical, and picking Hidden duplicated the Enabled checkbox beside it. | Folded into the on/off switch, which now says what switching off does. |
+| **Automatic messages** | Subject / template name | Read **only** as the email subject (`automations.ts:289`). On WhatsApp nothing reads it, and the label implied it might be an approved WhatsApp template — a different thing entirely. | Email only, renamed *Email subject line*. Hidden input on WhatsApp. |
+| Automatic messages | Only above this order total | Offered on *New customer*, whose entity carries no money. `evaluateConditions` (`automation-templates.ts:212`) compares the minimum against 0, so setting one **stops the rule firing at all**. | Not offered on that event. |
+| Automatic messages | "Active — send this automation" | Ambiguous — active as in enabled, or as in busy? | *Send this message to customers from now on.* |
+| **Connect your shop** | Provider | `FormField` wrapping a `Select` **and** a `<p>`. `FormField` clones a *single* child to inject the `id`, so with two children it injects nothing and `<Label htmlFor="provider">` pointed at no element. | Description moved into `hint` — wired up and read out on focus. |
+| Connect your shop | Every credential | The action validates **only** `provider` and `name` (`integrations-actions.ts:44-47`). A shop could "connect" WooCommerce with no URL and no keys, be told *"Integration connected"*, and then fail on every refresh with *"Missing WooCommerce credentials"*. | The fields `sync.ts` actually refuses to run without are now `required`, so the failure surfaces at the field that caused it. Each gained a hint naming the exact menu it comes from. Shopify's domain gets a `myshopify.com` pattern; the currency boxes get `[A-Za-z]{3}`. |
+| Connect your shop | Custom API paths | Placeholders showed the value that is used anyway when empty, so they read as examples to replace. | Hints say what empty means; `pattern="/.*"`. |
+| **Messaging apps** | WhatsApp provider | No explanation of the choice. | Hint changes with the choice and says what each provider means in practice. |
+| Messaging apps | WhatsApp connection | See section 14 — the same credentials are asked for again on Alerts, into a different table. | A note names the split: this number answers customers, Alerts messages *you*. |
+| **My assistants** | Assistant name | `"Assistant name *"` — the asterisk was decoration; `FormField` has a `required` prop that does it properly. | `required`, plus a hint. |
+| My assistants | Type | Second `FormField` with two children — the `Select` got no `id`. | Explanation into `hint`. |
+| My assistants | Website addresses | Same two-child defect on a `Textarea`. | Explanation into `hint`, which now also says to leave `https://` off. |
+| My assistants | Type (staff assistant) | Bare `<Label>` over a read-only div — a `<label>` bound to nothing. | Plain styled `<p>`; it was never a control. |
+| My assistants | Questions from your shop system | Rendered greyed-out for a customer assistant with nothing saying why. | Shown only for a staff assistant. Stored value is unchanged — the hidden `off` is what was already saved in that case. |
+| My assistants | **Default language** | See section 14 — the same label as the company profile's, different column, different meaning. | *Language it answers in*. |
+| **Your company** | **Default language** | Same collision. And "Auto-detect" was untrue: `normalizeLocale` (`i18n/index.ts:38`) maps anything but `ar` to `en`, so picking it gives you English. | *Dashboard language*; the option now reads *English (the default)*. Same fix in the agency sub-account form, which had a third phrasing and one option written in Arabic while the other two were in English. |
+| Your company / Connect your shop | Timezone | An identical `timezoneLabel()` helper in two components, each with a comment saying the duplication was deliberate for want of somewhere shared. | Moved to `src/lib/constants.ts`. Both import it. |
+| **My business info** | Location time zone | Rendered raw IANA ids — `Asia/Dubai` — in a list of several hundred. | `timezoneLabel`. The hint also names this as the zone the reply-time clocks are actually counted in (see section 14). |
+| My business info | Postal code, Google Maps link | **Dead.** `business-context.ts:131-136` builds the location line from name, address, city, region, country, phone and service area only; `google_maps_url` is selected and dropped, `postal_code` is not selected at all. | Labelled *"kept on file only"*, hint says the assistant will not repeat it. Left editable — the columns are real. |
+| My business info | Phone, WhatsApp, branch phone | No `type`, so a phone got a full keyboard and no format guidance, for numbers the assistant reads aloud to customers. | `type="tel"`, `inputMode="tel"`, country-code hints and examples. |
+| **Improve answers** | Expected source | **Dead.** Selected by the runner (`eval.ts:72`) and never used — the pass/fail at `eval.ts:110-125` turns purely on whether *anything* was retrieved. | Relabelled *"Where the answer should come from — your note"*, hint says the test does not check it. |
+| **Assistant settings** | Custom base prompt | Label admitted in a parenthesis that it was *"used only when type = Custom"* — so every other assistant got a large textarea that changed nothing, in a syntax nobody outside the team writes. | Shown only for a Custom assistant; otherwise one sentence saying so, and a hidden input so a prompt someone wrote is not erased. |
+| Assistant settings | Industry, Tone | See section 14 — both also set on My business info, both reaching the same reply. | A panel above them says which screen wins and why; each hint names its counterpart. |
+| Assistant settings | Save button | "Save & rebuild prompt" — internal vocabulary. | *Save these instructions.* |
+| **Inbox rules** | Answer within | See section 14. | *Mark a chat late in the inbox after*, with a link to the screen that owns warnings and escalation. |
+| Inbox rules | Only count the time while you are open | **Dead.** Written to `company_settings.business_hours.enabled`, read straight back out to fill in the same box, and read nowhere else — the local `isWithinBusinessHours` (`support-settings-data.ts:179`) has no call sites anywhere in the repo. | Control removed, value carried in a hidden input, and the section now points at the per-target checkbox on Reply-time targets that genuinely does this (`sla_policies.business_hours_only`, read at `sla/index.ts:182`). |
+| **Chat buttons** | Business hours | The hint was written when this was inert and deliberately avoided promising behaviour. It has since been wired up (`quick-actions.ts:205`) and the hedge had gone stale. | *When to show it*, hint now states plainly what the choice does. |
+| Chat buttons | Phone number | No `type`. | `type="tel"`, `inputMode="tel"`. |
+| **Alerts** | Missed conversation | **Dead.** In the `NotifyEvent` union and in `CORE_EVENTS`, but **nothing in the codebase ever emits it** — every other event on that grid has a dispatch site. Its five toggles configure a delivery that cannot happen. | Labelled *"A chat nobody answered — not sent yet"*. The whole event list was also rewritten from our event names into what happened ("Human handoff request" to *A customer asked for a person*). `notification-settings-form.tsx` itself was not touched. |
+| **Who you may message** | Contact | One box holding a phone number on two channels and an email address on the third, always placeheld `+971500000000`, with the server error *"A phone number is required"*. | Channel moved first; the box below re-labels, re-types (`tel`/`email`) and re-placeholders itself from it. |
+| Who you may message | "Opted in" | Jargon for a consent record. | *They agreed to be messaged.* |
+| **Get set up** | Website URL | `type="text"` on a field whose placeholder is an address — no keyboard, no autofill, no format check. | `type="url"`, `inputMode="url"`, plus a hint. |
+| **Agency** | Logo URL, Login background | No `type="url"`, no hint on the background at all. | `type="url"`, examples, and a hint saying what empty means. |
+| **Trigger phrases** | Example phrases | `<Label>` with no `htmlFor` over a chip group. | `fieldset` + `legend`. |
+| Trigger phrases | The chip input | Placeholder-only — announced as an unnamed text box, and the placeholder vanishes on the first keystroke. | `aria-label`. |
+| Trigger phrases | "Test a phrase" input | Placeholder-only, same defect. | `aria-label`. |
+| **Staff help desk chat** | Route box | Neither a label nor a placeholder — an icon beside it, which is not a label. | `aria-label` plus a placeholder. |
+| Staff help desk chat | Composer | Placeholder-as-label. A visible label would break the composer mock. | `aria-label` — the one place it is the right answer rather than the lazy one. |
+| Staff help desk chat | Connector action fields | Field name lived only in the placeholder, and the required marker was a bare `*` with no `required` behind it. | `aria-label` naming the field and whether it is required, plus a real `required`. |
+| **Enquiries** | Phone | No `type`. | `type="tel"` and an example. |
+| **Agency sub-accounts** | Website | No `type="url"`. | `type="url"`, real example instead of a bare `https://`. |
+
+Three of these deserve naming separately, because they were invisible rather
+than merely unclear: `FormField` injects the control's `id` by cloning **a
+single element child**. Give it two — a `Select` and a stray `<p>` — and
+`React.isValidElement` is false, no `id` is injected, and the `<Label htmlFor>`
+above points at nothing. That had happened in three places
+(`connect-integration-form.tsx`, and twice in `bot-form.tsx`) and is undetectable
+by eye, since the label still *looks* attached. All three explanations moved into
+the `hint` prop, which is where they belonged anyway.
+
+## 14. The same thing, set in two places
+
+Every row below was verified against the reader, not just the writer.
+
+| What | Place A | Place B | Which one wins | What was done |
+| --- | --- | --- | --- | --- |
+| **"Answer within N minutes"** | Inbox rules, `company_settings.sla_response_minutes` | Reply-time targets, `sla_policies.first_response_minutes` | **Split.** A colours the late chip in the inbox and nothing else (`inbox/page.tsx:240`). B drives the clock, the early warning and the escalation (`sla/index.ts:60-83`). Set 5 on one and 15 on the other and the inbox flags chats late that nothing is warning you about. | Both screens relabelled to name the narrow thing they do, and each points at the other. |
+| **Business hours on/off** | Inbox rules checkbox (`company_settings.business_hours.enabled`) | Reply-time targets, per target (`sla_policies.business_hours_only`) | **B only.** A is read by nothing. | A removed; the section points at B. |
+| **Industry** | Assistant settings, `bot_settings.prompt_config.industry` | My business info, `company_business_profiles.industry` | **Both, at once.** A is baked into the stored system prompt (`assemble.ts:45`); B is injected fresh every turn (`business-context.ts:106`). Put "clinic" in one and "retail" in the other and the model gets both. | Cannot be collapsed without touching prompt assembly. A panel on the assistant screen names the other field and says B is the one the model is instructed to follow. |
+| **Tone / brand voice** | Assistant settings, `prompt_config.tone` | My business info, `brand_voice`, `answer_length`, `sales_style`, `tone_notes` | **B nominally.** A colours the persona line (`assemble.ts:41`); B is listed in the business facts under an explicit *"Follow company tone fields"* instruction (`engine.ts:406`). | Same panel; each hint says which wins. |
+| **"Default language"** | Your company, `companies.default_language` | Assistant settings, `bots.language_default` | Genuinely different: A is the dashboard locale (`i18n/server.ts:41`), B is the assistant's reply language. Not a data duplicate — a **label collision**, identical wording and identical options on two screens. | Renamed to *Dashboard language* and *Language it answers in*. |
+| **WhatsApp credentials** | Alerts, `company_notification_settings` (`whatsapp_provider`, `meta_phone_number_id`, tokens) | Messaging apps, `channel_identities` (`external_id`, `secret_encrypted`, `settings_json.provider`) | **Neither — they serve different jobs and nothing syncs them.** Inbound reconciles (a `channel_identities` row wins, `webhooks/whatsapp/route.ts:63-73`); outbound does not. Staff alerts read `company_notification_settings` *only* (`notification-delivery.ts:174`). So a shop that connects WhatsApp on Messaging apps gets **no WhatsApp staff alerts** until it re-pastes the same number and token on Alerts. | A note on the channel form names the split and links across. The Alerts side could not be touched. |
+| **Slack / generic webhook** | Alerts (legacy fields) | Send data elsewhere, `webhook_endpoints` | **B.** `notify.ts:52-72` dispatches to the endpoints first and suppresses the legacy channel (`notification-delivery.ts:512`). | Nothing — the existing deprecation banner was **checked and is accurate**, including its claim that email and WhatsApp are unaffected. |
+| **Widget header title** | Assistant settings (writes `appearance_json.title` only while it still equals the old bot name) | Website chat design studio (writes it unconditionally) | Same table, same JSON key, reconciled by a `followsName` heuristic (`actions.ts:277-281`). | Nothing — verified working. A custom title survives a rename; a default one follows it. |
+| **Time zone** | Your company, `companies.timezone` | My business info, location, `company_locations.timezone` | **B**, for the primary location — it is what `sla/index.ts:107` and `business-hours.ts:40` read. The Inbox rules screen prints **A**. | Reported below; the location field's hint now says it is the one that counts. The screen that prints the wrong one is in `support-settings-data.ts`, which this pass may not edit. |
+
+## 15. Found, not fixed
+
+- **The timezone contradiction is only half closed.** Inbox rules displays
+  `companies.timezone` while the SLA engine and "are we open now" use
+  `company_locations.timezone` for the primary location. Changing the zone on
+  the company profile does not move the reply-time clock. The fix is in
+  `support-settings-data.ts:114/148`, which is another agent's file this week.
+  There is also no update action for a location's timezone at all — it is seeded
+  from the company at insert and never changed.
+- **WhatsApp credentials still have to be typed twice.** The note on the channel
+  form tells the owner why, but the real fix is for staff alerts to fall back to
+  `channel_identities` when `company_notification_settings` is empty. That is in
+  `notification-delivery.ts`.
+- **Industry and tone still reach the model from two places at once.** Only
+  prompt assembly can decide a precedence; the screens can only warn.
+- **`scheduled_timezone` on bulk messages is dead.** The composer sends the
+  browser's zone in a hidden input and `broadcasts-actions.ts:99` stores it, but
+  the cron sender's select omits it (`cron/broadcasts/route.ts:48`), so a
+  scheduled time is interpreted with no zone at all. No visible control, so
+  nothing to relabel — but "9am" does not currently mean 9am anywhere in
+  particular.
+- **`conversation_statuses` on chat buttons is dead.** Round-tripped through a
+  hidden field and stored; the runtime filter applies page patterns, required
+  capabilities, keywords and business hours, but never this. No visible control.
+- **Config with no UI at all**, the reverse problem: `nlu_settings.settings_json`
+  (`endpoint` and `minConfidence` are branched on in `flows/nlu.ts` but nothing
+  writes them, so INTNT is stuck on its defaults), `eval_questions.
+  expected_answer_type`, and `sla_policies.applies_group_id` — matched at
+  `sla/index.ts:51` with no field to set it.
+- **The flow builder was left alone**, as in part two. `flow-inspector.tsx` still
+  has ~25 controls whose local `Field` renders a `<Label>` with no `htmlFor` and
+  never sets an `id`; `flow-triggers-panel.tsx` and `flow-builder.tsx` each have
+  a bare `<Label>` too. Another workstream owns these.
+- **The company's spending cap is also writable by super-admin**
+  (`super-admin/actions.ts:147`) with nothing on the company screen saying a
+  platform admin can overwrite it. Not a duplicate within the company dashboard,
+  so out of this pass's scope, but worth a line on that screen.
+- **`extra_key` / `extra_secret`** on Connect your shop remain dead, as recorded
+  in section 11. They are now the only fields in that form with no `required`
+  and no format hint, which is the correct signal for a passthrough.
+
+## 16. Section 11 is now partly out of date
+
+`business_hours_mode` on chat buttons is **no longer inert** — it is read at
+`src/lib/quick-actions.ts:205`, whose own comment records that it used to be a
+saved setting nothing read. The hedged hint that section 11 describes has been
+replaced with one that states what the choice does. The rest of section 11
+stands.

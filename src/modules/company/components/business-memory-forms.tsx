@@ -28,6 +28,7 @@ import {
   SERVICE_CATEGORY_OPTIONS,
 } from '../business-categories';
 import { CURRENCY_OPTIONS, DURATION_OPTIONS, TIMEZONE_OPTIONS } from '../form-options';
+import { timezoneLabel } from '@/lib/constants';
 import type {
   BusinessProfileMemory,
   FaqRow,
@@ -179,11 +180,34 @@ export function BusinessMemoryForm({ profile }: { profile: BusinessProfileMemory
       </div>
 
       <div className="grid gap-4 lg:grid-cols-3">
-        <FormField label="Primary phone" htmlFor="primaryPhone">
-          <Input name="primaryPhone" defaultValue={profile.primaryPhone ?? ''} />
+        {/* Phone boxes with no `type` get a full keyboard on a phone and no
+            format guidance at all. The assistant reads these out to customers,
+            so the country code is not optional. */}
+        <FormField
+          label="Primary phone"
+          htmlFor="primaryPhone"
+          hint="With the country code — the assistant reads this back to customers who ask how to call you."
+        >
+          <Input
+            name="primaryPhone"
+            type="tel"
+            inputMode="tel"
+            placeholder="+971 4 000 0000"
+            defaultValue={profile.primaryPhone ?? ''}
+          />
         </FormField>
-        <FormField label="WhatsApp" htmlFor="whatsapp">
-          <Input name="whatsapp" defaultValue={profile.whatsapp ?? ''} />
+        <FormField
+          label="WhatsApp"
+          htmlFor="whatsapp"
+          hint="Only if it is different from the number above."
+        >
+          <Input
+            name="whatsapp"
+            type="tel"
+            inputMode="tel"
+            placeholder="+971500000000"
+            defaultValue={profile.whatsapp ?? ''}
+          />
         </FormField>
         <FormField label="Support email" htmlFor="supportEmail">
           <Input name="supportEmail" type="email" defaultValue={profile.supportEmail ?? ''} />
@@ -303,15 +327,27 @@ export function LocationForm() {
         <FormField label="Location name" htmlFor="name">
           <Input name="name" required placeholder="Main branch" />
         </FormField>
-        <FormField label="Phone" htmlFor="phone">
-          <Input name="phone" />
+        <FormField label="Phone" htmlFor="phone" hint="The number for this branch.">
+          <Input name="phone" type="tel" inputMode="tel" placeholder="+971 4 000 0000" />
         </FormField>
-        <FormField label="Timezone" htmlFor="timezone">
+        {/* Raw IANA ids — `Asia/Dubai`, `America/New_York` — were printed
+            verbatim in a list of several hundred. `timezoneLabel` puts the
+            place first and keeps the id, so it is both readable and findable.
+            The submitted value is byte-identical.
+
+            The hint matters more than the labels: this column, not the one on
+            the company profile, is what `src/lib/sla/index.ts:107` and
+            `src/lib/business-hours.ts:40` read for the primary location. */}
+        <FormField
+          label="Time zone"
+          htmlFor="timezone"
+          hint="Leave this on the company setting unless this branch is genuinely in another zone. For your main branch this is the zone your opening hours and reply-time clocks are actually counted in."
+        >
           <Select name="timezone" defaultValue="">
-            <option value="">Use company timezone</option>
+            <option value="">Same as the company time zone</option>
             {TIMEZONE_OPTIONS.map((timezone) => (
               <option key={timezone} value={timezone}>
-                {timezone}
+                {timezoneLabel(timezone)}
               </option>
             ))}
           </Select>
@@ -331,14 +367,38 @@ export function LocationForm() {
         <FormField label="Country" htmlFor="country">
           <Input name="country" />
         </FormField>
-        <FormField label="Postal code" htmlFor="postalCode">
+        {/*
+          These two are saved and never used. `src/lib/ai/business-context.ts`
+          builds each location line the assistant can quote from `name`,
+          `address_line1/2`, `city`, `region`, `country`, `phone` and
+          `service_area` only (`:131-136`) — `google_maps_url` is selected at
+          `:69` and then dropped, and `postal_code` is not even selected. Neither
+          appears in the locations table on the page either. They are kept
+          editable, because the columns are real and one line of prompt work
+          would use them, but the label no longer implies the assistant will
+          repeat them to a customer who asks.
+        */}
+        <FormField
+          label="Postal code — kept on file only"
+          htmlFor="postalCode"
+          hint="Stored with the address, but the assistant does not currently include it when it gives a customer your address."
+        >
           <Input name="postalCode" />
         </FormField>
-        <FormField label="Google Maps URL" htmlFor="googleMapsUrl">
-          <Input name="googleMapsUrl" type="url" />
+        <FormField
+          label="Google Maps link — kept on file only"
+          htmlFor="googleMapsUrl"
+          hint="Saved, but not yet passed to the assistant, so it will not send a customer this link. Put directions in an FAQ answer if you need it said."
+        >
+          <Input name="googleMapsUrl" type="url" placeholder="https://maps.app.goo.gl/…" />
         </FormField>
-        <FormField label="Service area" htmlFor="serviceArea" className="lg:col-span-2">
-          <Input name="serviceArea" />
+        <FormField
+          label="Service area"
+          htmlFor="serviceArea"
+          className="lg:col-span-2"
+          hint="Where this branch will actually travel to or deliver. The assistant quotes this when a customer asks whether you cover them."
+        >
+          <Input name="serviceArea" placeholder="Within 10 miles of the city centre" />
         </FormField>
       </div>
       <FormMessage state={state} />

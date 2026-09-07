@@ -10,24 +10,9 @@ import { RefreshDashboardShell } from '@/components/refresh-dashboard-shell';
 import { updateProfileAction, type ActionState } from '../actions';
 import type { CompanyProfile } from '../data';
 import { COUNTRY_OPTIONS, TIMEZONE_OPTIONS } from '../form-options';
+import { timezoneLabel } from '@/lib/constants';
 
 const initial: ActionState = {};
-
-/**
- * Show an IANA timezone id as a place name.
- *
- * `Europe/London` is stored, submitted and compared verbatim — only the text
- * shown changes, to "London (Europe/London)". The id stays in the text because
- * an owner who was given a specific one has to be able to find it.
- *
- * Deliberately duplicated in `connect-integration-form.tsx`: the list both
- * format (`TIMEZONE_OPTIONS`) lives in a module this change does not own, so
- * there is nowhere shared to put it yet.
- */
-function timezoneLabel(id: string): string {
-  const place = id.split('/').pop()?.replace(/_/g, ' ') ?? id;
-  return `${place} (${id})`;
-}
 
 export function ProfileForm({ company }: { company: CompanyProfile }) {
   const [state, action] = useFormState(updateProfileAction, initial);
@@ -75,11 +60,27 @@ export function ProfileForm({ company }: { company: CompanyProfile }) {
             ))}
           </Select>
         </FormField>
-        <FormField label="Default language" htmlFor="defaultLanguage">
+        {/*
+          Was "Default language", the identical label the assistant's own reply
+          language carries on /company/bots/[id]/settings — two different stored
+          columns (`companies.default_language` here, `bots.language_default`
+          there) with the same three options and the same words, and neither
+          screen said which was which.
+
+          "Auto-detect" was also untrue: `normalizeLocale`
+          (src/lib/i18n/index.ts:38) maps anything that is not `ar` to `en`, so
+          picking it gives you English. The stored value is unchanged — existing
+          rows hold `auto` — but the option now says what selecting it does.
+        */}
+        <FormField
+          label="Dashboard language"
+          htmlFor="defaultLanguage"
+          hint="The language this dashboard is shown in, for everyone on your team who signs in. Arabic also flips the whole layout right-to-left. What language your assistant answers customers in is set separately, on the assistant itself."
+        >
           <Select name="defaultLanguage" defaultValue={company.defaultLanguage}>
-            <option value="auto">Auto-detect</option>
+            <option value="auto">English (the default)</option>
             <option value="en">English</option>
-            <option value="ar">Arabic</option>
+            <option value="ar">Arabic — right-to-left</option>
           </Select>
         </FormField>
       </div>

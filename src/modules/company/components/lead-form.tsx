@@ -22,8 +22,8 @@ export function LeadForm() {
         <FormField label="Email" htmlFor="email">
           <Input name="email" type="email" />
         </FormField>
-        <FormField label="Phone" htmlFor="phone">
-          <Input name="phone" />
+        <FormField label="Phone" htmlFor="phone" hint="With the country code, so you can call back.">
+          <Input name="phone" type="tel" inputMode="tel" placeholder="+971500000000" />
         </FormField>
       </div>
       <FormField label="Message" htmlFor="message">

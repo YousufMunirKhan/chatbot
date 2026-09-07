@@ -1,3 +1,4 @@
+import { cache } from 'react';
 import { createSupabaseServiceClient } from '@/lib/db/server';
 import { getCompanyId, listBots } from './data';
 
@@ -74,19 +75,27 @@ export async function findDocumentReferences(
   return refs;
 }
 
-export async function listDocuments(): Promise<DocumentRow[]> {
+/**
+ * `cache()`d, and the bot lookup no longer waits for the document list: the two
+ * are independent, and a sequential `await` costs a full round trip (~230 ms on
+ * this deployment) for nothing. The home page's setup checklist and the
+ * knowledge page both call this within one render.
+ */
+export const listDocuments = cache(async function listDocuments(): Promise<DocumentRow[]> {
   const companyId = await getCompanyId();
   const sb = createSupabaseServiceClient();
 
-  const { data, error } = await sb
-    .from('documents')
-    .select('id, title, source_type, status, char_count, bot_id, created_at')
-    .eq('company_id', companyId)
-    .order('created_at', { ascending: false });
+  // Bots resolve `bot_id` -> name and do not depend on the document rows.
+  const [{ data, error }, bots] = await Promise.all([
+    sb
+      .from('documents')
+      .select('id, title, source_type, status, char_count, bot_id, created_at')
+      .eq('company_id', companyId)
+      .order('created_at', { ascending: false }),
+    listBots(),
+  ]);
   if (error) throw error;
 
-  // Resolve bot_id → name from the company's own bots (already company-scoped).
-  const bots = await listBots();
   const botNames = new Map<string, string>(bots.map((b) => [b.id, b.name]));
   const references = await findDocumentReferences(
     companyId,
@@ -108,4 +117,4 @@ export async function listDocuments(): Promise<DocumentRow[]> {
       generatedFrom: references.get(id) ?? null,
     };
   });
-}
+});
