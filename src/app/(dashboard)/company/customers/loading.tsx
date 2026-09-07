@@ -1,13 +1,15 @@
-import { HeaderSkeleton, ListCardSkeleton, PageSkeleton, StatGridSkeleton } from '../_skeletons';
+import { HeaderSkeleton, ListCardSkeleton, PageSkeleton } from '../_skeletons';
 
+/**
+ * One list, not three. The page stopped being three stacked previews when it
+ * became a list of people, and a placeholder that still promised three tables
+ * would make the real page look like it had lost something on arrival.
+ */
 export default function CustomersLoading() {
   return (
     <PageSkeleton>
-      <HeaderSkeleton withAction />
-      <StatGridSkeleton count={3} className="sm:grid-cols-3 lg:grid-cols-3" />
-      <ListCardSkeleton rows={5} />
-      <ListCardSkeleton rows={4} />
-      <ListCardSkeleton rows={4} />
+      <HeaderSkeleton />
+      <ListCardSkeleton rows={8} />
     </PageSkeleton>
   );
 }

@@ -29,6 +29,22 @@ export interface DocumentRow {
   createdAt: string;
   /** Set when a live policy/FAQ generated (and still owns) this document. */
   generatedFrom: DocumentReference | null;
+  /** The page this document was imported from, when it came from the web. */
+  sourceUrl: string | null;
+  /**
+   * True when the source was longer than we index. The row is otherwise
+   * indistinguishable from a complete one, which is exactly how a shop ended up
+   * believing the assistant had read all 84 pages of its policy PDF.
+   */
+  truncated: boolean;
+  /** Admin-facing sentence explaining what was left out. */
+  truncationReason: string | null;
+  pageCount: number | null;
+  pagesIngested: number | null;
+  /** 0-100 while indexing, written by the queued job after each batch. */
+  ingestProgress: number;
+  /** What the job is doing right now, or the failure message when it failed. */
+  ingestStage: string | null;
 }
 
 /**
@@ -75,6 +91,38 @@ export async function findDocumentReferences(
   return refs;
 }
 
+function toDocumentRow(
+  raw: Record<string, unknown>,
+  botNames: Map<string, string>,
+  references: Map<string, DocumentReference>,
+): DocumentRow {
+  const botId = (raw.bot_id as string) ?? null;
+  const id = raw.id as string;
+  return {
+    id,
+    title: raw.title as string,
+    sourceType: raw.source_type as string,
+    status: raw.status as string,
+    charCount: (raw.char_count as number) ?? 0,
+    botName: botId ? botNames.get(botId) ?? null : null,
+    createdAt: raw.created_at as string,
+    generatedFrom: references.get(id) ?? null,
+    sourceUrl: (raw.source_url as string | null) ?? null,
+    truncated: Boolean(raw.truncated),
+    truncationReason: (raw.truncation_reason as string | null) ?? null,
+    pageCount: (raw.page_count as number | null) ?? null,
+    pagesIngested: (raw.pages_ingested as number | null) ?? null,
+    ingestProgress: (raw.ingest_progress as number | null) ?? 0,
+    ingestStage: (raw.ingest_stage as string | null) ?? null,
+  };
+}
+
+// One literal, not a concatenation: `@supabase/supabase-js` parses the select
+// string at the TYPE level, and a `string` (which is what `'a' + 'b'` widens to)
+// makes every row come back as `GenericStringError` instead of a record.
+const DOCUMENT_COLUMNS =
+  'id, title, source_type, status, char_count, bot_id, created_at, source_url, truncated, truncation_reason, page_count, pages_ingested, ingest_progress, ingest_stage' as const;
+
 /**
  * `cache()`d, and the bot lookup no longer waits for the document list: the two
  * are independent, and a sequential `await` costs a full round trip (~230 ms on
@@ -89,7 +137,7 @@ export const listDocuments = cache(async function listDocuments(): Promise<Docum
   const [{ data, error }, bots] = await Promise.all([
     sb
       .from('documents')
-      .select('id, title, source_type, status, char_count, bot_id, created_at')
+      .select(DOCUMENT_COLUMNS)
       .eq('company_id', companyId)
       .order('created_at', { ascending: false }),
     listBots(),
@@ -102,19 +150,5 @@ export const listDocuments = cache(async function listDocuments(): Promise<Docum
     (data ?? []).map((d) => (d as Record<string, unknown>).id as string),
   );
 
-  return (data ?? []).map((d) => {
-    const x = d as Record<string, unknown>;
-    const botId = (x.bot_id as string) ?? null;
-    const id = x.id as string;
-    return {
-      id,
-      title: x.title as string,
-      sourceType: x.source_type as string,
-      status: x.status as string,
-      charCount: (x.char_count as number) ?? 0,
-      botName: botId ? botNames.get(botId) ?? null : null,
-      createdAt: x.created_at as string,
-      generatedFrom: references.get(id) ?? null,
-    };
-  });
+  return (data ?? []).map((d) => toDocumentRow(d as Record<string, unknown>, botNames, references));
 });

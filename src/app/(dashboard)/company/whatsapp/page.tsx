@@ -13,6 +13,8 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { EmptyState } from '@/components/ui/empty-state';
 import { Input } from '@/components/ui/input';
 import { PageHeader } from '@/components/ui/page-header';
+import { UpgradeNotice } from '@/components/ui/upgrade-notice';
+import { companyHasFeature, requireCompanyFeature } from '@/lib/entitlements';
 import {
   Table,
   TableBody,
@@ -39,12 +41,16 @@ import {
   WabaIdForm,
 } from '@/modules/company/components/whatsapp-settings-forms';
 
+// The gate below decides what this page draws; these decide what a post can do.
+// A form that is never rendered is still reachable with a crafted request.
 async function saveRetailerId(formData: FormData) {
   'use server';
+  await requireCompanyFeature('whatsapp');
   await setProductRetailerIdAction(formData);
 }
 async function toggleStep(formData: FormData) {
   'use server';
+  await requireCompanyFeature('whatsapp');
   await toggleGuideStepAction(formData);
 }
 
@@ -57,6 +63,10 @@ function qualityVariant(rating: string): 'success' | 'warning' | 'destructive' |
 
 export default async function WhatsAppPage() {
   await requireRole([ROLES.COMPANY_ADMIN]);
+  // Checked before the Meta round trip below: a company that cannot use the
+  // channel should not be spending our token budget reading its health.
+  if (!(await companyHasFeature('whatsapp'))) return <UpgradeNotice feature="whatsapp" />;
+
   const [identities, status, catalog, products, progress] = await Promise.all([
     listWhatsAppIdentities(),
     getWhatsAppAccountStatus(),

@@ -15,7 +15,14 @@ import {
   type CompanyDeletionPreview,
 } from './deletion-data';
 import { sendImprovementEmail } from './improvements-data';
-import { PLANS, PLAN_KEYS, SUBSCRIPTION_STATUSES } from './plans';
+import {
+  PLANS,
+  PLAN_FEATURES,
+  PLAN_KEYS,
+  SUBSCRIPTION_STATUSES,
+  type PlanFeature,
+  type PlanFeatureSet,
+} from './plans';
 
 type ServiceClient = ReturnType<typeof createSupabaseServiceClient>;
 
@@ -394,6 +401,60 @@ function resolveLimit(
   return planDefault ?? null;
 }
 
+/** `null` clears the exception and puts the feature back on the package's answer. */
+interface FeatureChange {
+  feature: PlanFeature;
+  value: boolean | null;
+}
+
+/**
+ * The feature exceptions the operator actually changed on this submit.
+ *
+ * Each control posts its current choice AND, in a companion `_was` field, the
+ * choice it was drawn with. Only a difference between the two counts as a
+ * decision. That distinction is what makes this safe to save next to unrelated
+ * edits: an operator changing a company's status must not silently drop an
+ * override somebody granted last month just because their copy of the form was
+ * rendered without it. Same shape as the `…Unlimited` companions the limit
+ * fields already use.
+ *
+ * A control that posted nothing at all is not a decision either — every other
+ * caller of this action leaves the whole set alone.
+ */
+function readFeatureChanges(formData: FormData): FeatureChange[] {
+  const changes: FeatureChange[] = [];
+  for (const feature of PLAN_FEATURES) {
+    const choice = formData.get(`feature_${feature}`);
+    if (typeof choice !== 'string') continue;
+    if (choice === formData.get(`feature_${feature}_was`)) continue;
+    if (choice === 'on') changes.push({ feature, value: true });
+    else if (choice === 'off') changes.push({ feature, value: false });
+    else if (choice === 'inherit') changes.push({ feature, value: null });
+  }
+  return changes;
+}
+
+/**
+ * The stored blob, reduced to the entries this release understands.
+ *
+ * `feature_overrides` has been hand-edited with SQL until now, so it can hold a
+ * misspelled name or a string `"true"`. `src/lib/entitlements.ts` already
+ * ignores anything that is not a boolean under a known feature name when it
+ * reads; dropping the same junk on write is what lets an operator clear the last
+ * real exception and get an honest `null` back rather than a blob of leftovers
+ * that reads as "this company has exceptions" forever.
+ */
+function normalizeStoredOverrides(value: unknown): PlanFeatureSet {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return {};
+  const raw = value as Record<string, unknown>;
+  const overrides: PlanFeatureSet = {};
+  for (const feature of PLAN_FEATURES) {
+    const entry = raw[feature];
+    if (typeof entry === 'boolean') overrides[feature] = entry;
+  }
+  return overrides;
+}
+
 export async function updateSubscriptionAction(
   _prev: ActionState,
   formData: FormData,
@@ -434,6 +495,34 @@ export async function updateSubscriptionAction(
     ),
   };
 
+  // Migration 0065 — the per-company exceptions `src/lib/entitlements.ts` reads.
+  // `undefined` means the column is left out of the update entirely, which is
+  // the case for every save where no exception control moved: the merge below
+  // is the only thing that may rewrite somebody else's grant, so it runs only
+  // when this operator actually decided something.
+  let featureOverrides: PlanFeatureSet | null | undefined;
+  const featureChanges = readFeatureChanges(formData);
+  if (featureChanges.length > 0) {
+    const { data: currentRow, error: currentErr } = await sb
+      .from('subscriptions')
+      .select('feature_overrides')
+      .eq('company_id', v.companyId)
+      .maybeSingle();
+    if (currentErr) {
+      return { error: `Could not read the current feature exceptions: ${currentErr.message}` };
+    }
+    const merged = normalizeStoredOverrides(
+      (currentRow as { feature_overrides?: unknown } | null)?.feature_overrides,
+    );
+    for (const change of featureChanges) {
+      if (change.value === null) delete merged[change.feature];
+      else merged[change.feature] = change.value;
+    }
+    // `null`, not `{}`, once the last exception is cleared: 0065 keeps the two
+    // apart so the table still reads as "this company has no exceptions".
+    featureOverrides = Object.keys(merged).length > 0 ? merged : null;
+  }
+
   const { error: updateErr } = await sb
     .from('subscriptions')
     .update({
@@ -441,6 +530,7 @@ export async function updateSubscriptionAction(
       status: v.status,
       free_until: v.freeUntil ?? null,
       ...limits,
+      ...(featureOverrides === undefined ? {} : { feature_overrides: featureOverrides }),
     })
     .eq('company_id', v.companyId);
   if (updateErr) return { error: `Could not save the subscription: ${updateErr.message}` };
@@ -459,6 +549,9 @@ export async function updateSubscriptionAction(
       agentLimit: limits.agent_limit,
       botLimit: limits.bot_limit,
       integrationLimit: limits.integration_limit,
+      // Only recorded when it moved, so the log says who granted a feature and
+      // when rather than repeating the same blob on every unrelated plan edit.
+      ...(featureOverrides === undefined ? {} : { featureOverrides }),
     },
   });
   revalidatePath(`/super-admin/companies/${v.companyId}`);

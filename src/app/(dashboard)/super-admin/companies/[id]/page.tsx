@@ -241,7 +241,7 @@ export default async function CompanyDetailPage({
             <CardTitle>Plan and limits</CardTitle>
           </CardHeader>
           <CardContent>
-            <SubscriptionForm companyId={c.id} subscription={sub} plans={billingPlans} />
+            <SubscriptionForm companyId={c.id} subscription={sub} plans={billingPlans} featureOverrides={sub.featureOverrides} />
           </CardContent>
         </Card>
       ) : null}

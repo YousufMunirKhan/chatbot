@@ -6,6 +6,7 @@ import { requireRole } from '@/lib/auth';
 import { ROLES } from '@/lib/constants';
 import { createSupabaseServiceClient } from '@/lib/db/server';
 import { getCompanyId } from './data';
+import { companyHasFeature } from '@/lib/entitlements';
 
 export type ActionState = { error?: string; ok?: boolean };
 
@@ -23,6 +24,9 @@ const campaignSchema = z.object({
 
 export async function saveCampaignAction(_prev: ActionState, formData: FormData): Promise<ActionState> {
   await requireRole([ROLES.COMPANY_ADMIN]);
+  if (!(await companyHasFeature('campaigns'))) {
+    return { error: 'Your plan does not include Chat invites. See Billing to change your package.' };
+  }
   const companyId = await getCompanyId();
   const parsed = campaignSchema.safeParse(Object.fromEntries(formData));
   if (!parsed.success) return { error: parsed.error.issues[0]?.message ?? 'Invalid campaign' };
@@ -54,6 +58,9 @@ export async function saveCampaignAction(_prev: ActionState, formData: FormData)
 
 export async function toggleCampaignAction(formData: FormData): Promise<ActionState> {
   await requireRole([ROLES.COMPANY_ADMIN]);
+  if (!(await companyHasFeature('campaigns'))) {
+    return { error: 'Your plan does not include Chat invites. See Billing to change your package.' };
+  }
   const companyId = await getCompanyId();
   const id = z.string().uuid().safeParse(formData.get('id'));
   const status = z.enum(['active', 'paused']).safeParse(formData.get('status'));
@@ -71,6 +78,9 @@ export async function toggleCampaignAction(formData: FormData): Promise<ActionSt
 
 export async function deleteCampaignAction(formData: FormData): Promise<ActionState> {
   await requireRole([ROLES.COMPANY_ADMIN]);
+  if (!(await companyHasFeature('campaigns'))) {
+    return { error: 'Your plan does not include Chat invites. See Billing to change your package.' };
+  }
   const companyId = await getCompanyId();
   const id = z.string().uuid().safeParse(formData.get('id'));
   if (!id.success) return { error: 'Invalid id' };

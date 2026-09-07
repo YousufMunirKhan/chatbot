@@ -7,7 +7,9 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { EmptyState } from '@/components/ui/empty-state';
 import { PageHeader } from '@/components/ui/page-header';
+import { UpgradeNotice } from '@/components/ui/upgrade-notice';
 import { ConfirmSubmit } from '@/components/confirm-submit';
+import { companyHasFeature, requireCompanyFeature } from '@/lib/entitlements';
 import { formatDate } from '@/lib/format';
 import {
   listWhatsAppTemplates,
@@ -20,16 +22,21 @@ import {
 } from '@/modules/company/whatsapp-actions';
 import { WhatsAppTemplateForm } from '@/modules/company/components/whatsapp-template-form';
 
+// The gate below decides what this page draws; these decide what a post can do.
+// A form that is never rendered is still reachable with a crafted request.
 async function sync() {
   'use server';
+  await requireCompanyFeature('whatsapp');
   await syncWhatsAppTemplatesAction();
 }
 async function submit(formData: FormData) {
   'use server';
+  await requireCompanyFeature('whatsapp');
   await submitWhatsAppTemplateAction(formData);
 }
 async function remove(formData: FormData) {
   'use server';
+  await requireCompanyFeature('whatsapp');
   await deleteWhatsAppTemplateAction(formData);
 }
 
@@ -54,6 +61,12 @@ function templateLanguageLabel(locale: string): string {
 
 export default async function WhatsAppTemplatesPage() {
   await requireRole([ROLES.COMPANY_ADMIN]);
+  // Approved wording is only useful for sending on WhatsApp, so it is gated with
+  // the channel. No back link: /company/whatsapp is gated on the same feature.
+  if (!(await companyHasFeature('whatsapp'))) {
+    return <UpgradeNotice feature="whatsapp" title="Approved messages" />;
+  }
+
   const [templates, creds] = await Promise.all([
     listWhatsAppTemplates(),
     getPrimaryWhatsAppCredentials(),

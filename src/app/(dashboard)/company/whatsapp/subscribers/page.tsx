@@ -7,6 +7,8 @@ import { EmptyState } from '@/components/ui/empty-state';
 import { FormField } from '@/components/ui/form-field';
 import { Input } from '@/components/ui/input';
 import { PageHeader } from '@/components/ui/page-header';
+import { UpgradeNotice } from '@/components/ui/upgrade-notice';
+import { companyHasFeature, requireCompanyFeature } from '@/lib/entitlements';
 import {
   Table,
   TableBody,
@@ -20,8 +22,11 @@ import { listSubscribers } from '@/modules/company/whatsapp-data';
 import { setSubscriptionAction } from '@/modules/company/whatsapp-actions';
 import { SubscriberForm } from '@/modules/company/components/whatsapp-settings-forms';
 
+// The gate below decides what this page draws; this decides what a post can do.
+// A form that is never rendered is still reachable with a crafted request.
 async function setSubscription(formData: FormData) {
   'use server';
+  await requireCompanyFeature('whatsapp');
   await setSubscriptionAction(formData);
 }
 
@@ -31,6 +36,13 @@ export default async function WhatsAppSubscribersPage({
   searchParams?: { q?: string };
 }) {
   await requireRole([ROLES.COMPANY_ADMIN]);
+  // Consent belongs to the WhatsApp package, so it is gated with it. No back
+  // link here: /company/whatsapp is gated on the same feature and would only
+  // send the reader to a second copy of this page.
+  if (!(await companyHasFeature('whatsapp'))) {
+    return <UpgradeNotice feature="whatsapp" title="Who you may message" />;
+  }
+
   const search = (searchParams?.q ?? '').trim();
   const subscribers = await listSubscribers(search);
   const optedOut = subscribers.filter((s) => !s.optedIn).length;

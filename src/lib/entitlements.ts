@@ -1,4 +1,5 @@
 import { cache } from 'react';
+import { getSessionUser } from '@/lib/auth';
 import { createSupabaseServiceClient } from '@/lib/db/server';
 import { AppError } from '@/lib/errors';
 import { logger } from '@/lib/logger';
@@ -141,6 +142,42 @@ export async function hasFeature(companyId: string, feature: PlanFeature): Promi
  */
 export async function requireFeature(companyId: string, feature: PlanFeature): Promise<void> {
   if (!(await hasFeature(companyId, feature))) throw new FeatureNotEntitledError(feature);
+}
+
+/**
+ * The two questions above, asked about whoever is signed in.
+ *
+ * Every gate in the dashboard is "does the company on this session get X", and
+ * spelling that out at each call site meant repeating the null-company branch
+ * eleven times — the branch that decides whether a gate fails open. It is worth
+ * exactly one implementation, here, next to the rest of the reasoning.
+ *
+ * NO COMPANY ON THE SESSION MEANS GRANT. A page or action that needs a company
+ * already redirects through `getCompanyId()` or fails on its own read; a gate is
+ * not the right place to discover that, and answering "your plan does not
+ * include this" to someone whose plan we have not identified is a lie in the
+ * direction that costs a customer.
+ *
+ * The company id comes off the session — never a form field — which is the same
+ * rule the rest of the data layer follows, and is what stops one tenant asking
+ * about another's entitlements.
+ */
+export async function companyHasFeature(feature: PlanFeature): Promise<boolean> {
+  const user = await getSessionUser();
+  if (!user?.companyId) return true;
+  return hasFeature(user.companyId, feature);
+}
+
+/**
+ * Throwing variant, for server actions and route handlers. Pair it with
+ * `companyHasFeature` on the page that submits to them: the page decides what to
+ * render, this decides what may actually happen, and a hidden button is not a
+ * gate — a form post reaches the action whether or not the button was drawn.
+ */
+export async function requireCompanyFeature(feature: PlanFeature): Promise<void> {
+  const user = await getSessionUser();
+  if (!user?.companyId) return;
+  await requireFeature(user.companyId, feature);
 }
 
 /**

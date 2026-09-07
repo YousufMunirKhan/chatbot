@@ -8,7 +8,15 @@ import { Input } from '@/components/ui/input';
 import { Select } from '@/components/ui/select';
 import { SubmitButton } from '@/components/ui/submit-button';
 import { updateSubscriptionAction, type ActionState } from '../actions';
-import { SUBSCRIPTION_STATUSES } from '../plans';
+import {
+  PLAN_FEATURES,
+  PLAN_FEATURE_DESCRIPTIONS,
+  PLAN_FEATURE_LABELS,
+  SUBSCRIPTION_STATUSES,
+  planFeatureEnabled,
+  type PlanFeature,
+  type PlanFeatureSet,
+} from '../plans';
 import type { BillingPlan } from '../billing-data';
 import type { SubscriptionInfo } from '../data';
 
@@ -67,14 +75,97 @@ function LimitField({
   );
 }
 
+/**
+ * One feature entitlement, as inherit / force on / force off.
+ *
+ * This is the control that replaces hand-written SQL. The exception it writes —
+ * `subscriptions.feature_overrides`, migration 0065 — has three states and not
+ * two: "this company follows its package", "this company has it whatever the
+ * package says", and "this company does not have it whatever the package says".
+ * A plain checkbox can only carry two, and the missing one is the common case,
+ * so this is three radios rather than a tick box. `LimitField` above splits
+ * "unlimited" out of a number field for the same reason.
+ *
+ * The inherit option prints what the selected package would decide, because
+ * "inherit" on its own does not tell an operator what they are about to leave
+ * this company with — and the answer changes as they change the package above.
+ *
+ * The hidden `_was` field carries the state this control OPENED in. The action
+ * uses it to tell "the operator chose inherit" apart from "the operator did not
+ * touch this row", and so never clears an override that was already there
+ * because a form rendered before the read was wired said nothing about it.
+ */
+const OVERRIDE_CHOICES = [
+  { value: 'inherit', label: 'Inherit' },
+  { value: 'on', label: 'Force on' },
+  { value: 'off', label: 'Force off' },
+] as const;
+
+type OverrideChoice = (typeof OVERRIDE_CHOICES)[number]['value'];
+
+function choiceOf(value: boolean | undefined): OverrideChoice {
+  if (value === true) return 'on';
+  if (value === false) return 'off';
+  return 'inherit';
+}
+
+function FeatureOverrideField({
+  feature,
+  planKey,
+  stored,
+}: {
+  feature: PlanFeature;
+  planKey: string;
+  stored: boolean | undefined;
+}) {
+  // Pinned at mount: the state the row was in when this form was drawn.
+  const [openedAs] = useState<OverrideChoice>(() => choiceOf(stored));
+  const [choice, setChoice] = useState<OverrideChoice>(openedAs);
+  const planGrants = planFeatureEnabled(planKey, feature);
+
+  return (
+    <fieldset className="rounded-md border p-3">
+      <legend className="px-1 text-sm font-medium">{PLAN_FEATURE_LABELS[feature]}</legend>
+      <p className="text-xs text-muted-foreground">{PLAN_FEATURE_DESCRIPTIONS[feature]}</p>
+      <input type="hidden" name={`feature_${feature}_was`} value={openedAs} />
+      <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1.5">
+        {OVERRIDE_CHOICES.map((option) => (
+          <label key={option.value} className="flex items-center gap-1.5 text-xs">
+            <input
+              type="radio"
+              name={`feature_${feature}`}
+              value={option.value}
+              checked={choice === option.value}
+              onChange={() => setChoice(option.value)}
+              className="h-3.5 w-3.5"
+            />
+            {option.value === 'inherit'
+              ? `Inherit — ${planGrants ? 'included' : 'not included'}`
+              : option.label}
+          </label>
+        ))}
+      </div>
+    </fieldset>
+  );
+}
+
 export function SubscriptionForm({
   companyId,
   subscription,
   plans,
+  featureOverrides,
 }: {
   companyId: string;
   subscription: SubscriptionInfo;
   plans: BillingPlan[];
+  /**
+   * The company's stored `feature_overrides`, so the controls open in the state
+   * the row is actually in. Optional because the page that renders this form
+   * does not pass it yet; until it does the controls open on "Inherit" and the
+   * action leaves untouched rows alone, so nothing an operator set by hand is
+   * lost by saving an unrelated change on this form.
+   */
+  featureOverrides?: PlanFeatureSet;
 }) {
   const [state, action] = useFormState(updateSubscriptionAction, initial);
   const [planKey, setPlanKey] = useState(subscription.plan ?? plans[0]?.key ?? 'free_trial');
@@ -151,6 +242,32 @@ export function SubscriptionForm({
         blank to inherit the selected plan&apos;s default. Tick <em>Unlimited</em> to remove the cap
         entirely — the same rule the onboarding form uses.
       </p>
+
+      {/* Migration 0065 — the per-company exception to the package. It sits
+          under the limits because it answers the same question one step
+          further out: the boxes above say how much of the product this company
+          gets, these say which parts of it they get at all. */}
+      <div className="space-y-3 border-t pt-4">
+        <div className="space-y-1">
+          <p className="text-sm font-medium">Feature exceptions</p>
+          <p className="text-xs text-muted-foreground">
+            Leave every one on <em>Inherit</em> and this company follows its package exactly.
+            Forcing one on or off overrides the package for this company only — use it for a
+            grandfathered customer or something agreed outside the price list. The company sees the
+            result on its own billing page, labelled &ldquo;Added for you&rdquo;.
+          </p>
+        </div>
+        <div className="grid gap-3 sm:grid-cols-2">
+          {PLAN_FEATURES.map((feature) => (
+            <FeatureOverrideField
+              key={feature}
+              feature={feature}
+              planKey={planKey}
+              stored={featureOverrides?.[feature]}
+            />
+          ))}
+        </div>
+      </div>
 
       <FormMessage state={state} />
       <SubmitButton size="sm">Save changes</SubmitButton>

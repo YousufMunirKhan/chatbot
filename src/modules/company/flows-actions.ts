@@ -9,6 +9,7 @@ import { encryptSecret } from '@/lib/crypto';
 import { parseGraph, type FlowGraph } from '@/lib/flows/types';
 import { getCompanyId } from './data';
 import { findTemplate, planGraphSave, planVersionRestore, validateGraph } from './flow-graph';
+import { companyHasFeature, requireCompanyFeature } from '@/lib/entitlements';
 
 /**
  * Write side of the flow builder.
@@ -68,6 +69,9 @@ export async function createFlowAction(
   formData: FormData,
 ): Promise<CreateFlowState> {
   await requireRole([ROLES.COMPANY_ADMIN]);
+  if (!(await companyHasFeature('flows'))) {
+    return { error: 'Your plan does not include Guided chats. See Billing to change your package.' };
+  }
   const companyId = await getCompanyId();
   const parsed = createSchema.safeParse(Object.fromEntries(formData));
   if (!parsed.success) return { error: parsed.error.issues[0]?.message ?? 'Invalid flow.' };
@@ -116,6 +120,7 @@ export async function createFlowAction(
 
 export async function duplicateFlowAction(formData: FormData): Promise<void> {
   await requireRole([ROLES.COMPANY_ADMIN]);
+  await requireCompanyFeature('flows');
   const id = uuid.safeParse(formData.get('id'));
   if (!id.success) return;
   const owned = await ownedFlow(id.data);
@@ -166,6 +171,7 @@ export async function duplicateFlowAction(formData: FormData): Promise<void> {
 
 export async function deleteFlowAction(formData: FormData): Promise<void> {
   await requireRole([ROLES.COMPANY_ADMIN]);
+  await requireCompanyFeature('flows');
   const companyId = await getCompanyId();
   const id = uuid.safeParse(formData.get('id'));
   if (!id.success) return;
@@ -187,6 +193,9 @@ const metaSchema = z.object({
 
 export async function updateFlowMetaAction(input: unknown): Promise<ActionState> {
   await requireRole([ROLES.COMPANY_ADMIN]);
+  if (!(await companyHasFeature('flows'))) {
+    return { error: 'Your plan does not include Guided chats. See Billing to change your package.' };
+  }
   const parsed = metaSchema.safeParse(input);
   if (!parsed.success) return { error: parsed.error.issues[0]?.message ?? 'Invalid details.' };
   const { flowId, name, description, channels, priority } = parsed.data;
@@ -227,6 +236,9 @@ export type SaveGraphState = ActionState & { version?: number; savedAt?: string 
 
 export async function saveFlowGraphAction(input: unknown): Promise<SaveGraphState> {
   await requireRole([ROLES.COMPANY_ADMIN]);
+  if (!(await companyHasFeature('flows'))) {
+    return { error: 'Your plan does not include Guided chats. See Billing to change your package.' };
+  }
   const parsed = saveSchema.safeParse(input);
   if (!parsed.success) return { error: parsed.error.issues[0]?.message ?? 'Invalid graph.' };
   const { flowId, snapshot } = parsed.data;
@@ -286,6 +298,9 @@ export type PublishState = ActionState & { problems?: string[]; status?: string 
  */
 export async function publishFlowAction(input: unknown): Promise<PublishState> {
   await requireRole([ROLES.COMPANY_ADMIN]);
+  if (!(await companyHasFeature('flows'))) {
+    return { error: 'Your plan does not include Guided chats. See Billing to change your package.' };
+  }
   const parsed = z
     .object({ flowId: uuid, graph: graphSchema.optional() })
     .safeParse(input);
@@ -334,6 +349,9 @@ export async function publishFlowAction(input: unknown): Promise<PublishState> {
 
 export async function setFlowStatusAction(input: unknown): Promise<ActionState> {
   await requireRole([ROLES.COMPANY_ADMIN]);
+  if (!(await companyHasFeature('flows'))) {
+    return { error: 'Your plan does not include Guided chats. See Billing to change your package.' };
+  }
   const parsed = z
     .object({ flowId: uuid, status: z.enum(['draft', 'live', 'paused']) })
     .safeParse(input);
@@ -353,6 +371,7 @@ export async function setFlowStatusAction(input: unknown): Promise<ActionState> 
 /** Form wrapper for the list page's pause / publish / resume buttons. */
 export async function toggleFlowStatusAction(formData: FormData): Promise<void> {
   await requireRole([ROLES.COMPANY_ADMIN]);
+  await requireCompanyFeature('flows');
   const id = uuid.safeParse(formData.get('id'));
   const status = z.enum(['draft', 'live', 'paused']).safeParse(formData.get('status'));
   if (!id.success || !status.success) return;
@@ -373,6 +392,9 @@ export type RestoreState = ActionState & {
 
 export async function restoreFlowVersionAction(input: unknown): Promise<RestoreState> {
   await requireRole([ROLES.COMPANY_ADMIN]);
+  if (!(await companyHasFeature('flows'))) {
+    return { error: 'Your plan does not include Guided chats. See Billing to change your package.' };
+  }
   const parsed = z.object({ flowId: uuid, version: z.number().int().min(1) }).safeParse(input);
   if (!parsed.success) return { error: 'Invalid version.' };
 
@@ -439,6 +461,9 @@ const triggerSchema = z.object({
 
 export async function saveFlowTriggerAction(input: unknown): Promise<ActionState> {
   await requireRole([ROLES.COMPANY_ADMIN]);
+  if (!(await companyHasFeature('flows'))) {
+    return { error: 'Your plan does not include Guided chats. See Billing to change your package.' };
+  }
   const parsed = triggerSchema.safeParse(input);
   if (!parsed.success) return { error: parsed.error.issues[0]?.message ?? 'Invalid trigger.' };
   const v = parsed.data;
@@ -488,6 +513,9 @@ export async function saveFlowTriggerAction(input: unknown): Promise<ActionState
 
 export async function deleteFlowTriggerAction(input: unknown): Promise<ActionState> {
   await requireRole([ROLES.COMPANY_ADMIN]);
+  if (!(await companyHasFeature('flows'))) {
+    return { error: 'Your plan does not include Guided chats. See Billing to change your package.' };
+  }
   const parsed = z.object({ id: uuid, flowId: uuid }).safeParse(input);
   if (!parsed.success) return { error: 'Invalid trigger.' };
   const companyId = await getCompanyId();

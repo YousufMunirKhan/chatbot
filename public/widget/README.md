@@ -61,6 +61,30 @@ different job — it returns only agent/system messages as the backstop for the
 realtime stream, and replaying the visitor's own words there would duplicate
 every bubble already on screen.
 
+## Attachments
+
+The paperclip beside the message box posts one file to `POST /api/widget/upload`
+as `multipart/form-data` (`publicBotId`, `visitorId`, optional `conversationId`,
+`file`). The reply carries the stored file and a short-lived signed URL, and a
+`conversationId` — a visitor may lead with a photo before typing anything, in
+which case the upload is what created the conversation and the widget adopts the
+id it gets back.
+
+Everything that decides whether a file is acceptable happens server-side, in
+`src/lib/attachments/`: the size is re-measured, and the type is read out of the
+**bytes** rather than taken from the filename or the content type the browser
+declared. Images, PDF and plain text are accepted; SVG and archive-based office
+formats are not. `ATTACH_MAX_BYTES` and `ATTACH_ACCEPT` near the top of
+`widget.js` are a copy of `src/lib/attachments/policy.ts` — there is no build
+step to share a module through, so they are kept in step by hand.
+
+Files live in the private `chat-attachments` bucket (migration `0077`), one
+folder per company, and are only ever reached through a signed URL that expires
+in fifteen minutes. That is why `GET /api/widget/upload` exists: neither the
+realtime stream nor the restored transcript can carry a URL that would still
+work by the time it is used, so both render the message first and then ask this
+endpoint for the files, which are dropped into the bubbles already on screen.
+
 ## Try it locally
 
 1. `npm run dev`

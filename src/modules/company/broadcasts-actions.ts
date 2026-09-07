@@ -6,6 +6,7 @@ import { requireRole } from '@/lib/auth';
 import { ROLES } from '@/lib/constants';
 import { createSupabaseServiceClient } from '@/lib/db/server';
 import { getCompanyId } from './data';
+import { companyHasFeature, requireCompanyFeature } from '@/lib/entitlements';
 
 export type ActionState = { error?: string; ok?: boolean };
 
@@ -30,6 +31,9 @@ const schema = z.object({
 
 export async function createBroadcastAction(_prev: ActionState, formData: FormData): Promise<ActionState> {
   await requireRole([ROLES.COMPANY_ADMIN]);
+  if (!(await companyHasFeature('broadcasts'))) {
+    return { error: 'Your plan does not include Bulk messages. See Billing to change your package.' };
+  }
   const companyId = await getCompanyId();
   const parsed = schema.safeParse(Object.fromEntries(formData));
   if (!parsed.success) return { error: parsed.error.issues[0]?.message ?? 'Invalid broadcast' };
@@ -107,6 +111,7 @@ export async function createBroadcastAction(_prev: ActionState, formData: FormDa
 
 export async function deleteBroadcastAction(formData: FormData): Promise<void> {
   await requireRole([ROLES.COMPANY_ADMIN]);
+  await requireCompanyFeature('broadcasts');
   const companyId = await getCompanyId();
   const id = z.string().uuid().safeParse(formData.get('id'));
   if (!id.success) return;

@@ -20,14 +20,6 @@ export const SMS_WEBHOOK_PATH = '/api/webhooks/sms';
  */
 const MAX_SMS_BODY = 1500;
 
-/**
- * `key` is the literal `'sms'` rather than `ChannelKey` because CHANNEL_KEYS in
- * ./types.ts does not list SMS yet and that file belongs to another change.
- * The shape is otherwise the adapter contract exactly, so the moment `'sms'`
- * joins CHANNEL_KEYS this value satisfies `ChannelAdapter` with no edit here.
- */
-export type SmsChannelAdapter = Omit<ChannelAdapter, 'key'> & { key: 'sms' };
-
 type TwilioFields = Record<string, string>;
 
 /**
@@ -132,7 +124,7 @@ export function verifyTwilioSignature(input: {
  * both signs inbound requests and authenticates outbound ones) while the
  * account SID and any messaging service live in the identity's settings.
  */
-export const smsAdapter: SmsChannelAdapter = {
+export const smsAdapter: ChannelAdapter = {
   key: SMS_CHANNEL_KEY,
   label: 'SMS (Twilio)',
   externalIdHint: 'Your Twilio number in +country format, e.g. +14155550123',
@@ -292,10 +284,10 @@ export function splitForSms(text: string, max = MAX_SMS_BODY): string[] {
 
 /**
  * What the Channels screen needs to offer SMS as a connectable channel. It is
- * declared here so that adding SMS to CHANNEL_KEYS and CHANNEL_DESCRIPTORS is a
- * two-line change in files this one deliberately does not touch.
+ * declared here rather than inline in the registry so the Twilio-specific copy
+ * lives beside the Twilio code it describes; the registry just lists it.
  */
-export const SMS_CHANNEL_DESCRIPTOR: Omit<ChannelDescriptor, 'key'> & { key: 'sms' } = {
+export const SMS_CHANNEL_DESCRIPTOR: ChannelDescriptor = {
   key: SMS_CHANNEL_KEY,
   label: 'SMS (Twilio)',
   externalIdHint: 'Your Twilio number in +country format, e.g. +14155550123',

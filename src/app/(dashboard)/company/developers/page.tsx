@@ -8,6 +8,8 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { EmptyState } from '@/components/ui/empty-state';
 import { PageHeader } from '@/components/ui/page-header';
 import { StatTile } from '@/components/ui/stat-tile';
+import { UpgradeNotice } from '@/components/ui/upgrade-notice';
+import { companyHasFeature, requireCompanyFeature } from '@/lib/entitlements';
 import {
   Table,
   TableBody,
@@ -32,8 +34,11 @@ import { WebhookEventsPanel } from '@/modules/company/components/webhook-events-
 // Keys, logs and the event catalogue all change under the user's hands.
 export const dynamic = 'force-dynamic';
 
+// The gate below decides what this page draws; this decides what a post can do.
+// A form that is never rendered is still reachable with a crafted request.
 async function revoke(formData: FormData) {
   'use server';
+  await requireCompanyFeature('api_access');
   await revokeApiKeyAction(formData);
 }
 
@@ -69,6 +74,12 @@ function sdkSnippet(baseUrl: string): string {
 
 export default async function DevelopersPage() {
   await requireRole([ROLES.COMPANY_ADMIN]);
+  // Keys a company already holds keep working against `/api/v1` until support
+  // revokes them; this only closes the screen that mints and reads them.
+  if (!(await companyHasFeature('api_access'))) {
+    return <UpgradeNotice feature="api_access" title="Developers" />;
+  }
+
   const [keys, requests, usage, events] = await Promise.all([
     listApiKeys(),
     recentApiRequests(25),

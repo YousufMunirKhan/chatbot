@@ -2,6 +2,8 @@ import { notFound } from 'next/navigation';
 import { requireRole } from '@/lib/auth';
 import { ROLES } from '@/lib/constants';
 import { PageHeader } from '@/components/ui/page-header';
+import { UpgradeNotice } from '@/components/ui/upgrade-notice';
+import { companyHasFeature } from '@/lib/entitlements';
 import { listMembers } from '@/modules/company/data';
 import {
   getFlow,
@@ -15,6 +17,13 @@ export const dynamic = 'force-dynamic';
 
 export default async function FlowBuilderPage({ params }: { params: { id: string } }) {
   await requireRole([ROLES.COMPANY_ADMIN]);
+
+  // Checked before the flow is loaded, so a company that cannot use the builder
+  // never learns whether a given id exists. The builder's own save, publish and
+  // trigger actions live in `flows-actions.ts` and gate themselves.
+  if (!(await companyHasFeature('flows'))) {
+    return <UpgradeNotice feature="flows" backTo={{ href: '/company', label: 'Home' }} />;
+  }
 
   // `getFlow` is scoped to the session's company, so an id belonging to another
   // tenant is indistinguishable from one that does not exist.

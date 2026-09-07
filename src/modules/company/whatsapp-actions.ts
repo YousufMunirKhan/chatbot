@@ -17,6 +17,7 @@ import {
 import { normalizeWhatsAppNumber } from '@/lib/channels/whatsapp';
 import { getCompanyId } from './data';
 import { getPrimaryWhatsAppCredentials } from './whatsapp-data';
+import { companyHasFeature, requireCompanyFeature } from '@/lib/entitlements';
 
 export type ActionState = { error?: string; ok?: boolean };
 
@@ -65,6 +66,9 @@ export async function createWhatsAppTemplateAction(
   formData: FormData,
 ): Promise<ActionState> {
   await requireRole([ROLES.COMPANY_ADMIN]);
+  if (!(await companyHasFeature('whatsapp'))) {
+    return { error: 'Your plan does not include WhatsApp. See Billing to change your package.' };
+  }
   const companyId = await getCompanyId();
   const parsed = templateSchema.safeParse(Object.fromEntries(formData));
   if (!parsed.success) return { error: parsed.error.issues[0]?.message ?? 'Invalid template' };
@@ -125,6 +129,7 @@ export async function createWhatsAppTemplateAction(
 /** Submit an existing draft to Meta for review. */
 export async function submitWhatsAppTemplateAction(formData: FormData): Promise<void> {
   await requireRole([ROLES.COMPANY_ADMIN]);
+  await requireCompanyFeature('whatsapp');
   const companyId = await getCompanyId();
   const id = z.string().uuid().safeParse(formData.get('id'));
   if (!id.success) return;
@@ -185,6 +190,9 @@ export async function submitWhatsAppTemplateAction(formData: FormData): Promise<
  */
 export async function syncWhatsAppTemplatesAction(): Promise<ActionState> {
   await requireRole([ROLES.COMPANY_ADMIN]);
+  if (!(await companyHasFeature('whatsapp'))) {
+    return { error: 'Your plan does not include WhatsApp. See Billing to change your package.' };
+  }
   const companyId = await getCompanyId();
   const creds = await getPrimaryWhatsAppCredentials();
   if (!creds?.token || !creds.wabaId) {
@@ -263,6 +271,7 @@ export async function syncWhatsAppTemplatesAction(): Promise<ActionState> {
 
 export async function deleteWhatsAppTemplateAction(formData: FormData): Promise<void> {
   await requireRole([ROLES.COMPANY_ADMIN]);
+  await requireCompanyFeature('whatsapp');
   const companyId = await getCompanyId();
   const id = z.string().uuid().safeParse(formData.get('id'));
   if (!id.success) return;
@@ -298,6 +307,9 @@ const subscriberSchema = z.object({
 
 export async function upsertSubscriberAction(_prev: ActionState, formData: FormData): Promise<ActionState> {
   await requireRole([ROLES.COMPANY_ADMIN]);
+  if (!(await companyHasFeature('whatsapp'))) {
+    return { error: 'Your plan does not include WhatsApp. See Billing to change your package.' };
+  }
   const companyId = await getCompanyId();
   const parsed = subscriberSchema.safeParse(Object.fromEntries(formData));
   if (!parsed.success) return { error: parsed.error.issues[0]?.message ?? 'Invalid subscriber' };
@@ -332,6 +344,7 @@ export async function upsertSubscriberAction(_prev: ActionState, formData: FormD
 /** Flip one subscriber's consent from the list (manual opt-out honours STOP). */
 export async function setSubscriptionAction(formData: FormData): Promise<void> {
   await requireRole([ROLES.COMPANY_ADMIN]);
+  await requireCompanyFeature('whatsapp');
   const companyId = await getCompanyId();
   const id = z.string().uuid().safeParse(formData.get('id'));
   if (!id.success) return;
@@ -363,6 +376,9 @@ const catalogSchema = z.object({
 
 export async function saveCatalogSettingsAction(_prev: ActionState, formData: FormData): Promise<ActionState> {
   await requireRole([ROLES.COMPANY_ADMIN]);
+  if (!(await companyHasFeature('whatsapp'))) {
+    return { error: 'Your plan does not include WhatsApp. See Billing to change your package.' };
+  }
   const companyId = await getCompanyId();
   const parsed = catalogSchema.safeParse(Object.fromEntries(formData));
   if (!parsed.success) return { error: parsed.error.issues[0]?.message ?? 'Invalid catalog settings' };
@@ -394,6 +410,7 @@ const retailerSchema = z.object({
 /** Map one synced product onto its Meta commerce `retailer_id`. */
 export async function setProductRetailerIdAction(formData: FormData): Promise<void> {
   await requireRole([ROLES.COMPANY_ADMIN]);
+  await requireCompanyFeature('whatsapp');
   const companyId = await getCompanyId();
   const parsed = retailerSchema.safeParse(Object.fromEntries(formData));
   if (!parsed.success) return;
@@ -420,6 +437,9 @@ const wabaSchema = z.object({
  */
 export async function saveWabaIdAction(_prev: ActionState, formData: FormData): Promise<ActionState> {
   await requireRole([ROLES.COMPANY_ADMIN]);
+  if (!(await companyHasFeature('whatsapp'))) {
+    return { error: 'Your plan does not include WhatsApp. See Billing to change your package.' };
+  }
   const companyId = await getCompanyId();
   const parsed = wabaSchema.safeParse(Object.fromEntries(formData));
   if (!parsed.success) return { error: 'Invalid WhatsApp Business Account id' };
@@ -458,6 +478,7 @@ const guideSchema = z.object({
 
 export async function toggleGuideStepAction(formData: FormData): Promise<void> {
   await requireRole([ROLES.COMPANY_ADMIN]);
+  await requireCompanyFeature('whatsapp');
   const companyId = await getCompanyId();
   const parsed = guideSchema.safeParse(Object.fromEntries(formData));
   if (!parsed.success) return;

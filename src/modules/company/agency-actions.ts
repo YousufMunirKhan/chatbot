@@ -8,6 +8,7 @@ import { createSupabaseServiceClient } from '@/lib/db/server';
 import { invalidateAgencyCache, normalizeBranding } from '@/lib/agency';
 import { PLANS } from '@/modules/super-admin/plans';
 import { getOwnedAgency } from './agency-data';
+import { companyHasFeature } from '@/lib/entitlements';
 
 /**
  * Agency-owner actions (migration 0057).
@@ -36,6 +37,9 @@ export async function updateAgencyBrandingAction(
   formData: FormData,
 ): Promise<ActionState> {
   await requireRole([ROLES.COMPANY_ADMIN]);
+  if (!(await companyHasFeature('agency'))) {
+    return { error: 'Your plan does not include Agency sub-accounts. See Billing to change your package.' };
+  }
   const agency = await getOwnedAgency();
   if (!agency) return { error: 'You do not own an agency.' };
 
@@ -85,6 +89,9 @@ export async function createSubAccountAction(
   formData: FormData,
 ): Promise<ActionState> {
   await requireRole([ROLES.COMPANY_ADMIN]);
+  if (!(await companyHasFeature('agency'))) {
+    return { error: 'Your plan does not include Agency sub-accounts. See Billing to change your package.' };
+  }
   const agency = await getOwnedAgency();
   if (!agency) return { error: 'You do not own an agency.' };
   if (!agency.isActive) return { error: 'This agency is deactivated. Contact platform support.' };

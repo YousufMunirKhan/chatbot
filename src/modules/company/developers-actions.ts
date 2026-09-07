@@ -8,6 +8,7 @@ import { createSupabaseServiceClient } from '@/lib/db/server';
 import { API_SCOPE_WILDCARD, generateApiKey, isApiScope } from '@/lib/api-keys';
 import { sendTestEvent } from '@/lib/api/developer-events';
 import { getCompanyId } from './data';
+import { companyHasFeature, requireCompanyFeature } from '@/lib/entitlements';
 
 const PATH = '/company/developers';
 
@@ -37,6 +38,9 @@ export async function createApiKeyAction(
   formData: FormData,
 ): Promise<CreateKeyState> {
   await requireRole([ROLES.COMPANY_ADMIN]);
+  if (!(await companyHasFeature('api_access'))) {
+    return { error: 'Your plan does not include API access. See Billing to change your package.' };
+  }
   const companyId = await getCompanyId();
   const user = await getSessionUser();
 
@@ -95,6 +99,7 @@ const idSchema = z.string().uuid();
  */
 export async function revokeApiKeyAction(formData: FormData): Promise<void> {
   await requireRole([ROLES.COMPANY_ADMIN]);
+  await requireCompanyFeature('api_access');
   const companyId = await getCompanyId();
   const id = idSchema.safeParse(formData.get('id'));
   if (!id.success) return;
@@ -120,6 +125,9 @@ export async function sendTestEventAction(
   formData: FormData,
 ): Promise<TestEventState> {
   await requireRole([ROLES.COMPANY_ADMIN]);
+  if (!(await companyHasFeature('api_access'))) {
+    return { error: 'Your plan does not include API access. See Billing to change your package.' };
+  }
   const companyId = await getCompanyId();
   const parsed = eventSchema.safeParse(formData.get('event'));
   if (!parsed.success) return { error: 'Choose an event to test.' };

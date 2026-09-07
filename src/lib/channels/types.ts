@@ -2,9 +2,9 @@
  * Channel adapter contract.
  *
  * Every messaging surface (WhatsApp, Messenger, Telegram, Viber, LINE, TikTok,
- * YouTube, Gmail, email) is reduced to two operations: parse an inbound webhook
- * into a normalised event, and deliver outbound blocks. Everything above this
- * layer — the AI engine, the flow runtime, the inbox — is channel-agnostic.
+ * YouTube, Gmail, email, SMS) is reduced to two operations: parse an inbound
+ * webhook into a normalised event, and deliver outbound blocks. Everything above
+ * this layer — the AI engine, the flow runtime, the inbox — is channel-agnostic.
  */
 
 export const CHANNEL_KEYS = [
@@ -17,8 +17,13 @@ export const CHANNEL_KEYS = [
   'line',
   'tiktok',
   'youtube',
+  'sms',
 ] as const;
 export type ChannelKey = (typeof CHANNEL_KEYS)[number];
+// The human name for each key is not repeated here: the connect screen reads it
+// from CHANNEL_DESCRIPTORS in ./registry, and anything holding only a raw key
+// (the inbox badge, reports) reads CHANNEL_LABELS from @/lib/constants, which
+// already covers 'sms'.
 
 /** A button/quick-reply the customer can tap. `value` is echoed back as text. */
 export interface OutboundButton {

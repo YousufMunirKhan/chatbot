@@ -5,22 +5,30 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { EmptyState } from '@/components/ui/empty-state';
 import { PageHeader } from '@/components/ui/page-header';
+import { UpgradeNotice } from '@/components/ui/upgrade-notice';
+import { companyHasFeature, requireCompanyFeature } from '@/lib/entitlements';
 import { listCampaigns } from '@/modules/company/campaigns-data';
 import { toggleCampaignAction, deleteCampaignAction } from '@/modules/company/campaigns-actions';
 import { CampaignForm } from '@/modules/company/components/campaign-form';
 import { ConfirmSubmit } from '@/components/confirm-submit';
 
+// The gate below decides what this page draws; these decide what a post can do.
+// A form that is never rendered is still reachable with a crafted request.
 async function toggle(formData: FormData) {
   'use server';
+  await requireCompanyFeature('campaigns');
   await toggleCampaignAction(formData);
 }
 async function remove(formData: FormData) {
   'use server';
+  await requireCompanyFeature('campaigns');
   await deleteCampaignAction(formData);
 }
 
 export default async function CampaignsPage() {
   await requireRole([ROLES.COMPANY_ADMIN]);
+  if (!(await companyHasFeature('campaigns'))) return <UpgradeNotice feature="campaigns" />;
+
   const campaigns = await listCampaigns();
 
   return (

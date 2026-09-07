@@ -4,6 +4,7 @@ import { authenticateApiKey, hasScope, type ApiScope } from '@/lib/api-keys';
 import { createSupabaseServiceClient } from '@/lib/db/server';
 import { rateLimitDistributed } from '@/lib/ratelimit';
 import { logger } from '@/lib/logger';
+import { hasFeature } from '@/lib/entitlements';
 
 /**
  * Shared wrapper for every public `/api/v1` route.
@@ -194,6 +195,22 @@ export function withApiAuth(
     if (!hasScope(principal.scopes, scope)) {
       return finish(
         apiErrorResponse('forbidden', `This API key is missing the \`${scope}\` scope.`),
+      );
+    }
+
+    // Closing the Developers page only stops new keys being minted; a key the
+    // company already holds keeps working whatever its plan says. `hasFeature`
+    // rather than `companyHasFeature` because the company comes from the key,
+    // not from a session. Going through `finish` keeps the refusal in
+    // `api_requests`, which is where a customer finds out why their integration
+    // stopped.
+    if (!(await hasFeature(principal.companyId, 'api_access'))) {
+      return finish(
+        apiErrorResponse(
+          'forbidden',
+          'Your plan does not include API access. See Billing to change your package.',
+          402,
+        ),
       );
     }
 

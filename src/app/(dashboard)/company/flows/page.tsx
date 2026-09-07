@@ -5,7 +5,9 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { PageHeader } from '@/components/ui/page-header';
+import { UpgradeNotice } from '@/components/ui/upgrade-notice';
 import { ConfirmSubmit } from '@/components/confirm-submit';
+import { companyHasFeature, requireCompanyFeature } from '@/lib/entitlements';
 import { formatDate } from '@/lib/format';
 import { listFlows, type FlowListRow } from '@/modules/company/flows-data';
 import {
@@ -18,16 +20,21 @@ import { FlowTemplateGrid, NewFlowForm } from '@/modules/company/components/flow
 
 export const dynamic = 'force-dynamic';
 
+// The gate below decides what this page draws; these decide what a post can do.
+// A form that is never rendered is still reachable with a crafted request.
 async function duplicate(formData: FormData) {
   'use server';
+  await requireCompanyFeature('flows');
   await duplicateFlowAction(formData);
 }
 async function remove(formData: FormData) {
   'use server';
+  await requireCompanyFeature('flows');
   await deleteFlowAction(formData);
 }
 async function setStatus(formData: FormData) {
   'use server';
+  await requireCompanyFeature('flows');
   await toggleFlowStatusAction(formData);
 }
 
@@ -61,6 +68,8 @@ const STEPS = [
 
 export default async function FlowsPage() {
   await requireRole([ROLES.COMPANY_ADMIN]);
+  if (!(await companyHasFeature('flows'))) return <UpgradeNotice feature="flows" />;
+
   const flows = await listFlows();
   const hasFlows = flows.length > 0;
 

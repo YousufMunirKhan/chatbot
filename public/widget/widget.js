@@ -78,6 +78,18 @@
     autoOpenDelaySeconds: Number(script.getAttribute('data-auto-open-delay') || 3)
   };
 
+  // ---- Attachments ----------------------------------------------------------
+  // These mirror src/lib/attachments/policy.ts. The server is what enforces
+  // them — it re-reads the size and sniffs the real bytes — but the visitor is
+  // told the rule here, before they spend two minutes uploading a video over a
+  // phone connection only to be refused at the end of it.
+  //
+  // There is no build step and no shared module to import from, so if the
+  // policy file changes these two lines change with it.
+  var ATTACH_MAX_BYTES = 10 * 1024 * 1024;
+  var ATTACH_ACCEPT =
+    '.png,.jpg,.jpeg,.gif,.webp,.pdf,.txt,.csv,image/png,image/jpeg,image/gif,image/webp,application/pdf,text/plain,text/csv';
+
   // ---- Storage helpers ------------------------------------------------------
   // Every access is wrapped: Safari private mode throws on setItem once the
   // quota is zero, and a browser set to block site data throws on the property
@@ -205,7 +217,15 @@
     offlineShown: false,
     gateRow: null, // the pre-chat / leave-a-message card currently in the flow
     composerLocked: false,
-    restored: false // transcript already fetched for this conversation
+    restored: false, // transcript already fetched for this conversation
+    // Attachments. `bubbleByMessageId` is what lets a bubble that is already on
+    // screen be upgraded in place once its file's signed URL arrives: the
+    // realtime stream carries a message's text but not what it is attached to,
+    // and a signed URL expires, so neither can be baked into the first render.
+    uploading: false,
+    bubbleByMessageId: {},
+    attachmentsShown: {},
+    attachSyncTimer: null
   };
 
   // ---- Styles ---------------------------------------------------------------
@@ -380,6 +400,27 @@
       '.' + P + 'root :focus-visible{outline:3px solid var(--aiba-color);outline-offset:2px}',
       '.' + P + 'header :focus-visible{outline:3px solid #fff;outline-offset:2px}',
       '.' + P + 'launcher:focus-visible{outline:none;box-shadow:0 0 0 3px #fff,0 0 0 6px #0f172a,0 12px 34px rgba(17,24,39,.22)}',
+      // Attachments. The paperclip sits inside the composer next to the send
+      // button; the file input beside it is display:none, which also keeps it
+      // out of focusables() and therefore out of the tab trap.
+      '.' + P + 'attach{flex:0 0 auto;border:1px solid #d7e2ef;background:#fff;color:#5b6b82;width:44px;height:44px;border-radius:13px;cursor:pointer;display:flex;align-items:center;justify-content:center;padding:0}',
+      '.' + P + 'attach:hover{border-color:var(--aiba-color);color:var(--aiba-color)}',
+      '.' + P + 'attach:disabled{opacity:.45;cursor:not-allowed}',
+      '.' + P + 'attach svg{width:20px;height:20px;fill:currentColor}',
+      '.' + P + 'file{display:none}',
+      // An attachment bubble drops the sender's colour on BOTH sides: a photo
+      // inside a solid brand-blue block reads as a rendering fault, and a file
+      // link needs a background it can actually be legible on. Written as
+      // `.bubble.att-bubble` and placed after the me/them rules so it outranks
+      // them without !important.
+      '.' + P + 'bubble.' + P + 'att-bubble{background:#fff;color:#172033;border:1px solid #e6edf5;padding:6px;max-width:86%}',
+      '.' + P + 'att-img{display:block;line-height:0;border-radius:9px;overflow:hidden}',
+      '.' + P + 'att-img img{display:block;max-width:100%;max-height:260px;object-fit:contain;border-radius:9px}',
+      '.' + P + 'att-file{display:flex;align-items:center;gap:9px;padding:8px 10px;text-decoration:none;color:#172033;border-radius:9px;min-width:0}',
+      '.' + P + 'att-file:hover{background:#f3f6fb}',
+      '.' + P + 'att-icon{flex:0 0 auto;font-size:16px;line-height:1}',
+      '.' + P + 'att-name{font-size:14px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0}',
+      '.' + P + 'att-size{flex:0 0 auto;font-size:12px;color:#6b7280}',
       '@keyframes ' + P + 'blink{0%,80%,100%{opacity:.3}40%{opacity:1}}',
       '.' + P + 'window[dir="rtl"] .' + P + 'me .' + P + 'bubble{border-bottom-right-radius:14px;border-bottom-left-radius:4px}',
       '.' + P + 'window[dir="rtl"] .' + P + 'them .' + P + 'bubble{border-bottom-left-radius:14px;border-bottom-right-radius:4px}',
@@ -492,6 +533,28 @@
     send.className = P + 'send';
     send.setAttribute('aria-label', 'Send message');
     send.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M2 21l21-9L2 3v7l15 2-15 2z"/></svg>';
+
+    // The paperclip and the input it drives. The label says what may be sent
+    // and how big, because a refusal after the upload is a bad way to find out.
+    var attach = document.createElement('button');
+    attach.type = 'button';
+    attach.className = P + 'attach';
+    attach.setAttribute('aria-label', 'Attach a photo or file. Images, PDF or plain text, up to 10 MB.');
+    attach.title = 'Attach a photo or file (images, PDF or plain text, up to 10 MB)';
+    attach.innerHTML =
+      '<svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M16.5 6v11.5c0 2.21-1.79 4-4 4s-4-1.79-4-4V5c0-1.38 1.12-2.5 2.5-2.5S13.5 3.62 13.5 5v10.5c0 .55-.45 1-1 1s-1-.45-1-1V6H10v9.5c0 1.38 1.12 2.5 2.5 2.5s2.5-1.12 2.5-2.5V5c0-2.21-1.79-4-4-4S7 2.79 7 5v12.5c0 3.04 2.46 5.5 5.5 5.5s5.5-2.46 5.5-5.5V6h-1.5z"/></svg>';
+
+    var fileInput = document.createElement('input');
+    fileInput.type = 'file';
+    fileInput.className = P + 'file';
+    fileInput.setAttribute('accept', ATTACH_ACCEPT);
+    // Driven entirely by the button above, so it is hidden from both the
+    // pointer and the tab order rather than being a second visible control.
+    fileInput.setAttribute('aria-hidden', 'true');
+    fileInput.tabIndex = -1;
+
+    footer.appendChild(attach);
+    footer.appendChild(fileInput);
     footer.appendChild(input);
     footer.appendChild(send);
 
@@ -526,12 +589,23 @@
     // pinning it to the viewport. <html> is almost never transformed.
     (document.documentElement || document.body).appendChild(host);
 
-    els = { root: root, launcher: launcher, win: win, header: header, msgs: msgs, actions: actions, form: form, brand: brand, input: input, send: send, title: h3, status: status, headAvatar: headAvatar };
+    els = { root: root, launcher: launcher, win: win, header: header, msgs: msgs, actions: actions, form: form, brand: brand, input: input, send: send, attach: attach, file: fileInput, title: h3, status: status, headAvatar: headAvatar };
     applyWidgetAppearance();
 
     launcher.addEventListener('click', toggle);
     close.addEventListener('click', toggle);
     send.addEventListener('click', onSend);
+    attach.addEventListener('click', function () {
+      if (state.uploading || state.sending || state.composerLocked) return;
+      fileInput.click();
+    });
+    fileInput.addEventListener('change', function () {
+      var picked = fileInput.files && fileInput.files[0];
+      // Cleared straight away so picking the SAME file twice still fires a
+      // change event — otherwise a failed upload cannot be retried as-is.
+      fileInput.value = '';
+      if (picked) uploadAttachment(picked);
+    });
     input.addEventListener('keydown', function (e) {
       if (e.key === 'Enter') {
         e.preventDefault();
@@ -599,7 +673,11 @@
   }
 
   // ---- Rendering ------------------------------------------------------------
-  function addBubble(kind, text) {
+  // `messageId` is optional and only supplied for bubbles that came from a
+  // stored message. Keeping the element against its id is what lets an
+  // attachment be dropped into a bubble that is already on screen — see
+  // syncAttachments().
+  function addBubble(kind, text, messageId) {
     var row = document.createElement('div');
     row.className = P + 'row ' + P + kind; // me | them | sys
     var bubble = document.createElement('div');
@@ -626,8 +704,194 @@
     }
     row.appendChild(bubble);
     els.msgs.appendChild(row);
+    if (messageId) state.bubbleByMessageId[messageId] = bubble;
     scrollDown(kind === 'me'); // always follow the user's own message
     return bubble;
+  }
+
+  // ---- Attachments ----------------------------------------------------------
+  function formatBytes(bytes) {
+    if (!bytes || bytes < 0) return '0 KB';
+    if (bytes < 1024) return bytes + ' B';
+    var kb = bytes / 1024;
+    if (kb < 1024) return Math.round(kb) + ' KB';
+    var mb = kb / 1024;
+    return (mb >= 10 ? Math.round(mb) : Math.round(mb * 10) / 10) + ' MB';
+  }
+
+  // The one element that represents a stored file: an image shown inline, or a
+  // labelled link for everything else. Both open in a new tab, and both are
+  // built with createElement rather than innerHTML — the URL is ours, but the
+  // FILE NAME came off a stranger's machine and is never parsed as markup.
+  function buildAttachmentEl(att) {
+    var link = document.createElement('a');
+    // The signed URL is minted by our own API, but check it anyway: a
+    // `javascript:` href would be the whole attack, and this is one comparison.
+    var href = String(att && att.url ? att.url : '');
+    link.href = /^https?:\/\//i.test(href) ? href : '#';
+    link.target = '_blank';
+    link.rel = 'noreferrer noopener';
+
+    if (att.kind === 'image') {
+      link.className = P + 'att-img';
+      link.title = att.name + ' - ' + formatBytes(att.size);
+      var img = document.createElement('img');
+      img.src = link.href;
+      img.alt = att.name;
+      img.loading = 'lazy';
+      link.appendChild(img);
+      return link;
+    }
+
+    link.className = P + 'att-file';
+    var icon = document.createElement('span');
+    icon.className = P + 'att-icon';
+    icon.setAttribute('aria-hidden', 'true');
+    icon.textContent = '📎';
+    var name = document.createElement('span');
+    name.className = P + 'att-name';
+    name.textContent = att.name;
+    var size = document.createElement('span');
+    size.className = P + 'att-size';
+    size.textContent = formatBytes(att.size);
+    link.appendChild(icon);
+    link.appendChild(name);
+    link.appendChild(size);
+    return link;
+  }
+
+  // Replace a bubble's text with its attachment. The text it had was the
+  // fallback line the server stores in content_text ("Sent a photo: cat.png"),
+  // which exists so the message is never blank in the inbox or in search —
+  // once the file itself is on screen, repeating the name above it is noise.
+  function fillBubbleWithAttachment(bubble, att) {
+    bubble.textContent = '';
+    bubble.className = P + 'bubble ' + P + 'att-bubble';
+    bubble.appendChild(buildAttachmentEl(att));
+  }
+
+  function setUploading(on) {
+    state.uploading = on;
+    if (els.attach) els.attach.disabled = on || state.sending || state.composerLocked;
+  }
+
+  function uploadAttachment(file) {
+    if (state.uploading || state.sending || state.composerLocked) return;
+    if (file.size > ATTACH_MAX_BYTES) {
+      addBubble('sys', file.name + ' is ' + formatBytes(file.size) + '. The limit is ' + formatBytes(ATTACH_MAX_BYTES) + '.');
+      return;
+    }
+
+    setUploading(true);
+    // A placeholder in the visitor's own column, so the chat reacts the instant
+    // they pick something rather than sitting still for the whole upload. It
+    // becomes the attachment on success and the reason on failure.
+    var placeholder = addBubble('me', 'Sending ' + file.name + '...');
+
+    var body = new FormData();
+    body.append('publicBotId', cfg.botId);
+    body.append('visitorId', visitorId);
+    if (conversationId) body.append('conversationId', conversationId);
+    body.append('file', file);
+
+    fetch(cfg.api + '/api/widget/upload', { method: 'POST', body: body })
+      .then(function (res) {
+        return res
+          .json()
+          .catch(function () { return {}; })
+          .then(function (data) {
+            if (!res.ok) {
+              var err = new Error((data && data.code) || 'upload_' + res.status);
+              err.friendly = data && data.error ? String(data.error) : '';
+              err.statusCode = res.status;
+              throw err;
+            }
+            return data;
+          });
+      })
+      .then(function (data) {
+        // A visitor may lead with a photo before typing anything, in which case
+        // the server created the conversation. Adopt it so the next typed
+        // message continues this chat instead of starting a second one.
+        if (data.conversationId && data.conversationId !== conversationId) {
+          conversationId = data.conversationId;
+          lsSet('conversationId', conversationId);
+          connectRealtime();
+        }
+        if (data.messageId) {
+          state.seenIds[data.messageId] = true;
+          state.bubbleByMessageId[data.messageId] = placeholder;
+        }
+        if (data.attachment) {
+          state.attachmentsShown[data.attachment.id] = true;
+          fillBubbleWithAttachment(placeholder, data.attachment);
+        }
+        scrollDown(true);
+      })
+      .catch(function (err) {
+        placeholder.textContent = attachmentErrorMessage(err, file);
+        reportClientError('Widget attachment upload failed', {
+          error: err && err.message ? err.message : String(err),
+          statusCode: err && err.statusCode ? err.statusCode : undefined
+        });
+      })
+      .then(function () {
+        setUploading(false);
+      });
+  }
+
+  function attachmentErrorMessage(err, file) {
+    // The API already writes these for a person to read, so prefer its wording
+    // and only fall back when the request never got far enough to produce one.
+    if (err && err.friendly) return err.friendly;
+    return 'Could not send ' + file.name + '. Check your connection and try again.';
+  }
+
+  // Fetch this conversation's attachments and drop each one into the bubble it
+  // belongs to.
+  //
+  // This exists because neither of the two ways a message reaches the widget
+  // carries its file: the realtime stream sends the message row's text and
+  // nothing else, and the restored transcript is the same. A signed URL could
+  // not be delivered that way in any case — it expires — so the URL is always
+  // minted now, and the bubble is upgraded in place afterwards.
+  function syncAttachments() {
+    if (!conversationId) return;
+    var url =
+      cfg.api +
+      '/api/widget/upload?publicBotId=' +
+      encodeURIComponent(cfg.botId) +
+      '&conversationId=' +
+      encodeURIComponent(conversationId) +
+      '&visitorId=' +
+      encodeURIComponent(visitorId);
+    fetch(url)
+      .then(function (res) { return res.ok ? res.json() : null; })
+      .then(function (data) {
+        if (!data || !data.attachments || !data.attachments.length) return;
+        var painted = false;
+        for (var i = 0; i < data.attachments.length; i++) {
+          var att = data.attachments[i];
+          if (!att || !att.id || state.attachmentsShown[att.id]) continue;
+          var bubble = state.bubbleByMessageId[att.messageId];
+          if (!bubble) continue;
+          state.attachmentsShown[att.id] = true;
+          fillBubbleWithAttachment(bubble, att);
+          painted = true;
+        }
+        if (painted) scrollDown(false);
+      })
+      .catch(function () {});
+  }
+
+  // Coalesced: an agent sending three files in a row must not become three
+  // list fetches, and the row has to be on screen before it can be decorated.
+  function scheduleAttachmentSync() {
+    if (!conversationId || state.attachSyncTimer) return;
+    state.attachSyncTimer = setTimeout(function () {
+      state.attachSyncTimer = null;
+      syncAttachments();
+    }, 600);
   }
 
   function renderQuickActions() {
@@ -1583,8 +1847,12 @@
       var m = evt.message;
       if (state.seenIds[m.id]) return;
       state.seenIds[m.id] = true;
-      if (m.sender_type === 'system') addBubble('sys', m.content_text || '');
-      else { addBubble('them', m.content_text || ''); state.botAnswered = true; }
+      if (m.sender_type === 'system') addBubble('sys', m.content_text || '', m.id);
+      else { addBubble('them', m.content_text || '', m.id); state.botAnswered = true; }
+      // The event carries the message row's text and nothing else, so an agent
+      // sending a file arrives here as its fallback line. Ask for the files a
+      // moment later and swap the bubble over if this was one.
+      scheduleAttachmentSync();
       if (m.created_at && (!state.lastTimestamp || m.created_at > state.lastTimestamp)) {
         state.lastTimestamp = m.created_at;
         lsSet('after', state.lastTimestamp);
@@ -1740,6 +2008,9 @@
     if (!els.input || !els.send) return;
     els.input.disabled = on || state.sending;
     els.send.disabled = on || state.sending;
+    // The paperclip is a way into the conversation too, so a gate that only
+    // shut the message box would be a gate with a door beside it.
+    if (els.attach) els.attach.disabled = on || state.sending || state.uploading;
     var idle = state.rtl ? '...' : 'Type your message...';
     var locked = state.rtl ? '...' : 'Fill in the short form above to start';
     els.input.setAttribute('placeholder', on ? locked : idle);
@@ -2048,18 +2319,22 @@
           var m = messages[i];
           if (!m || state.seenIds[m.id]) continue;
           state.seenIds[m.id] = true;
-          if (m.senderType === 'visitor') addBubble('me', m.text);
-          else if (m.senderType === 'system') addBubble('sys', m.text);
+          if (m.senderType === 'visitor') addBubble('me', m.text, m.id);
+          else if (m.senderType === 'system') addBubble('sys', m.text, m.id);
           else {
-            addBubble('them', m.text);
+            addBubble('them', m.text, m.id);
             state.botAnswered = true;
           }
         }
+        // Any of those bubbles may be a file. The transcript endpoint returns
+        // the message text only, so the files are fetched separately and
+        // dropped into the bubbles that are now on screen.
         if (messages.length) {
           // A conversation already under way must not be greeted again — the
           // welcome would land underneath the answer it already gave.
           state.welcomed = true;
           scrollDown(true);
+          syncAttachments();
         }
         if (data.lastMessageAt) {
           state.lastTimestamp = data.lastMessageAt;
@@ -2081,6 +2356,7 @@
     // re-enable a message box the form is still holding shut.
     els.send.disabled = on || state.composerLocked;
     els.input.disabled = on || state.composerLocked;
+    if (els.attach) els.attach.disabled = on || state.composerLocked || state.uploading;
   }
 
   function onSend() {

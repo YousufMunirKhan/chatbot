@@ -6,6 +6,8 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { EmptyState } from '@/components/ui/empty-state';
 import { PageHeader } from '@/components/ui/page-header';
+import { UpgradeNotice } from '@/components/ui/upgrade-notice';
+import { companyHasFeature, requireCompanyFeature } from '@/lib/entitlements';
 import { formatDate } from '@/lib/format';
 import { listApprovedTemplateOptions, listBroadcasts } from '@/modules/company/broadcasts-data';
 import { deleteBroadcastAction } from '@/modules/company/broadcasts-actions';
@@ -14,6 +16,9 @@ import { ConfirmSubmit } from '@/components/confirm-submit';
 
 async function cancel(formData: FormData) {
   'use server';
+  // The gate below decides what this page draws; this decides what a post can
+  // do. A form that is never rendered is still reachable with a crafted request.
+  await requireCompanyFeature('broadcasts');
   await deleteBroadcastAction(formData);
 }
 
@@ -46,6 +51,8 @@ function audienceLabel(audience: string, filter: Record<string, unknown>): strin
 
 export default async function BroadcastsPage() {
   await requireRole([ROLES.COMPANY_ADMIN]);
+  if (!(await companyHasFeature('broadcasts'))) return <UpgradeNotice feature="broadcasts" />;
+
   const [broadcasts, templates] = await Promise.all([
     listBroadcasts(),
     listApprovedTemplateOptions(),

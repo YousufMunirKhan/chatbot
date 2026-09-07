@@ -3,6 +3,7 @@ import { createSupabaseServiceClient } from '@/lib/db/server';
 import { currentMonthStartIso, getReplyAllowanceUsage, type ReplyAllowanceUsage } from '@/lib/billing';
 import { usdToGbp } from './money';
 import { getPlanPriceMapGbp } from './plan-pricing';
+import type { PlanFeatureSet } from './plans';
 
 /**
  * Super-admin data layer (Module 4). Uses the service-role client (bypasses RLS)
@@ -266,6 +267,8 @@ export interface SubscriptionInfo {
   agentLimit: number | null;
   botLimit: number | null;
   integrationLimit: number | null;
+  /** Per-company exceptions to the plan, as stored on subscriptions. */
+  featureOverrides: PlanFeatureSet;
 }
 
 export interface CompanyDetail {
@@ -464,6 +467,7 @@ export async function getCompanyDetail(id: string): Promise<CompanyDetail | null
       agentLimit: (sub.agent_limit as number) ?? null,
       botLimit: (sub.bot_limit as number) ?? null,
       integrationLimit: (sub.integration_limit as number) ?? null,
+      featureOverrides: (sub.feature_overrides ?? {}) as PlanFeatureSet,
     },
     members: (members ?? []).map((m) => {
       const u = rec((m as Record<string, unknown>).users);

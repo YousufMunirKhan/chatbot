@@ -6,6 +6,8 @@ import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { EmptyState } from '@/components/ui/empty-state';
 import { PageHeader } from '@/components/ui/page-header';
+import { UpgradeNotice } from '@/components/ui/upgrade-notice';
+import { companyHasFeature } from '@/lib/entitlements';
 import { formatDate, formatNumber } from '@/lib/format';
 import { getOwnedAgency, listSubAccounts } from '@/modules/company/agency-data';
 import { AgencyBrandingForm } from '@/modules/company/components/agency-branding-form';
@@ -24,11 +26,21 @@ function gbp(value: number): string {
  * — including another admin of the same company — gets a 404 rather than an
  * empty screen, because "there is no such page for you" is the honest answer
  * and it leaks nothing about who the owner is.
+ *
+ * ENTITLEMENT: the 404 comes FIRST and the package check second, on purpose. A
+ * company with no agency has nothing here whatever it pays, and telling it what
+ * a package it cannot buy would unlock is noise; only an actual agency owner is
+ * shown the upgrade state. No priced package includes `agency` — it is a
+ * commercial arrangement — so an owner whose subscription does not carry the
+ * override lands on a screen that says to talk to us, which is the truth.
  */
 export default async function CompanyAgencyPage() {
   await requireRole([ROLES.COMPANY_ADMIN]);
   const agency = await getOwnedAgency();
   if (!agency) notFound();
+  if (!(await companyHasFeature('agency'))) {
+    return <UpgradeNotice feature="agency" title={agency.name} />;
+  }
 
   const subAccounts = await listSubAccounts(agency.id);
   const totals = subAccounts.reduce(

@@ -6,6 +6,9 @@ import { tiktokAdapter } from './adapters/tiktok';
 import { viberAdapter } from './adapters/viber';
 import { whatsappAdapter } from './adapters/whatsapp';
 import { youtubeAdapter } from './adapters/youtube';
+// SMS lives one level up rather than under adapters/ because it needs the app's
+// env and logger, and everything in adapters/ is deliberately dependency-free.
+import { SMS_CHANNEL_DESCRIPTOR, smsAdapter } from './sms';
 import { CHANNEL_KEYS } from './types';
 import type { ChannelAdapter, ChannelKey } from './types';
 
@@ -19,6 +22,7 @@ const ADAPTERS: Record<ChannelKey, ChannelAdapter> = {
   line: lineAdapter,
   tiktok: tiktokAdapter,
   youtube: youtubeAdapter,
+  sms: smsAdapter,
 };
 
 export function getChannelAdapter(channel: string): ChannelAdapter | null {
@@ -130,6 +134,8 @@ export const CHANNEL_DESCRIPTORS: ChannelDescriptor[] = [
     webhookPath: '/api/webhooks/youtube',
     docsHint: 'Comments are polled every few minutes; replies post in-thread.',
   },
+  // Declared in ./sms so the Twilio wording sits next to the Twilio code.
+  SMS_CHANNEL_DESCRIPTOR,
   {
     key: 'email',
     label: 'Email & Gmail',
