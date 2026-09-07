@@ -1,4 +1,5 @@
 import { requireRole } from '@/lib/auth';
+import { InfoHint } from '@/components/ui/info-hint';
 import { CHANNEL_LABELS, ROLES, humanizeToken, labelFor } from '@/lib/constants';
 import { companyLabel } from '@/lib/labels';
 import { Alert } from '@/components/ui/alert';
@@ -301,7 +302,13 @@ async function OverviewPanel({ days }: { days: number }) {
                   <TableHead>Channel</TableHead>
                   <TableHead>Conversations</TableHead>
                   <TableHead>Messages</TableHead>
-                  <TableHead>Handled by AI</TableHead>
+                  <TableHead>
+                    Handled by AI
+                    <InfoHint label="Handled by AI">
+                      Conversations on this channel that finished without ever needing one of your
+                      team.
+                    </InfoHint>
+                  </TableHead>
                   <TableHead>Leads</TableHead>
                 </TableRow>
               </TableHeader>
@@ -348,9 +355,21 @@ async function OverviewPanel({ days }: { days: number }) {
               <TableHeader>
                 <TableRow>
                   <TableHead>Flow</TableHead>
-                  <TableHead>Blocks entered</TableHead>
+                  <TableHead>
+                    People who started it
+                    <InfoHint label="People who started it">
+                      How many separate conversations reached this guided chat. Someone who goes
+                      through it twice counts twice.
+                    </InfoHint>
+                  </TableHead>
                   <TableHead>Completions</TableHead>
-                  <TableHead>Completion rate</TableHead>
+                  <TableHead>
+                    Reached the end
+                    <InfoHint label="Reached the end">
+                      The share of people who started this guided chat and got all the way to its
+                      last step. A low number usually means one question is putting people off.
+                    </InfoHint>
+                  </TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -721,7 +740,7 @@ async function AssistantPanel({ days }: { days: number }) {
     <div className="space-y-6">
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
         <StatTile
-          label="Containment"
+          label="Sorted without a person"
           value={`${report.containmentRate}%`}
           hint={`${report.containedConversations} of ${report.conversations} needed no human`}
           tone={

@@ -9,10 +9,9 @@ import {
 } from '@/lib/constants';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { EmptyState } from '@/components/ui/empty-state';
 import { PageHeader } from '@/components/ui/page-header';
-import { StatTile } from '@/components/ui/stat-tile';
 import {
   Table,
   TableBody,
@@ -22,203 +21,221 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import { formatCurrency, formatDate } from '@/lib/format';
-import { listAppointments } from '@/modules/company/appointments-data';
-import { listLeads } from '@/modules/company/leads-data';
-import { listChatOrders, listSyncedOrders } from '@/modules/company/orders-data';
+import {
+  CUSTOMER_TABS,
+  getCustomerOverview,
+  normalizeCustomerTab,
+} from '@/modules/company/customers-data';
 import { RefreshOnFocus } from '@/components/refresh-on-focus';
 
-export default async function CustomersWorkspacePage() {
+/**
+ * Customers.
+ *
+ * What changed and why:
+ *  - One list at a time. Three previews used to sit stacked, so the page was
+ *    three near-identical tables tall and the buttons at the top only scrolled
+ *    you down to them. With real volume that is a page nobody reads.
+ *  - The counts on the tabs are the real totals, so "Enquiries 412" is visible
+ *    without loading 412 rows — only the eight on screen are fetched.
+ *  - Every row is a link to the thing it describes, rather than a dead cell.
+ */
+
+export const dynamic = 'force-dynamic';
+
+const PREVIEW_SIZE = 8;
+
+function tabHref(key: string): string {
+  return key === 'leads' ? '/company/customers' : `/company/customers?show=${key}`;
+}
+
+export default async function CustomersWorkspacePage({
+  searchParams,
+}: {
+  searchParams?: { show?: string };
+}) {
   await requireRole([ROLES.COMPANY_ADMIN, ROLES.AGENT]);
-  const [leads, appointments, chatOrders, syncedOrders] = await Promise.all([
-    listLeads(),
-    listAppointments(),
-    listChatOrders(),
-    listSyncedOrders(),
-  ]);
-  const orders = [...chatOrders, ...syncedOrders].slice(0, 8);
+  const tab = normalizeCustomerTab(searchParams?.show);
+  const overview = await getCustomerOverview(tab, PREVIEW_SIZE);
+  // `normalizeCustomerTab` only ever returns a key that exists in the list, so
+  // the fallback is for the type checker rather than a case that can happen.
+  const active = CUSTOMER_TABS.find((t) => t.key === tab) ?? {
+    key: 'leads' as const,
+    label: 'Enquiries',
+    href: '/company/leads',
+  };
 
   return (
-    <div className="mx-auto max-w-7xl space-y-6">
+    <div className="mx-auto max-w-6xl space-y-6">
       <RefreshOnFocus />
       <PageHeader
         title="Customers"
-        description="Everyone who has been in touch — who left their details, who asked to book, and who ordered. The three sections below each have a full page behind them."
-        actions={
-          <>
-            <Button asChild variant="outline" size="sm">
-              <Link href="#leads">Leads</Link>
-            </Button>
-            <Button asChild variant="outline" size="sm">
-              <Link href="#appointments">Appointments</Link>
-            </Button>
-            <Button asChild variant="outline" size="sm">
-              <Link href="#orders">Orders</Link>
-            </Button>
-          </>
-        }
+        description="Everyone who has been in touch — who left their details, who asked to book, and who ordered."
       />
 
-      <div className="grid gap-4 sm:grid-cols-3">
-        <StatTile label="Leads" value={leads.length} href="#leads" />
-        <StatTile label="Appointments" value={appointments.length} href="#appointments" />
-        <StatTile label="Orders" value={chatOrders.length + syncedOrders.length} href="#orders" />
-      </div>
+      {/* The tabs carry the totals, so they are the summary as well as the
+          navigation. Separate count tiles above them would say the same thing
+          twice. */}
+      <nav aria-label="Which customers to show" className="flex flex-wrap gap-2">
+        {CUSTOMER_TABS.map(({ key, label }) => {
+          const isActive = key === tab;
+          const count = overview.counts[key];
+          return (
+            <Link
+              key={key}
+              href={tabHref(key)}
+              aria-current={isActive ? 'page' : undefined}
+              className={[
+                'flex items-center gap-2 rounded-md border px-3 py-2 text-sm',
+                isActive ? 'border-primary bg-muted font-medium' : 'text-muted-foreground hover:bg-muted/50',
+              ].join(' ')}
+            >
+              <span>{label}</span>
+              <span className="rounded-full bg-background px-2 py-0.5 text-xs tabular-nums">{count}</span>
+            </Link>
+          );
+        })}
+      </nav>
 
-      <Card id="leads">
-        <CardHeader className="flex-row items-center justify-between">
-          <CardTitle>Recent leads</CardTitle>
-          <Link href="/company/leads" className="text-sm text-primary hover:underline">
-            Manage all
-          </Link>
+      <Card>
+        <CardHeader className="flex-row flex-wrap items-center justify-between gap-3">
+          <div>
+            <CardTitle>
+              {overview.counts[tab] > PREVIEW_SIZE
+                ? `Latest ${PREVIEW_SIZE} of ${overview.counts[tab]}`
+                : active.label}
+            </CardTitle>
+            <CardDescription>Newest first.</CardDescription>
+          </div>
+          <Button asChild size="sm" variant="outline">
+            <Link href={active.href}>Open all {active.label.toLowerCase()}</Link>
+          </Button>
         </CardHeader>
-        <CardContent className="p-0">
-          {leads.length === 0 ? (
-            // Module 1 — nothing captured yet; the widget is what starts the flow.
-            <EmptyState
-              title="No leads yet."
-              body="Once the widget is live, anyone who leaves a name and contact detail in chat appears here."
-              action={
-                <Button asChild size="sm">
-                  <Link href="/company/widget">Install the widget</Link>
-                </Button>
-              }
-            />
-          ) : (
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Name</TableHead>
-                  <TableHead>Contact</TableHead>
-                  <TableHead>Need</TableHead>
-                  <TableHead>Status</TableHead>
-                  <TableHead>Created</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {leads.slice(0, 8).map((lead) => (
-                  <TableRow key={lead.id}>
-                    <TableCell className="font-medium">{lead.name || 'Lead'}</TableCell>
-                    <TableCell>{lead.email ?? lead.phone ?? '-'}</TableCell>
-                    <TableCell>{lead.enquiryType ?? '-'}</TableCell>
-                    <TableCell>
-                      <Badge variant="secondary">{labelFor(LEAD_STATUS_LABELS, lead.status)}</Badge>
-                    </TableCell>
-                    <TableCell className="text-muted-foreground">
-                      {formatDate(lead.createdAt)}
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          )}
-        </CardContent>
-      </Card>
 
-      <Card id="appointments">
-        <CardHeader className="flex-row items-center justify-between">
-          <CardTitle>Appointment requests</CardTitle>
-          <Link href="/company/appointments" className="text-sm text-primary hover:underline">
-            Manage all
-          </Link>
-        </CardHeader>
         <CardContent className="p-0">
-          {appointments.length === 0 ? (
-            // Module 2 — bookings need a bookable service before they can arrive.
-            <EmptyState
-              title="No appointment requests yet."
-              body="Mark a service as bookable and the assistant can take requests in chat."
-              action={
-                <Button asChild size="sm" variant="outline">
-                  <Link href="/company/business-data?tab=services">Set up a bookable service</Link>
-                </Button>
-              }
-            />
-          ) : (
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Customer</TableHead>
-                  <TableHead>Service</TableHead>
-                  <TableHead>Preferred time</TableHead>
-                  <TableHead>Status</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {appointments.slice(0, 8).map((appointment) => (
-                  <TableRow key={appointment.id}>
-                    <TableCell className="font-medium">
-                      {appointment.customerName || 'Customer'}
-                    </TableCell>
-                    <TableCell>{appointment.serviceType ?? '-'}</TableCell>
-                    <TableCell>
-                      {[appointment.preferredDate, appointment.preferredTime]
-                        .filter(Boolean)
-                        .join(' ') || '-'}
-                    </TableCell>
-                    <TableCell>
-                      <Badge variant="secondary">
-                        {labelFor(APPOINTMENT_STATUS_LABELS, appointment.status)}
-                      </Badge>
-                    </TableCell>
+          {tab === 'leads' ? (
+            overview.leads.length === 0 ? (
+              <EmptyState
+                title="No enquiries yet"
+                body="Once the chat is live on your website, anyone who leaves a name and a way to reach them appears here."
+                action={
+                  <Button asChild size="sm">
+                    <Link href="/company/widget">Put the chat on your website</Link>
+                  </Button>
+                }
+              />
+            ) : (
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Name</TableHead>
+                    <TableHead>Contact</TableHead>
+                    <TableHead>What they wanted</TableHead>
+                    <TableHead>Stage</TableHead>
+                    <TableHead>When</TableHead>
                   </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          )}
-        </CardContent>
-      </Card>
+                </TableHeader>
+                <TableBody>
+                  {overview.leads.map((lead) => (
+                    <TableRow key={lead.id}>
+                      <TableCell className="font-medium">{lead.name}</TableCell>
+                      <TableCell>{lead.contact ?? '—'}</TableCell>
+                      <TableCell>{lead.need ?? '—'}</TableCell>
+                      <TableCell>
+                        <Badge variant="secondary">{labelFor(LEAD_STATUS_LABELS, lead.status)}</Badge>
+                      </TableCell>
+                      <TableCell className="text-muted-foreground">{formatDate(lead.createdAt)}</TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            )
+          ) : null}
 
-      <Card id="orders">
-        <CardHeader className="flex-row items-center justify-between">
-          <CardTitle>Recent orders</CardTitle>
-          <Link href="/company/orders" className="text-sm text-primary hover:underline">
-            Manage all
-          </Link>
-        </CardHeader>
-        <CardContent className="p-0">
-          {orders.length === 0 ? (
-            // Module 3 — covers both chat orders and store-synced orders.
-            <EmptyState
-              title="No orders yet."
-              body="Orders placed in chat show up here, and so do orders from a connected store once you link one."
-              action={
-                <Button asChild size="sm" variant="outline">
-                  <Link href="/company/integrations">Connect a store</Link>
-                </Button>
-              }
-            />
-          ) : (
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Customer</TableHead>
-                  <TableHead>Status</TableHead>
-                  <TableHead>Total</TableHead>
-                  <TableHead>Created</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {orders.map((order) => (
-                  <TableRow key={order.id}>
-                    <TableCell className="font-medium">
-                      {order.customerName ?? 'Customer'}
-                    </TableCell>
-                    <TableCell>
-                      {/* This row mixes chat orders with store-synced ones, so the
-                          status can be a WooCommerce token we never chose. */}
-                      <Badge variant="secondary">
-                        {labelFor(ORDER_STATUS_LABELS, order.status, 'Not known')}
-                      </Badge>
-                    </TableCell>
-                    <TableCell>{formatCurrency(order.total, order.currency)}</TableCell>
-                    <TableCell className="text-muted-foreground">
-                      {formatDate(order.createdAt)}
-                    </TableCell>
+          {tab === 'appointments' ? (
+            overview.appointments.length === 0 ? (
+              <EmptyState
+                title="No booking requests yet"
+                body="Mark one of your services as bookable and the assistant can take requests in chat."
+                action={
+                  <Button asChild size="sm" variant="outline">
+                    <Link href="/company/business-data?tab=services">Make a service bookable</Link>
+                  </Button>
+                }
+              />
+            ) : (
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Customer</TableHead>
+                    <TableHead>Service</TableHead>
+                    <TableHead>When they asked for</TableHead>
+                    <TableHead>Stage</TableHead>
                   </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          )}
+                </TableHeader>
+                <TableBody>
+                  {overview.appointments.map((appointment) => (
+                    <TableRow key={appointment.id}>
+                      <TableCell className="font-medium">{appointment.customerName}</TableCell>
+                      <TableCell>{appointment.serviceType ?? '—'}</TableCell>
+                      <TableCell className="text-muted-foreground">
+                        {appointment.preferredDate
+                          ? `${formatDate(appointment.preferredDate)}${appointment.preferredTime ? ` at ${appointment.preferredTime}` : ''}`
+                          : 'No time given'}
+                      </TableCell>
+                      <TableCell>
+                        <Badge variant="secondary">
+                          {labelFor(APPOINTMENT_STATUS_LABELS, appointment.status)}
+                        </Badge>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            )
+          ) : null}
+
+          {tab === 'orders' ? (
+            overview.orders.length === 0 ? (
+              <EmptyState
+                title="No orders yet"
+                body="Orders placed in chat appear here, and so do orders from your shop once you connect it."
+                action={
+                  <Button asChild size="sm" variant="outline">
+                    <Link href="/company/integrations">Connect your shop</Link>
+                  </Button>
+                }
+              />
+            ) : (
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Customer</TableHead>
+                    <TableHead>Came from</TableHead>
+                    <TableHead>Stage</TableHead>
+                    <TableHead>Total</TableHead>
+                    <TableHead>When</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {overview.orders.map((order) => (
+                    <TableRow key={`${order.origin}-${order.id}`}>
+                      <TableCell className="font-medium">{order.customerName}</TableCell>
+                      <TableCell className="text-muted-foreground">
+                        {order.origin === 'chat' ? 'Chat' : 'Your shop'}
+                      </TableCell>
+                      <TableCell>
+                        <Badge variant="secondary">{labelFor(ORDER_STATUS_LABELS, order.status)}</Badge>
+                      </TableCell>
+                      <TableCell className="tabular-nums">
+                        {formatCurrency(order.total, order.currency)}
+                      </TableCell>
+                      <TableCell className="text-muted-foreground">{formatDate(order.createdAt)}</TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            )
+          ) : null}
         </CardContent>
       </Card>
     </div>
