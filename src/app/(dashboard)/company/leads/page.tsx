@@ -33,7 +33,18 @@ import { RefreshOnFocus } from '@/components/refresh-on-focus';
 
 type BadgeVariant = 'default' | 'secondary' | 'success' | 'warning' | 'destructive' | 'outline';
 
-const LEAD_STATUSES = ['new', 'contacted', 'qualified', 'converted', 'closed'] as const;
+/**
+ * `open` is not a stored status — it is this list's resting view, and it means
+ * every enquiry except the closed ones. Without it the page opened on all seven
+ * of a shop's finished enquiries and read as seven outstanding ones. Closed work
+ * is still one dropdown away, and `All statuses` still shows everything.
+ */
+const LEAD_STATUSES = ['open', 'new', 'contacted', 'qualified', 'converted', 'closed'] as const;
+const DEFAULT_LEAD_STATUS = 'open';
+const LEAD_FILTER_LABELS: Record<string, string> = {
+  ...LEAD_STATUS_LABELS,
+  open: 'Open — still needs action',
+};
 
 function statusVariant(status: string): BadgeVariant {
   if (status === 'new') return 'default';
@@ -150,10 +161,10 @@ export default async function LeadsPage({
 }) {
   await requireRole([ROLES.COMPANY_ADMIN, ROLES.AGENT]);
   const search = searchParams?.q?.trim() || undefined;
-  const status = searchParams?.status || 'all';
+  const status = searchParams?.status || DEFAULT_LEAD_STATUS;
   const page = Number(searchParams?.page) || 1;
   const { rows: leads, total, pageCount, pageSize } = await listLeadsPaged({ page, search, status });
-  const filtered = Boolean(search) || status !== 'all';
+  const filtered = Boolean(search) || status !== DEFAULT_LEAD_STATUS;
   const waiting = leads.filter((l) => l.status === 'new').length;
 
   return (
@@ -181,7 +192,8 @@ export default async function LeadsPage({
         search={search}
         status={status}
         statuses={LEAD_STATUSES}
-        statusLabels={LEAD_STATUS_LABELS}
+        statusLabels={LEAD_FILTER_LABELS}
+        defaultStatus={DEFAULT_LEAD_STATUS}
         placeholder="Search name, email, phone…"
       />
 
@@ -193,7 +205,9 @@ export default async function LeadsPage({
               body={
                 <>
                   Nothing matches {search ? <>&ldquo;{search}&rdquo;</> : 'this search'}
-                  {status !== 'all' ? ` at the ${LEAD_STATUS_LABELS[status] ?? status} stage` : ''}.
+                  {status !== DEFAULT_LEAD_STATUS
+                    ? ` at the ${LEAD_FILTER_LABELS[status] ?? status} stage`
+                    : ''}.
                 </>
               }
               action={
@@ -229,6 +243,7 @@ export default async function LeadsPage({
               pageSize={pageSize}
               search={search}
               status={status}
+              defaultStatus={DEFAULT_LEAD_STATUS}
             />
           )}
         </CardContent>

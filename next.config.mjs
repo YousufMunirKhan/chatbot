@@ -1,6 +1,14 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   reactStrictMode: true,
+  // Deploys used to build straight into `.next` while the running server was
+  // still reading it. Next rewrites the chunk files and manifests in place, so
+  // for the length of a build every page the live site tried to render came
+  // back 500 — a real user hit that twice in one evening on two different
+  // pages. `scripts/deploy.sh` now builds with this pointed at `.next-build`
+  // and swaps the finished directory in with a rename, which is a single
+  // filesystem operation rather than a minute-long window.
+  distDir: process.env.NEXT_DIST_DIR || '.next',
   experimental: {
     // Dashboard data is live, so don't serve a stale client-side Router Cache
     // copy on navigation — always re-fetch dynamic routes (Next 14.2+).

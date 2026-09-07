@@ -46,3 +46,8 @@ yarn-error.log*
 
 # Backups written by scripts/dedupe-leads.mjs
 leads-backup-*.json
+
+# Deploy builds into .next-build and keeps the last good build as
+# .next-previous so a rollback needs no rebuild. Neither belongs in git.
+.next-build/
+.next-previous/

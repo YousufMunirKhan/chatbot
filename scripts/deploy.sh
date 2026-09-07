@@ -125,14 +125,39 @@ fi
 # Next needs devDependencies to build, so install them if `--omit=dev` ran.
 run npm install --no-audit --no-fund >/dev/null 2>&1
 
-if ! run npm run build; then
+# Build somewhere else, then swap it in.
+#
+# Building straight into `.next` overwrites the chunks and manifests the running
+# server is still reading from, so every page the live site rendered during a
+# build returned 500. That is not theoretical: two deploys in one evening each
+# produced a minute of 500s, and the person using the site reported two
+# different pages as broken. `next.config.mjs` reads NEXT_DIST_DIR, so the build
+# goes to `.next-build` and only becomes live at the `mv`, which is one
+# filesystem operation.
+BUILD_DIR=.next-build
+run rm -rf "$BUILD_DIR"
+
+if ! NEXT_DIST_DIR="$BUILD_DIR" run npm run build; then
   say ""
-  say "BUILD FAILED — nothing was restarted, the old build is still serving."
+  say "BUILD FAILED — nothing was swapped or restarted, the old build is still serving."
   say "Fix the error, then run this script again."
+  run rm -rf "$BUILD_DIR"
   exit 1
 fi
 
-# --- 5. Restart and check health ------------------------------------------
+# --- 5. Swap, restart and check health ------------------------------------
+say ""
+say "== Swapping the new build in =="
+run rm -rf .next-previous
+if [ -d .next ]; then
+  run mv .next .next-previous || { say "could not move the old build aside"; exit 1; }
+fi
+run mv "$BUILD_DIR" .next || {
+  say "SWAP FAILED — restoring the previous build."
+  [ -d .next-previous ] && mv .next-previous .next
+  exit 1
+}
+
 say ""
 say "== Restarting =="
 run bash -c "$RESTART" || { say "restart command failed"; exit 1; }
@@ -159,7 +184,17 @@ done
 if [ "$HEALTHY" -ne 1 ]; then
   say ""
   say "  NOT healthy after 60s. Rolling back to ${CURRENT_COMMIT:0:12}."
-  git checkout "$CURRENT_COMMIT" && npm run build && bash -c "$RESTART"
+  git checkout "$CURRENT_COMMIT"
+  # The build that was serving a minute ago is still on disk, so put it back
+  # rather than spending another minute rebuilding it while the site is down.
+  if [ -d .next-previous ]; then
+    rm -rf .next && mv .next-previous .next
+    say "  Restored the previous build without rebuilding."
+  else
+    say "  No previous build kept — rebuilding, this takes a minute."
+    npm run build
+  fi
+  bash -c "$RESTART"
   say "  Rolled back. Check the service logs for the cause."
   exit 1
 fi

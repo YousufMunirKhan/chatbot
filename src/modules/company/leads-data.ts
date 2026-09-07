@@ -80,7 +80,13 @@ export async function listLeadsPaged(opts: ListLeadsOptions = {}): Promise<Paged
     .select('id,name,email,phone,enquiry_type,message,status,created_at,conversation_id,source', { count: 'exact' })
     .eq('company_id', companyId);
 
-  if (opts.status && opts.status !== 'all') query = query.eq('status', opts.status);
+  // `open` is not a stored status. It is the default view, and it means "still
+  // needs something from me" — a closed enquiry has been dealt with, and leaving
+  // it in the list is how a page of seven finished enquiries ends up looking
+  // like seven outstanding ones. `all` still shows everything, and picking
+  // `closed` shows exactly the closed ones, so nothing is ever hidden for good.
+  if (opts.status === 'open') query = query.neq('status', 'closed');
+  else if (opts.status && opts.status !== 'all') query = query.eq('status', opts.status);
 
   const search = opts.search?.trim();
   if (search) {

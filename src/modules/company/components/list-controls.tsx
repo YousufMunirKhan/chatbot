@@ -31,6 +31,7 @@ export function ListFilters({
   searchLabel = 'Search',
   statusLabel = 'Status',
   statusLabels = {},
+  defaultStatus = 'all',
 }: {
   basePath: string;
   search?: string;
@@ -49,7 +50,17 @@ export function ListFilters({
    * `humanizeToken` rather than to the raw `no_show` fragment they used to show.
    */
   statusLabels?: Record<string, string>;
+  /**
+   * What this list shows when nothing is chosen. Usually `all`, but a list whose
+   * finished items would otherwise pile up in the default view passes its own
+   * resting value — leads default to `open`, so closed enquiries stay out of the
+   * way without being hidden. It also tells `Clear` whether anything is actually
+   * filtered, so the button does not sit there permanently on a list that has a
+   * non-`all` default.
+   */
+  defaultStatus?: string;
 }) {
+  const isFiltered = Boolean(search) || (Boolean(status) && status !== defaultStatus);
   return (
     <form method="get" action={basePath} className="flex flex-wrap items-end gap-2">
       <FormField label={searchLabel} htmlFor={SEARCH_ID}>
@@ -64,7 +75,7 @@ export function ListFilters({
       {/* `w-auto`: this select sizes to its options in the filter row, where
           `Select`'s default `w-full` would stretch it across the bar. */}
       <FormField label={statusLabel} htmlFor={STATUS_ID}>
-        <Select size="sm" name="status" defaultValue={status ?? 'all'} className="w-auto">
+        <Select size="sm" name="status" defaultValue={status ?? defaultStatus} className="w-auto">
           <option value="all">All statuses</option>
           {statuses.map((s) => (
             <option key={s} value={s}>
@@ -76,7 +87,7 @@ export function ListFilters({
       <Button type="submit" variant="outline" size="sm">
         Filter
       </Button>
-      {(search || (status && status !== 'all')) && (
+      {isFiltered && (
         <Button asChild variant="ghost" size="sm">
           <Link href={basePath}>Clear</Link>
         </Button>
@@ -93,6 +104,7 @@ export function Pagination({
   pageSize,
   search,
   status,
+  defaultStatus = 'all',
 }: {
   basePath: string;
   page: number;
@@ -101,11 +113,12 @@ export function Pagination({
   pageSize: number;
   search?: string;
   status?: string;
+  defaultStatus?: string;
 }) {
   const href = (p: number) => {
     const params = new URLSearchParams();
     if (search) params.set('q', search);
-    if (status && status !== 'all') params.set('status', status);
+    if (status && status !== defaultStatus) params.set('status', status);
     if (p > 1) params.set('page', String(p));
     const qs = params.toString();
     return qs ? `${basePath}?${qs}` : basePath;
