@@ -1,6 +1,7 @@
 'use client';
 
 import Link from 'next/link';
+import { useState } from 'react';
 import { useFormState, useFormStatus } from 'react-dom';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -32,6 +33,10 @@ export function NotificationSettingsForm({
   settings: CompanyNotificationSettingsView;
 }) {
   const [state, formAction] = useFormState(saveNotificationSettingsAction, initial);
+  // Which WhatsApp provider's credentials to ask for. Both sets used to render
+  // at once, so a company on Twilio was still shown Meta's fields and had no
+  // way to tell which ones the product would actually use.
+  const [provider, setProvider] = useState(settings.whatsappProvider);
 
   return (
     <form action={formAction} className="space-y-8">
@@ -153,76 +158,141 @@ export function NotificationSettingsForm({
               <option value="platform_managed">Platform-managed sender (support add-on)</option>
             </Select>
           </FormField>
-          <FormField label="WhatsApp provider" htmlFor="whatsappProvider">
-            <Select name="whatsappProvider" defaultValue={settings.whatsappProvider}>
-              <option value="disabled">Disabled</option>
-              <option value="meta_cloud">Meta Cloud API</option>
-              <option value="twilio">Twilio WhatsApp</option>
+          <FormField
+            label="WhatsApp provider"
+            htmlFor="whatsappProvider"
+            hint="Only the credentials for the provider you pick are asked for below."
+          >
+            <Select
+              id="whatsappProvider"
+              name="whatsappProvider"
+              defaultValue={settings.whatsappProvider}
+              onChange={(e) =>
+                setProvider(e.currentTarget.value as typeof settings.whatsappProvider)
+              }
+            >
+              <option value="disabled">Not sending WhatsApp alerts</option>
+              <option value="meta_cloud">Meta Cloud API (direct from WhatsApp)</option>
+              <option value="twilio">Twilio</option>
             </Select>
           </FormField>
           <FormField
             label="WhatsApp recipient numbers"
             htmlFor="whatsappRecipients"
             className="sm:col-span-2"
+            hint="One number per line, with the country code."
           >
             <Textarea
+              id="whatsappRecipients"
               name="whatsappRecipients"
               rows={3}
               defaultValue={settings.whatsappRecipients.join('\n')}
               placeholder="+447700900123"
             />
           </FormField>
-          <div className="rounded-md border p-4 sm:col-span-2">
-            <h3 className="text-sm font-semibold">Meta Cloud API credentials</h3>
-            <div className="mt-4 grid gap-4 sm:grid-cols-2">
-              <FormField label="Phone number ID" htmlFor="metaPhoneNumberId">
-                <Input name="metaPhoneNumberId" defaultValue={settings.metaPhoneNumberId} />
-              </FormField>
-              <FormField label="Access token" htmlFor="metaAccessToken">
-                <Input
-                  name="metaAccessToken"
-                  type="password"
-                  placeholder={settings.hasMetaAccessToken ? 'Saved. Leave blank to keep.' : ''}
-                />
-              </FormField>
-              <FormField label="Template name" htmlFor="metaTemplateName">
-                <Input
-                  name="metaTemplateName"
-                  defaultValue={settings.metaTemplateName}
-                  placeholder="lead_alert"
-                />
-              </FormField>
-              <FormField label="Template language" htmlFor="metaTemplateLanguage">
-                <Input
-                  name="metaTemplateLanguage"
-                  defaultValue={settings.metaTemplateLanguage}
-                  placeholder="en_GB"
-                />
-              </FormField>
+
+          {/* Only the chosen provider's credentials are shown. Both blocks used
+              to render at once, so a company on Twilio was still asked for Meta
+              details and could not tell which set actually mattered. */}
+          {provider === 'meta_cloud' ? (
+            <div className="rounded-md border p-4 sm:col-span-2">
+              <h3 className="text-sm font-semibold">Meta Cloud API details</h3>
+              <p className="mt-1 text-sm text-muted-foreground">
+                From Meta Business → WhatsApp → API Setup.
+              </p>
+              <div className="mt-4 grid gap-4 sm:grid-cols-2">
+                <FormField
+                  label="Phone number ID"
+                  htmlFor="metaPhoneNumberId"
+                  hint="A long number from Meta, not your phone number and not an email address."
+                >
+                  <Input
+                    id="metaPhoneNumberId"
+                    name="metaPhoneNumberId"
+                    inputMode="numeric"
+                    pattern="[0-9]*"
+                    defaultValue={settings.metaPhoneNumberId}
+                    placeholder="109876543210987"
+                  />
+                </FormField>
+                <FormField
+                  label="Access token"
+                  htmlFor="metaAccessToken"
+                  hint="Use a permanent token — a temporary one stops working in 24 hours."
+                >
+                  <Input
+                    id="metaAccessToken"
+                    name="metaAccessToken"
+                    type="password"
+                    placeholder={settings.hasMetaAccessToken ? 'Saved. Leave blank to keep.' : ''}
+                  />
+                </FormField>
+                <FormField
+                  label="Template name"
+                  htmlFor="metaTemplateName"
+                  hint="An approved template. Alerts sent outside the 24-hour window need one."
+                >
+                  <Input
+                    id="metaTemplateName"
+                    name="metaTemplateName"
+                    defaultValue={settings.metaTemplateName}
+                    placeholder="lead_alert"
+                  />
+                </FormField>
+                <FormField
+                  label="Template language"
+                  htmlFor="metaTemplateLanguage"
+                  hint="The language code the template was approved in, e.g. en_GB."
+                >
+                  <Input
+                    id="metaTemplateLanguage"
+                    name="metaTemplateLanguage"
+                    defaultValue={settings.metaTemplateLanguage}
+                    placeholder="en_GB"
+                  />
+                </FormField>
+              </div>
             </div>
-          </div>
-          <div className="rounded-md border p-4 sm:col-span-2">
-            <h3 className="text-sm font-semibold">Twilio WhatsApp credentials</h3>
-            <div className="mt-4 grid gap-4 sm:grid-cols-2">
-              <FormField label="Account SID" htmlFor="twilioAccountSid">
-                <Input name="twilioAccountSid" defaultValue={settings.twilioAccountSid} />
-              </FormField>
-              <FormField label="Auth token" htmlFor="twilioAuthToken">
-                <Input
-                  name="twilioAuthToken"
-                  type="password"
-                  placeholder={settings.hasTwilioAuthToken ? 'Saved. Leave blank to keep.' : ''}
-                />
-              </FormField>
-              <FormField label="WhatsApp from number" htmlFor="twilioWhatsappFrom">
-                <Input
-                  name="twilioWhatsappFrom"
-                  defaultValue={settings.twilioWhatsappFrom}
-                  placeholder="+14155238886"
-                />
-              </FormField>
+          ) : null}
+
+          {provider === 'twilio' ? (
+            <div className="rounded-md border p-4 sm:col-span-2">
+              <h3 className="text-sm font-semibold">Twilio details</h3>
+              <p className="mt-1 text-sm text-muted-foreground">
+                From your Twilio console dashboard.
+              </p>
+              <div className="mt-4 grid gap-4 sm:grid-cols-2">
+                <FormField label="Account SID" htmlFor="twilioAccountSid" hint="Starts with AC.">
+                  <Input
+                    id="twilioAccountSid"
+                    name="twilioAccountSid"
+                    defaultValue={settings.twilioAccountSid}
+                    placeholder="AC00000000000000000000000000000000"
+                  />
+                </FormField>
+                <FormField label="Auth token" htmlFor="twilioAuthToken">
+                  <Input
+                    id="twilioAuthToken"
+                    name="twilioAuthToken"
+                    type="password"
+                    placeholder={settings.hasTwilioAuthToken ? 'Saved. Leave blank to keep.' : ''}
+                  />
+                </FormField>
+                <FormField
+                  label="WhatsApp from number"
+                  htmlFor="twilioWhatsappFrom"
+                  hint="The WhatsApp-enabled number Twilio gave you."
+                >
+                  <Input
+                    id="twilioWhatsappFrom"
+                    name="twilioWhatsappFrom"
+                    defaultValue={settings.twilioWhatsappFrom}
+                    placeholder="+14155238886"
+                  />
+                </FormField>
+              </div>
             </div>
-          </div>
+          ) : null}
         </div>
       </section>
 
