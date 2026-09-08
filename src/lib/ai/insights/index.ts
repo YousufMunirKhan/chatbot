@@ -201,7 +201,7 @@ async function askModelForKnowledgeGaps(
   companyId: string,
   evidence: Evidence,
 ): Promise<{ findings: Finding[]; usage: { model: string; input: number; output: number } } | null> {
-  const resolved = await getChatProviderAsync();
+  const resolved = await getChatProviderAsync(companyId);
   // The mock provider returns canned text; a fabricated insight is worse than none.
   if (resolved.apiType === 'mock') return null;
 

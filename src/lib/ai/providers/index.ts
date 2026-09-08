@@ -7,6 +7,8 @@ import { createGeminiProvider, createGeminiEmbeddingProvider } from './gemini';
 import { createCohereReranker, createVoyageReranker } from './rerank';
 import { chatProviderById, embedProviderById, type ChatApiType } from '@/lib/ai/registry';
 import { getPlatformAiSettings } from '@/lib/platform-settings';
+import { resolveModelForCompany } from '@/lib/ai/model-policy';
+import type { ModelTier } from '@/modules/super-admin/plans';
 
 export { EMBEDDING_DIM };
 
@@ -17,6 +19,10 @@ export interface ResolvedChat {
   /** Which adapter family — drives tool-loop selection in the route. */
   apiType?: ChatApiType | 'mock';
   baseUrl?: string;
+  /** The tier `model` sits in, once a company was given to resolve against. */
+  modelTier?: ModelTier;
+  /** True when the plan would not reach the platform's configured model. */
+  modelClamped?: boolean;
 }
 export interface ResolvedEmbedding {
   provider: EmbeddingProvider;
@@ -56,8 +62,16 @@ export function getChatProvider(): ResolvedChat {
  * Resolve the selected chat provider from the registry. One provider at a time —
  * NO silent cross-vendor fallback. If the chosen provider has no key, fall back
  * to the free built-in (mock) so nothing hard-crashes.
+ *
+ * PASS THE COMPANY ID. The platform setting says which model the operator wants;
+ * the company's plan says which model it may have. Without a company id there is
+ * nobody to clamp against and the configured model is used as-is, which is the
+ * right answer for platform-level callers (the super admin's "test AI settings")
+ * and the wrong one for anything answering a customer — a Starter plan on a
+ * premium model costs 3.5x per reply and nothing else in the stack notices. See
+ * `src/lib/ai/model-policy.ts`.
  */
-export async function getChatProviderAsync(): Promise<ResolvedChat> {
+export async function getChatProviderAsync(companyId?: string | null): Promise<ResolvedChat> {
   const settings = await getPlatformAiSettings();
   const def = chatProviderById(settings.chatProvider);
   if (!def) return { provider: mockProvider, model: 'mock', apiType: 'mock' };
@@ -65,15 +79,27 @@ export async function getChatProviderAsync(): Promise<ResolvedChat> {
   if (!key) return { provider: mockProvider, model: 'mock', apiType: 'mock' };
 
   const all = [...def.models.latest, ...def.models.older];
-  const model = settings.chatModel && all.includes(settings.chatModel) ? settings.chatModel : def.defaultChat;
+  const configured = settings.chatModel && all.includes(settings.chatModel) ? settings.chatModel : def.defaultChat;
+
+  // The clamp. `def.defaultChat` is the registry's cheap everyday model for this
+  // provider, which is exactly what a plan that cannot reach the premium tier
+  // should be answered on, and it is always in the same vendor family as the key
+  // we are about to send — so the substitution can never produce a 404.
+  const decision = await resolveModelForCompany({
+    companyId,
+    requestedModel: configured,
+    standardModel: def.defaultChat,
+  });
+  const model = decision.model;
+  const tier = { modelTier: decision.tier, modelClamped: decision.clamped };
 
   if (def.apiType === 'anthropic') {
-    return { provider: createAnthropicProvider(key), model, apiKey: key, apiType: 'anthropic', baseUrl: def.baseUrl };
+    return { provider: createAnthropicProvider(key), model, apiKey: key, apiType: 'anthropic', baseUrl: def.baseUrl, ...tier };
   }
   if (def.apiType === 'gemini') {
-    return { provider: createGeminiProvider(key), model, apiKey: key, apiType: 'gemini' };
+    return { provider: createGeminiProvider(key), model, apiKey: key, apiType: 'gemini', ...tier };
   }
-  return { provider: createOpenAIProvider(key, def.baseUrl), model, apiKey: key, apiType: 'openai', baseUrl: def.baseUrl };
+  return { provider: createOpenAIProvider(key, def.baseUrl), model, apiKey: key, apiType: 'openai', baseUrl: def.baseUrl, ...tier };
 }
 
 /** No cross-vendor fallback — a single provider is used, by design. */

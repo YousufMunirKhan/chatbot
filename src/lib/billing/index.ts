@@ -78,9 +78,18 @@ export async function getSubscription(companyId: string): Promise<PlanState | nu
   };
 }
 
+/**
+ * @deprecated Use `companyAllowsPremiumModel` from `@/lib/ai/model-policy`.
+ *
+ * This hardcoded a plan list, so it could not see the per-company grants an
+ * operator makes through `subscriptions.feature_overrides` — a Starter customer
+ * explicitly given the premium model was refused it here anyway. It now
+ * delegates rather than being deleted, so that a caller added later cannot
+ * quietly resurrect the list.
+ */
 export async function planAllowsAdvancedModel(companyId: string): Promise<boolean> {
-  const sub = await getSubscription(companyId);
-  return sub?.plan === 'growth' || sub?.plan === 'pro' || sub?.plan === 'custom';
+  const { companyAllowsPremiumModel } = await import('@/lib/ai/model-policy');
+  return companyAllowsPremiumModel(companyId);
 }
 
 /** Messages (AI chat operations) used in the current calendar month. */

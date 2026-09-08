@@ -23,7 +23,8 @@ import { getToolSchemas } from '@/lib/tools';
 import { runToolLoop } from '@/lib/ai/agent';
 import { logAiUsage } from '@/lib/ai/usage';
 import { inferFailureReason, logAnswerQuality } from '@/lib/ai/quality';
-import { planAllowsAdvancedModel, withinMessageQuota } from '@/lib/billing';
+import { withinMessageQuota } from '@/lib/billing';
+import { companyAllowsPremiumModel } from '@/lib/ai/model-policy';
 import { getAiCreditAccess } from '@/lib/billing/credits';
 import { rateLimitDistributed } from '@/lib/ratelimit';
 import { logger } from '@/lib/logger';
@@ -296,7 +297,7 @@ export async function POST(req: Request) {
           getRecentHistory(convo.id, bot.companyId),
           getCachedBusinessContext(bot.companyId),
           getConversationSummary(convo.id, bot.companyId),
-          getChatProviderAsync(),
+          getChatProviderAsync(bot.companyId),
           getPlatformAiSettings(),
           hasHelpdeskRuntime(bot.capabilityFlags, bot.assistantAudience)
             ? listEnabledHelpdeskActions(bot.companyId)
@@ -332,7 +333,7 @@ export async function POST(req: Request) {
         const { provider, apiKey } = resolved;
         // Escalate hard questions to the advanced model when it fits the provider
         // family (Issue #10).
-        const canUseAdvancedModel = await planAllowsAdvancedModel(bot.companyId);
+        const canUseAdvancedModel = await companyAllowsPremiumModel(bot.companyId);
         const model =
           canUseAdvancedModel &&
           advancedModelMatchesProvider(provider.name, settings.advancedChatModel)

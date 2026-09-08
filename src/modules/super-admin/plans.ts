@@ -18,6 +18,16 @@
  * sub-accounts and white-label branding are 0057. Nothing joins this list
  * unless withholding it is a deliberate pricing decision — gating something
  * nobody would pay extra for buys support tickets and no revenue.
+ *
+ * `premium_model` is the one entry that is not a row in the sidebar. It is a
+ * property of every answer rather than a screen, and it is here anyway because
+ * it is the most expensive pricing decision in the product: measured across 89
+ * production replies, Claude Sonnet costs 3.5x what Claude Haiku does per
+ * reply, so which tier a plan may reach decides whether that plan makes money.
+ * Putting it here rather than in a scheme of its own means the plan map, the
+ * per-company exception in `subscriptions.feature_overrides`, the operator's
+ * override control and the company's own billing page all already handle it —
+ * see `src/lib/ai/model-policy.ts`, which reads this answer and nothing else.
  */
 export const PLAN_FEATURES = [
   'whatsapp',
@@ -27,6 +37,7 @@ export const PLAN_FEATURES = [
   'api_access',
   'agency',
   'custom_branding',
+  'premium_model',
 ] as const;
 export type PlanFeature = (typeof PLAN_FEATURES)[number];
 
@@ -49,6 +60,7 @@ export const PLAN_FEATURE_LABELS: Record<PlanFeature, string> = {
   api_access: 'API access',
   agency: 'Agency sub-accounts',
   custom_branding: 'Custom branding',
+  premium_model: 'Advanced AI model',
 };
 
 /** One plain sentence each, for the billing page's included/not-included list. */
@@ -60,6 +72,7 @@ export const PLAN_FEATURE_DESCRIPTIONS: Record<PlanFeature, string> = {
   api_access: 'API keys, so your own systems can read and write your data.',
   agency: 'Run other businesses as sub-accounts under your own account.',
   custom_branding: 'Your logo and colours on the chat, and no "Powered by" line.',
+  premium_model: 'Harder questions answered by the stronger AI model, not the standard one.',
 };
 
 export interface PlanDef {
@@ -93,6 +106,10 @@ export const PLANS = {
     description: 'Proof period for one website assistant with a small AI credit cap.',
     // The trial proves the website assistant works. Everything a business would
     // renew for is deliberately behind the first paid tier.
+    //
+    // A trial pays nothing at all, so the advanced model is pure cost with no
+    // revenue behind it — 100 replies on the premium tier is the whole of the
+    // £2 credit cap this plan is allowed to spend.
     features: {
       whatsapp: false,
       flows: false,
@@ -101,6 +118,7 @@ export const PLANS = {
       api_access: false,
       agency: false,
       custom_branding: false,
+      premium_model: false,
     },
   },
   starter: {
@@ -115,6 +133,11 @@ export const PLANS = {
     // Starter is the website package, and its own description says so: answers,
     // leads and bookings on one site. Outbound messaging and the other channels
     // are what Business is for.
+    //
+    // Standard model only. £19 buys 500 replies, and this is the plan where a
+    // platform-wide switch to a premium model does the most damage per pound:
+    // the customer never asked for the expensive model, so the whole of the
+    // extra cost comes out of the margin.
     features: {
       whatsapp: false,
       flows: false,
@@ -123,6 +146,7 @@ export const PLANS = {
       api_access: false,
       agency: false,
       custom_branding: false,
+      premium_model: false,
     },
   },
   growth: {
@@ -137,6 +161,16 @@ export const PLANS = {
     // The step up is reach and repeatability: another channel to be found on,
     // scripted conversations, and the two ways of starting a chat first. What
     // stays back is what a developer or a reseller buys, not a shop owner.
+    //
+    // `premium_model: true` is what Business already had before this map
+    // existed: `planAllowsAdvancedModel` in src/lib/billing/index.ts has let
+    // growth, pro and custom escalate hard questions since Issue #10, and
+    // writing `false` here would take that away from customers who are paying
+    // for it today. It is not a free choice — at 2,000 replies the premium tier
+    // costs £33.60 of the £49, leaving 31% against 80% on the standard tier.
+    // The lever is this one line, and the cost table on the platform settings
+    // page shows the arithmetic; a single heavy account can be pulled back on
+    // its own with a forced-off exception rather than a change here.
     features: {
       whatsapp: true,
       flows: true,
@@ -145,6 +179,7 @@ export const PLANS = {
       api_access: false,
       agency: false,
       custom_branding: false,
+      premium_model: true,
     },
   },
   pro: {
@@ -159,6 +194,13 @@ export const PLANS = {
     // Everything except reselling. Agency mode re-brands the whole product for
     // someone else's customers, which is a commercial arrangement rather than a
     // bigger version of this plan, so it is not something a card can buy.
+    //
+    // Pro keeps the premium tier because Pro has it today, and quietly moving a
+    // paying customer onto a cheaper model is a worse thing to do than the
+    // margin it would save. It is also the thinnest margin in the price list:
+    // 5,000 replies on the premium tier is £84 of the £99, 15% left, against
+    // 76% on the standard tier. Whoever decides to close that gap should do it
+    // deliberately and tell the affected accounts — the change is `false` here.
     features: {
       whatsapp: true,
       flows: true,
@@ -167,6 +209,7 @@ export const PLANS = {
       api_access: true,
       agency: false,
       custom_branding: true,
+      premium_model: true,
     },
   },
   custom: {
@@ -208,6 +251,43 @@ export function planFeatureEnabled(
   // empty map, so the inferred union has no key to index by feature name.
   const def: PlanDef = PLANS[plan as PlanKey];
   return def.features[feature] !== false;
+}
+
+/**
+ * The two model tiers a plan can reach.
+ *
+ * `standard` is the provider's cheap everyday model (Claude Haiku, GPT-4o mini,
+ * Gemini Flash); `premium` is the strong one (Claude Sonnet or Opus, GPT-4o,
+ * Gemini Pro). There are deliberately only two, because the pricing decision is
+ * binary — a plan either may reach the expensive model or it may not — and a
+ * ladder of five tiers would need a fifth answer from every plan the moment
+ * anybody added one.
+ */
+export const MODEL_TIERS = ['standard', 'premium'] as const;
+export type ModelTier = (typeof MODEL_TIERS)[number];
+
+export const MODEL_TIER_LABELS: Record<ModelTier, string> = {
+  standard: 'Standard',
+  premium: 'Advanced',
+};
+
+/**
+ * The highest model tier this plan may reach.
+ *
+ * Derived from `premium_model` rather than stored beside it, so there is one
+ * answer and not two that can disagree. Everything that decides a tier — the
+ * plan map here, the per-company exception in `subscriptions.feature_overrides`,
+ * the operator's override control on the subscription form — is already about
+ * that flag; this function only gives the answer its domain name.
+ *
+ * Note the direction it fails: `planFeatureEnabled` grants what it does not
+ * recognise, so a plan key this file has never heard of resolves to `premium`.
+ * That is right for a feature and wrong for money, which is why
+ * `src/lib/ai/model-policy.ts` and not this function decides what happens when
+ * the plan cannot be established at all.
+ */
+export function planModelTier(plan: string | null | undefined): ModelTier {
+  return planFeatureEnabled(plan, 'premium_model') ? 'premium' : 'standard';
 }
 
 export const SUBSCRIPTION_STATUSES = [

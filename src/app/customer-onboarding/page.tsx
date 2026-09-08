@@ -2,6 +2,14 @@ import Image from 'next/image';
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import { SETUP_STEPS } from '@/lib/constants';
+import {
+  HOSTING_STATEMENT,
+  VAT_SHORT,
+  VAT_STATEMENT,
+  count,
+  gbp,
+  getPublicPricing,
+} from '@/app/(marketing)/pricing/plan-catalogue';
 
 // The journey shown here is the journey the product actually runs. It used to
 // be a retyped copy that had already drifted — four steps against the product's
@@ -15,7 +23,25 @@ const integrations = [
   ['No developer fallback', 'Upload CSV files for products, inventory, orders, customers, or menus.'],
 ];
 
-export default function CustomerOnboardingPage() {
+export const runtime = 'nodejs';
+// This page now quotes a real price, and a price is only worth quoting if it is
+// the live one. Reading the billing catalogue makes the page dynamic; caching it
+// would let the brochure advertise a figure the checkout no longer honours.
+export const dynamic = 'force-dynamic';
+
+export default async function CustomerOnboardingPage() {
+  // This page used to describe the whole journey without ever saying what it
+  // cost, so a reader got all the way to the signup form still guessing. The
+  // number is read, never typed — same source as /pricing and the billing page.
+  const { plans, trialDays } = await getPublicPricing();
+  const entry = plans
+    .filter((plan) => plan.priceMonthlyGbp > 0)
+    .reduce<(typeof plans)[number] | null>(
+      (cheapest, plan) =>
+        !cheapest || plan.priceMonthlyGbp < cheapest.priceMonthlyGbp ? plan : cheapest,
+      null,
+    );
+
   return (
     <main className="min-h-screen bg-[#f4f7fb] text-slate-950">
       <section className="bg-brand-sidebar text-white">
@@ -33,24 +59,46 @@ export default function CustomerOnboardingPage() {
               <p className="mt-5 text-lg font-medium text-blue-100">
                 A guided setup asks what the assistant should do, collects only the required business data, then gives a simple website install path.
               </p>
+              {/* The price belongs above the fold, not behind the signup form.
+                  A reader who has to create an account to find out what it costs
+                  usually just leaves. */}
+              <p className="mt-4 text-base font-semibold text-white">
+                {entry
+                  ? `From ${gbp(entry.priceMonthlyGbp)} a month ${VAT_SHORT}, hosted in London.`
+                  : 'Priced in pounds, hosted in London.'}{' '}
+                <Link href="/pricing" className="underline underline-offset-4 hover:text-blue-100">
+                  See all packages
+                </Link>
+              </p>
               <div className="mt-8 flex flex-wrap gap-3">
                 {/* This page describes the setup journey and then, until
                     self-serve signup existed, sent the reader to a login form
                     they had no way past. */}
                 <Button asChild size="lg" className="bg-white text-slate-950 hover:bg-blue-50">
-                  <Link href="/signup">Start free</Link>
+                  <Link href="/signup">
+                    {trialDays ? `Start free for ${trialDays} days` : 'Start free'}
+                  </Link>
                 </Button>
                 <Button asChild size="lg" variant="outline" className="border-white/35 bg-white/10 text-white hover:bg-white/15">
+                  <Link href="/pricing">See pricing</Link>
+                </Button>
+                <Button asChild size="lg" variant="ghost" className="text-white hover:bg-white/15 hover:text-white">
                   <Link href="/login">I already have an account</Link>
                 </Button>
               </div>
             </div>
 
             <div className="mt-auto grid gap-3 pt-10 sm:grid-cols-3">
-              {['No-code launch', 'Human handoff', 'Cost guarded'].map((label) => (
+              {/* These used to all say "Built into onboarding", which told a
+                  reader nothing. Each one now carries the fact behind it. */}
+              {[
+                ['No-code launch', 'One line of code on your site'],
+                ['Human handoff', 'Your team takes over mid-chat'],
+                ['Priced in pounds', `${VAT_SHORT}, and no charge per conversation`],
+              ].map(([label, detail]) => (
                 <div key={label} className="rounded-lg border border-white/15 bg-white/10 p-4 backdrop-blur">
                   <div className="text-sm font-bold">{label}</div>
-                  <div className="mt-1 text-xs font-medium text-blue-100">Built into onboarding</div>
+                  <div className="mt-1 text-xs font-medium text-blue-100">{detail}</div>
                 </div>
               ))}
             </div>
@@ -133,6 +181,41 @@ export default function CustomerOnboardingPage() {
               <div key={title} className="rounded-lg border p-5">
                 <p className="font-semibold">{title}</p>
                 <p className="mt-2 text-sm text-slate-600">{text}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* The end of the brochure is where a reader decides, and until now it
+          ended without ever naming a price or saying where the data sits. Both
+          answers are here, and both are read from the same catalogue the
+          checkout charges from rather than written into this file. */}
+      <section className="mx-auto max-w-7xl px-5 py-14 sm:px-8 lg:px-10">
+        <div className="grid gap-8 lg:grid-cols-[1fr_1fr]">
+          <div>
+            <h2 className="text-3xl font-bold tracking-tight">What it costs, and where it lives.</h2>
+            <p className="mt-3 text-slate-600">{VAT_STATEMENT}</p>
+            <p className="mt-3 text-slate-600">{HOSTING_STATEMENT}</p>
+            <div className="mt-6">
+              <Button asChild size="lg">
+                <Link href="/pricing">See the full price list</Link>
+              </Button>
+            </div>
+          </div>
+          <div className="grid gap-3 sm:grid-cols-2">
+            {plans.slice(0, 4).map((plan) => (
+              <div key={plan.key} className="rounded-lg border bg-white p-5 shadow-sm">
+                <p className="font-semibold">{plan.label}</p>
+                <p className="mt-1 text-2xl font-extrabold tracking-tight">
+                  {plan.priceMonthlyGbp === 0 ? 'Free' : gbp(plan.priceMonthlyGbp)}
+                  {plan.priceMonthlyGbp === 0 ? null : (
+                    <span className="text-sm font-medium text-slate-500">/mo</span>
+                  )}
+                </p>
+                <p className="mt-2 text-sm text-slate-600">
+                  {count(plan.monthlyReplies)} AI replies a month
+                </p>
               </div>
             ))}
           </div>

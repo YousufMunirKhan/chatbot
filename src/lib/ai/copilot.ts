@@ -360,7 +360,7 @@ export async function runCopilot(params: {
     throw new AppError('There is nothing in this conversation to work from yet.', 400, 'empty_conversation');
   }
 
-  const resolved = await getChatProviderAsync();
+  const resolved = await getChatProviderAsync(params.companyId);
   // The mock provider returns canned text. An agent pasting a fabricated reply
   // to a customer is a worse outcome than an unavailable button.
   if (resolved.apiType === 'mock') {

@@ -6,6 +6,7 @@ import { requireRole } from '@/lib/auth';
 import { ROLES } from '@/lib/constants';
 import { createSupabaseServiceClient } from '@/lib/db/server';
 import { getChatProviderAsync } from '@/lib/ai/providers';
+import { classifyModel } from '@/lib/ai/model-policy';
 import { sendEmail } from '@/lib/email';
 import { upsertPlatformSetting } from '@/lib/platform-settings';
 
@@ -107,9 +108,17 @@ export async function updateAiSettingsAction(
     return { error: err instanceof Error ? err.message : 'Could not save AI settings' };
   }
 
+  // The tier goes in the record with the model id. Choosing a premium model
+  // here multiplies the cost of every reply the platform sends by about 3.5x
+  // (89 measured production replies), and "who put us on Sonnet, and when" is a
+  // question that gets asked at the end of the month rather than at the moment
+  // it happens — a bare model id would leave the answer to be worked out.
   await audit(admin.userId, 'platform.ai_settings.updated', {
     chatProvider: v.chatProvider,
     chatModel: v.chatModel,
+    chatModelTier: classifyModel(v.chatModel),
+    advancedChatModel: v.advancedChatModel,
+    advancedChatModelTier: classifyModel(v.advancedChatModel),
     embeddingProvider: v.embeddingProvider,
     embeddingModel: v.embeddingModel,
     openaiKeyUpdated: Boolean(v.openaiApiKey),
@@ -117,6 +126,8 @@ export async function updateAiSettingsAction(
   });
   await settingEvent(admin.userId, 'ai_settings_updated', 'ai.*', {
     chatProvider: v.chatProvider,
+    chatModelTier: classifyModel(v.chatModel),
+    advancedChatModelTier: classifyModel(v.advancedChatModel),
     openaiKeyUpdated: Boolean(v.openaiApiKey),
     anthropicKeyUpdated: Boolean(v.anthropicApiKey),
   });
@@ -231,6 +242,9 @@ export async function testAiSettingsAction(
 ): Promise<SettingsActionState> {
   const admin = await requireRole([ROLES.SUPER_ADMIN]);
   try {
+    // No company id on purpose: this is the platform's own connectivity check,
+    // so it must exercise the model the operator just configured rather than
+    // whatever a plan would have clamped it to.
     const { provider, model } = await getChatProviderAsync();
     const result = await provider.complete({
       model,
@@ -242,6 +256,7 @@ export async function testAiSettingsAction(
     });
     await settingEvent(admin.userId, 'ai_test_succeeded', 'ai.chat_provider', {
       model,
+      modelTier: classifyModel(model),
       provider: provider.name,
     });
     // The event row is rendered in the settings activity feed (settings-data.ts).

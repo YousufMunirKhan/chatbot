@@ -37,11 +37,17 @@ export async function signInAction(_prev: LoginState, formData: FormData): Promi
     const sb = createSupabaseServiceClient();
     const { data: security } = await sb
       .from('user_security_settings')
-      .select('two_factor_enabled')
+      .select('two_factor_enabled,two_factor_method')
       .eq('user_id', user.userId)
       .maybeSingle();
     await logSecurityEvent({ userId: user.userId, companyId: user.companyId, eventType: 'login.password_success' });
     if (security?.two_factor_enabled) {
+      // An authenticator app needs nothing sent to it. Emailing a code to
+      // somebody holding a TOTP secret quietly downgrades their second factor
+      // back to their inbox — the same inbox that can reset their password —
+      // and `sendTwoFactorCode` would also write a pending code hash that the
+      // emailed-code page would then happily accept.
+      if (security.two_factor_method === 'totp') redirect('/two-factor');
       await sendTwoFactorCode(user.userId, user.email);
       redirect('/login/2fa');
     }

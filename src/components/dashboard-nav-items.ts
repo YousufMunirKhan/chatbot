@@ -140,6 +140,10 @@ const COMPANY_NAV_GROUPS: NavGroupDef[] = [
       // Was "Flows". A flow is a diagram to us and nothing to an owner; what
       // they get is a conversation that runs the same way every time.
       { href: '/company/flows', label: 'Guided chats' },
+      // Reads the company's own conversations and drafts a guided chat for
+      // the question people keep asking. Sits under Guided chats because
+      // accepting one creates a draft flow you then edit in the builder.
+      { href: '/company/flows/suggestions', label: 'Suggested chats' },
       // Was "Intents & NLU". Two pieces of jargon in one label.
       { href: '/company/intents', label: 'Trigger phrases' },
       // Was "Quality" / "Quality Room". Says what you do there instead.

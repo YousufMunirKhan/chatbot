@@ -135,7 +135,7 @@ export async function processInboundMessage(params: {
       getCachedBusinessContext(bot.companyId),
       getRecentHistory(convo.id, bot.companyId),
       getConversationSummary(convo.id, bot.companyId),
-      getChatProviderAsync(),
+      getChatProviderAsync(bot.companyId),
     ]);
 
     const { contextText } = await retrieveContext(

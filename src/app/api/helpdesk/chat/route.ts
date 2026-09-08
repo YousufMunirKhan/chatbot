@@ -247,7 +247,7 @@ export async function POST(req: Request) {
   const [businessContext, resolved, { contextText }, helpdeskActions, docs, initialPills, contextualPills, history, summary] =
     await Promise.all([
       getCachedBusinessContext(companyId),
-      getChatProviderAsync(),
+      getChatProviderAsync(companyId),
       retrieveContext(companyId, botId, parsed.data.text, 6, undefined, 'internal', language),
       hasHelpdeskRuntime(capabilityFlags, 'internal') ? listEnabledHelpdeskActions(companyId) : Promise.resolve([]),
       sb

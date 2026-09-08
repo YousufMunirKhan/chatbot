@@ -1,5 +1,10 @@
+import Link from 'next/link';
 import { requireRole } from '@/lib/auth';
 import { ROLES } from '@/lib/constants';
+// The public pricing page and this page have to agree about tax, so there is
+// exactly one sentence about it and both import it. See the comment on
+// `VAT_STATEMENT` for what it is asserting and why that assertion is true.
+import { VAT_SHORT, VAT_STATEMENT } from '@/app/(marketing)/pricing/plan-catalogue';
 import { Alert, type AlertTone } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -174,7 +179,7 @@ export default async function BillingPage({
       <Card>
         <CardHeader className="flex-row items-center justify-between">
           <CardTitle>
-            {planDef?.label ?? plan ?? 'No plan'} - {gbp(price)}/mo
+            {planDef?.label ?? plan ?? 'No plan'} - {gbp(price)}/mo{price > 0 ? ` ${VAT_SHORT}` : ''}
           </CardTitle>
           <Badge variant={statusVariant(status)}>{status ?? 'none'}</Badge>
         </CardHeader>
@@ -253,6 +258,7 @@ export default async function BillingPage({
               </>
             ) : null}
           </div>
+          <p className="text-xs text-muted-foreground">{VAT_STATEMENT}</p>
           <p className="text-xs text-muted-foreground">
             {account.stripeConfigured
               ? 'Invoices, saved cards, your billing address and cancellation are all handled on Stripe’s own secure pages. This app never sees your card details.'
@@ -400,8 +406,19 @@ export default async function BillingPage({
         <CardHeader>
           <CardTitle>Change package</CardTitle>
         </CardHeader>
-        <CardContent>
+        <CardContent className="space-y-4">
           <BillingUpgrade plans={publicPlans} currentPlan={plan} />
+          {/* The public page reads the same catalogue this picker does, so the
+              two always show the same figures. It is worth linking because it
+              carries the side-by-side comparison and the feature matrix, which
+              is what someone weighing up a change actually wants to read. */}
+          <p className="text-xs text-muted-foreground">
+            Every package is compared side by side on the{' '}
+            <Link href="/pricing" className="font-medium text-primary underline-offset-4 hover:underline">
+              public price list
+            </Link>
+            .
+          </p>
         </CardContent>
       </Card>
     </div>

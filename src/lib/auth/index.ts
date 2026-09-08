@@ -5,6 +5,11 @@ import { createSupabaseServerClient, createSupabaseServiceClient } from '@/lib/d
 import { ForbiddenError } from '@/lib/errors';
 import { ROLES, type Role } from '@/lib/constants';
 import { IMPERSONATION_COOKIE } from '@/lib/impersonation';
+import {
+  policyFromMembershipRow,
+  resolveTwoFactorGate,
+  type CompanyTwoFactorPolicy,
+} from './two-factor';
 
 /**
  * Authentication & authorization helpers (Module 3).
@@ -30,6 +35,7 @@ export interface SessionUser {
 
 interface SecurityRow {
   two_factor_enabled?: boolean | null;
+  two_factor_method?: string | null;
   two_factor_verified_at?: string | null;
 }
 
@@ -43,6 +49,14 @@ interface ProfileBundle {
   isSuperAdmin: boolean;
   security: SecurityRow | null;
   membership: MembershipRow | null;
+  /**
+   * The company's two-factor policy, which rides along inside the embed below at
+   * no extra round trip. `undefined` means it was not read — the degraded
+   * three-query path — and the gate then fetches it itself. `null` means it WAS
+   * read and there is no policy row, which is the normal case and must not
+   * cost a second query. The distinction is load-bearing.
+   */
+  policy: CompanyTwoFactorPolicy | null | undefined;
 }
 
 const first = <T>(value: T | T[] | null | undefined): T | null =>
@@ -77,17 +91,21 @@ async function loadProfileBundle(
   const { data, error } = await supabase
     .from('users')
     .select(
-      'is_super_admin, user_security_settings(two_factor_enabled,two_factor_verified_at), company_users(company_id,role,created_at)',
+      'is_super_admin, user_security_settings(two_factor_enabled,two_factor_method,two_factor_verified_at), company_users(company_id,role,created_at,companies(company_two_factor_policies(required,grace_period_days,required_since)))',
     )
     .eq('id', userId)
     .maybeSingle();
 
   if (!error) {
     const row = (data ?? {}) as Record<string, unknown>;
+    const membership = earliestMembership(
+      row.company_users as MembershipRow | MembershipRow[] | null,
+    );
     return {
       isSuperAdmin: Boolean(row.is_super_admin),
       security: first(row.user_security_settings as SecurityRow | SecurityRow[] | null),
-      membership: earliestMembership(row.company_users as MembershipRow | MembershipRow[] | null),
+      membership,
+      policy: policyFromMembershipRow(membership),
     };
   }
 
@@ -95,7 +113,7 @@ async function loadProfileBundle(
     supabase.from('users').select('is_super_admin').eq('id', userId).maybeSingle(),
     supabase
       .from('user_security_settings')
-      .select('two_factor_enabled,two_factor_verified_at')
+      .select('two_factor_enabled,two_factor_method,two_factor_verified_at')
       .eq('user_id', userId)
       .maybeSingle(),
     supabase
@@ -111,6 +129,8 @@ async function loadProfileBundle(
     isSuperAdmin: Boolean((profileRes.data as { is_super_admin?: boolean } | null)?.is_super_admin),
     security: (securityRes.data as SecurityRow | null) ?? null,
     membership: (membershipRes.data as MembershipRow | null) ?? null,
+    // Not read on this degraded path; the gate looks it up itself, cached.
+    policy: undefined,
   };
 }
 
@@ -124,12 +144,25 @@ export const getSessionUser = cache(async function getSessionUser(
   } = await supabase.auth.getUser();
   if (!user) return null;
 
-  const { isSuperAdmin, security, membership } = await loadProfileBundle(supabase, user.id);
+  const { isSuperAdmin, security, membership, policy } = await loadProfileBundle(supabase, user.id);
 
-  if (!options?.skipTwoFactorCheck && security?.two_factor_enabled) {
-    const verifiedAt = security.two_factor_verified_at ? new Date(security.two_factor_verified_at).getTime() : 0;
-    const maxAgeMs = 12 * 60 * 60 * 1000;
-    if (!verifiedAt || Date.now() - verifiedAt > maxAgeMs) redirect('/login/2fa');
+  if (!options?.skipTwoFactorCheck) {
+    const gate = await resolveTwoFactorGate({
+      companyId: (membership?.company_id as string | undefined) ?? null,
+      enabled: Boolean(security?.two_factor_enabled),
+      method: security?.two_factor_method ?? null,
+      verifiedAt: security?.two_factor_verified_at ?? null,
+      policy,
+    });
+    // An emailed code and an authenticator app are different challenges on
+    // different pages. Sending a TOTP user to /login/2fa shows them a box no
+    // code they hold can satisfy.
+    if (gate === 'challenge') {
+      redirect(security?.two_factor_method === 'totp' ? '/two-factor' : '/login/2fa');
+    }
+    // Their company requires a second factor and the grace period to set one up
+    // has run out. Nobody is signed out — the next page they open is the setup.
+    if (gate === 'enrol') redirect('/two-factor/set-up');
   }
 
   let impersonation: SessionUser['impersonation'] = null;

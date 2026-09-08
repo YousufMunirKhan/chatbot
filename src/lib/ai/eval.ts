@@ -82,7 +82,7 @@ export async function runEval(
   const botById = new Map<string, BotInfo>();
   let fallbackBot: BotInfo | null = null;
   if (opts.graded) {
-    const resolved = await getChatProviderAsync();
+    const resolved = await getChatProviderAsync(companyId);
     if (resolved.provider.name !== 'mock') {
       graded = true;
       provider = resolved.provider;

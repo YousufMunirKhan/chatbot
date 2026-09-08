@@ -10,6 +10,7 @@ import {
   StripeSettingsForm,
 } from '@/modules/super-admin/components/platform-settings-forms';
 import { getPlatformSettingsView } from '@/modules/super-admin/settings-data';
+import { ModelPolicyCard } from './model-policy-card';
 
 export default async function SuperAdminSettingsPage() {
   await requireRole([ROLES.SUPER_ADMIN]);
@@ -34,6 +35,15 @@ export default async function SuperAdminSettingsPage() {
           <AiSettingsForm settings={settings.ai} />
         </CardContent>
       </Card>
+
+      {/* Directly under the model pickers, because it is the consequence of
+          them: which package may reach the advanced model, and what a month of
+          replies on it costs against what that package is sold for. */}
+      <ModelPolicyCard
+        chatProvider={settings.ai.chatProvider}
+        chatModel={settings.ai.chatModel}
+        advancedChatModel={settings.ai.advancedChatModel}
+      />
 
       <Card>
         <CardHeader>

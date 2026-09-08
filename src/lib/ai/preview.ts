@@ -81,7 +81,7 @@ export async function previewAnswer(params: {
   const [{ chunks, contextText }, businessContext, resolved, helpdeskActions] = await Promise.all([
     retrieveContext(params.companyId, bot.id, params.question, 6, undefined, bot.assistantAudience),
     getCachedBusinessContext(params.companyId),
-    getChatProviderAsync(),
+    getChatProviderAsync(params.companyId),
     hasHelpdeskRuntime(bot.capabilityFlags, bot.assistantAudience)
       ? listEnabledHelpdeskActions(params.companyId)
       : Promise.resolve([]),
