@@ -2672,8 +2672,16 @@
 
     var list = document.createElement('div');
     list.className = P + 'sources-list';
+    // Belt and braces. The server now sends one source per page, but this list
+    // is also rebuilt from a stored message when a visitor reloads mid-chat, and
+    // older messages were saved with one entry per retrieved chunk — so a
+    // returning visitor would still see the same page listed six times.
+    var seen = {};
     sources.forEach(function (src) {
       if (!src || !src.title) return;
+      var key = src.documentId || src.url || src.title;
+      if (seen[key]) return;
+      seen[key] = true;
       var item;
       if (src.url) {
         item = document.createElement('a');

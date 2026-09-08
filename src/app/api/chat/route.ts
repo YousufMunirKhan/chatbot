@@ -602,14 +602,35 @@ export async function POST(req: Request) {
         const answeredFromKnowledge =
           citations.length > 0 && failureReason !== 'missing_info' && failureReason !== 'weak_retrieval';
         if (answeredFromKnowledge) {
-          send({ type: 'sources', sources: citations.map(publicCitation) });
+          // One source per PAGE, not per chunk.
+          //
+          // Retrieval returns a citation for every chunk it used, and the
+          // website crawler stores a page as many chunks — so an answer drawn
+          // from one product page listed that page six times under "Based on".
+          // To a visitor that reads as six different pages saying the same
+          // thing, which is a claim the answer cannot support.
+          //
+          // Deduped by `documentId` because that is the identity of the page;
+          // titles collide legitimately across a site ("Shipping" on two
+          // shops) and a url can be null for typed or uploaded knowledge.
+          // First wins, so the best-ranked chunk keeps its snippet and index.
+          const seenDocuments = new Set<string>();
+          const uniqueCitations = citations.filter((citation) =>
+            seenDocuments.has(citation.documentId)
+              ? false
+              : (seenDocuments.add(citation.documentId), true),
+          );
+          send({ type: 'sources', sources: uniqueCitations.map(publicCitation) });
           // Kept on the message so the citations survive a page reload and the
           // inbox can show an agent what the bot answered from. metadata_json
           // defaults to {} and nothing else writes it on a widget AI message.
           if (assistantMessageId) {
             const { error: citationError } = await createSupabaseServiceClient()
               .from('messages')
-              .update({ metadata_json: { citations } })
+              // The deduped list, not the raw one: this is what the inbox shows
+              // an agent and what survives a reload, and both should match what
+              // the visitor actually saw under the answer.
+              .update({ metadata_json: { citations: uniqueCitations } })
               .eq('id', assistantMessageId)
               .eq('company_id', bot.companyId);
             if (citationError) {

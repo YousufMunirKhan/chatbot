@@ -42,6 +42,25 @@ const PREVIEW_BG_LABELS: Record<PreviewBg, string> = {
   brand: 'Tinted website',
 };
 
+/**
+ * Starting points, not a palette — the colour pickers below still take any hex.
+ *
+ * These exist because most owners do not want to choose a colour, they want the
+ * widget to stop looking like somebody else's product. Five was too few to do
+ * that: a takeaway, a salon, a garage and a clinic were all being handed the
+ * same blue or the same green.
+ *
+ * Every entry is a real pairing rather than a hue wheel — each names the kind of
+ * business it suits, because "Terracotta" means nothing to somebody who runs a
+ * chip shop. Two rules hold across all of them, and a new preset must keep both:
+ *
+ *  1. `headerText` must clear WCAG AA (4.5:1) against `color`. Every dark
+ *     surface here uses white; the two light surfaces carry near-black. The
+ *     header is the one place a customer reads text on the brand colour, so a
+ *     preset that fails this is a preset that ships an unreadable header.
+ *  2. `dot` is the unread badge and must be visible against BOTH the header and
+ *     the pale launcher ring, so it is never a near-neighbour of `color`.
+ */
 const themePresets = [
   { name: 'Switch blue', color: '#045fff', headerText: '#ffffff', dot: '#ef4444', style: 'solid' },
   { name: 'Clean black', color: '#111827', headerText: '#ffffff', dot: '#22c55e', style: 'solid' },
@@ -60,6 +79,23 @@ const themePresets = [
     dot: '#f43f5e',
     style: 'solid',
   },
+  // Warm end of the wheel. Takeaways, cafés and anything food — a cold blue on a
+  // menu page reads as a bank.
+  { name: 'Warm orange', color: '#ea580c', headerText: '#ffffff', dot: '#0ea5e9', style: 'solid' },
+  { name: 'Deep red', color: '#b91c1c', headerText: '#ffffff', dot: '#facc15', style: 'solid' },
+  { name: 'Terracotta', color: '#9a3412', headerText: '#ffffff', dot: '#38bdf8', style: 'gradient' },
+  // Salons, clinics, beauty and wellness.
+  { name: 'Soft purple', color: '#7c3aed', headerText: '#ffffff', dot: '#fbbf24', style: 'solid' },
+  { name: 'Rose', color: '#be185d', headerText: '#ffffff', dot: '#34d399', style: 'solid' },
+  { name: 'Plum', color: '#6b21a8', headerText: '#ffffff', dot: '#f97316', style: 'gradient' },
+  // Trades, garages, logistics — heavier, less decorative.
+  { name: 'Navy', color: '#1e3a8a', headerText: '#ffffff', dot: '#f59e0b', style: 'solid' },
+  { name: 'Slate', color: '#334155', headerText: '#ffffff', dot: '#22d3ee', style: 'solid' },
+  { name: 'Forest', color: '#166534', headerText: '#ffffff', dot: '#fbbf24', style: 'gradient' },
+  // Two light headers. The dark text is what makes them legal, and they are the
+  // only presets that suit a site which is itself mostly white.
+  { name: 'Sand', color: '#e7d3b1', headerText: '#1f2937', dot: '#b91c1c', style: 'solid' },
+  { name: 'Sky', color: '#bae6fd', headerText: '#0f172a', dot: '#e11d48', style: 'solid' },
 ] as const;
 
 /**
