@@ -1,6 +1,7 @@
 import { createSupabaseServiceClient } from '@/lib/db/server';
 import { logger } from '@/lib/logger';
 import { getPlatformStripeSettings } from '@/lib/platform-settings';
+import { applyCreditMovement } from '@/lib/billing/credits';
 
 /**
  * Automatic credit top-up (migration 0057).
@@ -10,7 +11,7 @@ import { getPlatformStripeSettings } from '@/lib/platform-settings';
  * discover that nobody watched a number. This charges a saved Stripe payment
  * method off-session and credits the ledger before that happens.
  *
- * Three things this has to get right, because it moves real money:
+ * Four things this has to get right, because it moves real money:
  *
  *  1. NEVER CHARGE TWICE. The charge is only made by the caller that wins a
  *     conditional update on `claimed_at` — a compare-and-set the database
@@ -22,6 +23,11 @@ import { getPlatformStripeSettings } from '@/lib/platform-settings';
  *     consecutive failures disable the feature and record why.
  *  3. NEVER THROW AT THE CALL SITE. Every path returns a result object; the
  *     caller is a background hook, not a user-facing request.
+ *  4. NEVER LOSE THE CREDIT IT JUST BOUGHT. The balance is moved by
+ *     `apply_credit_movement` (migration 0093), in one statement under a row
+ *     lock, rather than being written back from a figure read before the card was
+ *     charged. See the crediting step at the bottom of `maybeAutoTopUp` for what
+ *     that used to cost.
  *
  * Wiring: call `maybeAutoTopUp(companyId)` from wherever credit is spent or on
  * a schedule. Nothing calls it implicitly — the company billing page exposes a
@@ -221,12 +227,17 @@ export async function maybeAutoTopUp(companyId: string): Promise<AutoTopUpResult
     .maybeSingle();
   const config = configRow ? mapAutoTopUpRow(configRow as Record<string, unknown>) : null;
 
+  // Read only to make the decision below and to describe it. Nothing is COMPUTED
+  // from it any more: the balance that ends up in the ledger comes back from
+  // `apply_credit_movement`, which reads it under a row lock after the charge.
+  // `lifetime_credit_added` is no longer read at all — the same statement that
+  // moves the balance moves that total, so adding to it here would double it.
   const { data: accountRow } = await sb
     .from('company_credit_accounts')
-    .select('balance_amount,lifetime_credit_added')
+    .select('balance_amount')
     .eq('company_id', companyId)
     .maybeSingle();
-  const account = accountRow as { balance_amount?: number; lifetime_credit_added?: number } | null;
+  const account = accountRow as { balance_amount?: number } | null;
   const balance = account ? Number(account.balance_amount ?? 0) : null;
 
   const decision = autoTopUpDecision(config, balance);
@@ -278,37 +289,96 @@ export async function maybeAutoTopUp(companyId: string): Promise<AutoTopUpResult
     if (!charge.ok) return await failAttempt(config, balance, amountCents, charge.error);
 
     // --- credit the ledger ------------------------------------------------
+    /*
+     * The customer's money is in. This is the write that has to survive.
+     *
+     * It used to be a read-modify-write straddling the Stripe call: the balance
+     * was read at the top of this function, the card was charged — hundreds of
+     * milliseconds to seconds of network — and then `balance_amount` was written
+     * back ABSOLUTELY as (that stale figure + credit). Every deduction and every
+     * replenishment that landed while Stripe was thinking was silently
+     * overwritten, and this is the writer holding the most money of any of them:
+     * a busy account could be charged £20 and end up with less than it started
+     * with, with a `top_up` row on the books swearing the £20 arrived.
+     *
+     * `apply_credit_movement` (migration 0093) takes the row lock, adds the
+     * delta to the balance it is holding, and writes the ledger row in the same
+     * statement — so the gap the charge sat in no longer exists. It also
+     * maintains `lifetime_credit_added` and stamps balanceBefore/After into the
+     * ledger metadata itself, which is why neither is written here any more:
+     * doing it twice is how a lifetime total ends up double-counting real money.
+     */
     const credit = round4(amountCents / 100);
-    await sb
-      .from('company_credit_accounts')
-      .update({
-        balance_amount: round4((balance ?? 0) + credit),
-        lifetime_credit_added: round4(Number(account?.lifetime_credit_added ?? 0) + credit),
-      })
-      .eq('company_id', companyId);
-    await sb.from('company_credit_transactions').insert({
-      company_id: companyId,
+    const movement = await applyCreditMovement({
+      companyId,
       type: 'top_up',
       amount: credit,
-      currency: 'GBP',
       description: 'Automatic top-up',
-      metadata_json: { source: 'auto_topup', stripePaymentIntentId: charge.id },
+      metadata: { source: 'auto_topup', stripePaymentIntentId: charge.id },
     });
+
+    if (movement.status !== 'applied') {
+      /*
+       * Charged, and not credited. The worst state this file can reach, and the
+       * one thing it must never do quietly or repeatedly.
+       *
+       * `failAttempt` is deliberately NOT used: the payment SUCCEEDED, so
+       * recording a failed attempt would tell an operator the card declined and
+       * hide the fact that the customer has been debited. The attempt is
+       * recorded as succeeded, carrying the PaymentIntent id so nobody charges
+       * again to compensate, with the crediting fault in its `error`.
+       *
+       * Auto top-up is then switched OFF. Nothing in `autoTopUpDecision` looks at
+       * `last_topup_at`, so leaving it enabled with the balance still under the
+       * threshold means the next message charges the card again — and again —
+       * against a wallet that is not accepting credit. Stopping is recoverable by
+       * a person; a repeating charge is not.
+       */
+      const detail =
+        movement.status === 'no_account'
+          ? 'this company has no credit account to pay it into'
+          : (movement.error ?? `the wallet returned ${movement.status}`);
+      const reason =
+        `Your card was charged £${credit.toFixed(2)} but the credit could not be ` +
+        `added (${detail}). Automatic top-up has been switched off so it cannot charge again. ` +
+        `Contact support quoting payment ${charge.id} — the payment is recorded and not lost.`;
+      logger.error('Auto top-up charged the card but could not credit the wallet', {
+        companyId,
+        amountCents,
+        stripePaymentIntentId: charge.id,
+        movementStatus: movement.status,
+        error: movement.error ?? null,
+        module: 'billing/auto-topup',
+      });
+      await releaseClaim(companyId, { is_enabled: false, disabled_reason: reason });
+      await recordAttempt({
+        companyId,
+        status: 'succeeded',
+        amountCents,
+        balanceBefore: balance,
+        paymentIntentId: charge.id,
+        error: reason,
+      });
+      return { status: 'failed', reason, amountCents, balanceBefore: balance ?? undefined };
+    }
 
     await releaseClaim(companyId, {
       last_topup_at: new Date().toISOString(),
       failure_count: 0,
       disabled_reason: null,
     });
+    // The movement's own `balanceBefore` rather than the figure read before the
+    // charge: it is what the wallet actually held when the money went in, which
+    // is what the attempts row is a record of.
     await recordAttempt({
       companyId,
       status: 'succeeded',
       amountCents,
-      balanceBefore: balance,
+      balanceBefore: movement.balanceBefore,
       paymentIntentId: charge.id,
     });
 
-    return { status: 'charged', amountCents, balanceBefore: balance ?? undefined };
+    return { status: 'charged', amountCents, balanceBefore: movement.balanceBefore };
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     logger.error('Auto top-up crashed', { companyId, error: message, module: 'billing/auto-topup' });

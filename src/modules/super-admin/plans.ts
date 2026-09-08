@@ -93,6 +93,83 @@ export interface PlanDef {
   features: PlanFeatureSet;
 }
 
+/**
+ * HOW `includedCreditGbp` WAS DERIVED — recompute it, do not guess at it.
+ *
+ * These are not round numbers somebody liked. Each one is the cost of the
+ * replies the plan on the same line ADVERTISES, at the rate the customer's
+ * wallet is actually charged, plus headroom. They were wrong before, and the way
+ * they were wrong killed the product: Starter shipped £5 against 500 replies
+ * that cost £6.06 to serve, so the credit gate in `src/app/api/chat/route.ts`
+ * closed before the reply allowance did and the assistant went silent on a
+ * customer who was still paying. Every paid plan had that shape.
+ *
+ * The arithmetic, all four steps:
+ *
+ *   1. provider cost per reply — MEASURED, not estimated, from 89 production
+ *      replies: `MEASURED_COST_PER_REPLY_USD` in `src/lib/ai/model-policy.ts`.
+ *        standard (claude-haiku-4-5)  $0.00606
+ *        premium  (claude-sonnet-4-6) $0.02100
+ *   2. what the wallet is charged for it: providerUSD x 0.8 (USD_TO_GBP)
+ *      x 2.5 (CUSTOMER_AI_MARKUP) — `customerAiChargeGbp` in
+ *      `src/lib/billing/credits.ts`. That is x2.0 flat:
+ *        standard £0.01212 a reply     premium £0.04200 a reply
+ *   3. x the plan's `messageLimit`, on the HIGHEST tier the plan may reach —
+ *      `premium_model` below decides that, and a plan that may escalate must be
+ *      funded as if every question were hard. Sizing on the average would
+ *      starve exactly the customer whose questions are all difficult, which is
+ *      the customer least able to tolerate a silent assistant.
+ *   4. +15% headroom and round up to the pound, because the measurement is a
+ *      mean: long conversations carry more history into each call and cost more
+ *      than the average reply they are averaged into.
+ *
+ *   free_trial  100 x £0.01212 = £1.21  x1.15 = £1.39  ->  £2
+ *   starter     500 x £0.01212 = £6.06  x1.15 = £6.97  ->  £7
+ *   growth     2000 x £0.04200 = £84.00 x1.15 = £96.60 ->  £97
+ *   pro        5000 x £0.04200 = £210.00 x1.15 = £241.50 -> £242
+ *
+ * £242 of credit on a £99 plan is not a £242 gift. Wallet units are marked up
+ * 2.5x over provider cost, so Pro's full allowance is £84 of real spend at
+ * today's FX and Business's is £33.60 — the margin discussed on each plan below
+ * is unchanged by this. What changed is that the wallet stopped being a second,
+ * accidental cap that bit before the reply allowance. The reply count is the
+ * product limit; the credit is a backstop against abnormal cost, and it is
+ * sized so it never fires first.
+ *
+ * THE MARGIN THIS BUYS, AND THE DECISION TAKEN ON IT
+ * ---------------------------------------------------
+ * Two different figures are quoted about Pro above and below, and both are
+ * right, so read them carefully before acting on either:
+ *
+ *   5,000 replies at the premium tier   £210 of wallet  =  £84.00 real spend
+ *   the whole wallet including headroom £242 of wallet  =  £96.80 real spend
+ *
+ * Against Pro's £99 inc VAT — £82.50 ex-VAT — that is roughly break-even when a
+ * customer uses every reply they bought, and about £14 down if the 15% headroom
+ * is consumed as well. The headroom is reachable: `deductAiCreditForUsage` fires
+ * on EVERY `logAiUsage` call, so ingestion, embeddings, insights and copilot all
+ * draw this same wallet with no reply counter above them.
+ *
+ * The owner was shown those numbers and chose to keep this sizing rather than
+ * reprice, cap premium escalation, or cut the allowance. The reasoning was that
+ * a customer must always receive the replies they were sold, and that the older
+ * arrangement only looked profitable because the wallet ran dry and the
+ * assistant stopped answering — margin taken by not delivering the product.
+ *
+ * So this is a deliberate position, not an oversight: DO NOT "correct" these
+ * figures downward on margin grounds without raising it again. What the numbers
+ * do say is that Pro at £99 for 5,000 premium-capable replies is priced thin.
+ * That is a pricing conversation, not a bug — and it is the conversation to have
+ * before the first Pro customer signs, not after.
+ *
+ * RECOMPUTE THESE WHENEVER: a plan's `messageLimit` changes, a plan's
+ * `premium_model` answer changes, the platform's configured chat model changes
+ * tier, `MEASURED_COST_PER_REPLY_USD` is re-measured, or `USD_TO_GBP` /
+ * `CUSTOMER_AI_MARKUP` move. Any of those and the figures below are stale, and a
+ * stale figure here is not a rounding error — it is the assistant going quiet
+ * mid-month. Migration 0089 carries the same numbers into `billing_plans`, which
+ * is what the public pricing page reads; the two must be changed together.
+ */
 export const PLANS = {
   free_trial: {
     label: 'Free Trial',
@@ -127,8 +204,14 @@ export const PLANS = {
     messageLimit: 500,
     botLimit: 1,
     agentLimit: 1,
-    integrationLimit: 0,
-    includedCreditGbp: 5,
+    // One integration, not none. A £19 assistant that cannot look up the order
+    // the customer is asking about answers "where is my order" with a shrug,
+    // which is a demo rather than a product. Business still buys reach —
+    // channels, scripted chats, outbound — and Pro buys three connections; what
+    // Starter buys with this is the ability to answer about the one system the
+    // shop actually runs on.
+    integrationLimit: 1,
+    includedCreditGbp: 7,
     description: 'Small businesses that need website answers, lead capture, and bookings.',
     // Starter is the website package, and its own description says so: answers,
     // leads and bookings on one site. Outbound messaging and the other channels
@@ -156,7 +239,7 @@ export const PLANS = {
     botLimit: 2,
     agentLimit: 3,
     integrationLimit: 1,
-    includedCreditGbp: 15,
+    includedCreditGbp: 97,
     description: 'Higher chat volume, support workflows, and one connected business system.',
     // The step up is reach and repeatability: another channel to be found on,
     // scripted conversations, and the two ways of starting a chat first. What
@@ -189,7 +272,7 @@ export const PLANS = {
     botLimit: 5,
     agentLimit: 10,
     integrationLimit: 3,
-    includedCreditGbp: 35,
+    includedCreditGbp: 242,
     description: 'Operational bots, help desk routing, and multiple integrations.',
     // Everything except reselling. Agency mode re-brands the whole product for
     // someone else's customers, which is a commercial arrangement rather than a

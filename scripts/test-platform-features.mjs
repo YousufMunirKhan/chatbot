@@ -32,6 +32,7 @@ const STUBS = {
   '@/lib/db/server': './__db.mjs',
   '@/lib/logger': './__logger.mjs',
   '@/lib/platform-settings': './__stripe.mjs',
+  '@/lib/ai/model-policy': './__model-policy.mjs',
 };
 
 writeFileSync(
@@ -50,6 +51,18 @@ writeFileSync(
   `export async function getPlatformStripeSettings() {
      return globalThis.__STRIPE ?? { enabled: true, secretKey: 'sk_test_fake', publishableKey: null, webhookSecret: null };
    }\n`,
+);
+
+// A copy of one leaf constant, not a re-implementation: `credits.ts` reads it to
+// size its funding backstop, and the real `@/lib/ai/model-policy` reaches
+// `react`'s cache and the provider registry, neither of which belongs in an
+// offline test. Nothing exercised here depends on the figures.
+writeFileSync(
+  join(OUT, '__model-policy.mjs'),
+  `export const MEASURED_COST_PER_REPLY_USD = {
+     'claude-haiku-4-5-20251001': 0.00606,
+     'claude-sonnet-4-6': 0.021,
+   };\n`,
 );
 
 function compile(srcPath, outName, relMap = {}) {
@@ -78,7 +91,19 @@ const i18nUrl = compile(SRC('lib', 'i18n', 'index.ts'), 'i18n.mjs', {
 });
 const agencyUrl = compile(SRC('lib', 'agency.ts'), 'agency.mjs');
 const groupsUrl = compile(SRC('lib', 'groups.ts'), 'groups.mjs');
-const topupUrl = compile(SRC('lib', 'billing', 'auto-topup.ts'), 'auto-topup.mjs');
+// Auto top-up moves money through `apply_credit_movement` (migration 0093) now
+// instead of writing `balance_amount` back from a figure it read before charging
+// the card, so the real credits module — and the plan catalogue it resolves
+// against — are compiled in with it, and the fake client below answers `rpc()`
+// the way that SQL function does. Stubbing the movement out would have left the
+// crediting assertions testing a re-implementation instead of the shipped code.
+compile(SRC('modules', 'super-admin', 'plans.ts'), 'plans.mjs');
+compile(SRC('lib', 'billing', 'credits.ts'), 'credits.mjs', {
+  '@/modules/super-admin/plans': './plans.mjs',
+});
+const topupUrl = compile(SRC('lib', 'billing', 'auto-topup.ts'), 'auto-topup.mjs', {
+  '@/lib/billing/credits': './credits.mjs',
+});
 
 // ---------------------------------------------------------------------------
 // A fake PostgREST client covering exactly the chains these libraries use.
@@ -188,8 +213,78 @@ function makeDb(tables) {
     }
   }
 
+  // `public.apply_credit_movement` (migration 0093), in JavaScript: the balance
+  // move and the ledger row happen together or not at all, the movement is
+  // derived from the balance held at that moment, and a `toBalance` grant tops up
+  // TO a figure and never past it. Enough of the real semantics — including
+  // 0089's one-`included_credit`-row-per-UTC-month index, which is what makes
+  // `duplicate` a real answer — for the callers under test to be exercised as
+  // shipped rather than against a permissive stub.
+  const rpc = (name, args) => {
+    if (name !== 'apply_credit_movement') {
+      return Promise.resolve({ data: null, error: { message: `unknown function ${name}` } });
+    }
+    stats.queries++;
+    const rows = store.company_credit_accounts ?? [];
+    const account = rows.find((row) => row.company_id === args.p_company_id);
+    const one = (status, amount, before, after) => ({
+      data: [{ status, amount_applied: amount, balance_before: before, balance_after: after }],
+      error: null,
+    });
+    if (!account) return Promise.resolve(one('no_account', 0, 0, 0));
+
+    const before = Number(account.balance_amount ?? 0);
+    const raw =
+      args.p_target_balance == null
+        ? Number(args.p_amount ?? 0)
+        : Math.max(0, Number(args.p_target_balance) - before);
+    const delta = Math.round(raw * 10_000) / 10_000;
+    if (delta === 0) return Promise.resolve(one('no_change', 0, before, before));
+
+    if (args.p_type === 'included_credit') {
+      const month = new Date().toISOString().slice(0, 7);
+      const clash = (store.company_credit_transactions ?? []).some(
+        (row) =>
+          row.company_id === args.p_company_id &&
+          row.type === 'included_credit' &&
+          String(row.created_at ?? new Date().toISOString()).slice(0, 7) === month,
+      );
+      if (clash) return Promise.resolve(one('duplicate', 0, before, before));
+    }
+
+    const ledgerRow = {
+      company_id: args.p_company_id,
+      type: args.p_type,
+      amount: delta,
+      currency: account.currency ?? 'GBP',
+      provider_cost_usd: args.p_provider_cost_usd ?? null,
+      ai_usage_log_id: args.p_ai_usage_log_id ?? null,
+      description: args.p_description ?? null,
+      metadata_json: {
+        ...(args.p_metadata ?? {}),
+        balanceBefore: before,
+        balanceAfter: before + delta,
+      },
+      created_by: args.p_created_by ?? null,
+      created_at: new Date().toISOString(),
+    };
+    store.company_credit_transactions = store.company_credit_transactions ?? [];
+    store.company_credit_transactions.push(ledgerRow);
+    stats.inserts.push({ table: 'company_credit_transactions', row: ledgerRow });
+
+    const after = Math.round((before + delta) * 10_000) / 10_000;
+    account.balance_amount = after;
+    account.lifetime_credit_added =
+      Math.round((Number(account.lifetime_credit_added ?? 0) + Math.max(delta, 0)) * 10_000) /
+      10_000;
+    account.lifetime_usage_charged =
+      Math.round((Number(account.lifetime_usage_charged ?? 0) + Math.max(-delta, 0)) * 10_000) /
+      10_000;
+    return Promise.resolve(one('applied', delta, before, after));
+  };
+
   return {
-    client: { from: (table) => new Query(table) },
+    client: { from: (table) => new Query(table), rpc },
     store,
     stats,
   };
@@ -433,6 +528,11 @@ const run = async () => {
       db.store.company_credit_transactions.length === 1 &&
         db.store.company_credit_transactions[0].type === 'top_up' &&
         db.store.company_credit_transactions[0].amount === 20);
+    check('the lifetime credit total moves exactly once',
+      db.store.company_credit_accounts[0].lifetime_credit_added === 30);
+    check('the ledger row carries the balance the wallet really held',
+      db.store.company_credit_transactions[0].metadata_json?.balanceBefore === 1.25 &&
+        db.store.company_credit_transactions[0].metadata_json?.balanceAfter === 21.25);
     check('a succeeded attempt is recorded',
       db.store.company_auto_topup_attempts[0]?.status === 'succeeded');
     check('the claim is released and last_topup_at set',
@@ -520,6 +620,33 @@ const run = async () => {
     await topup.maybeAutoTopUp('co-a');
     check('a successful charge resets the failure streak',
       db.store.company_auto_topup[0].failure_count === 0);
+
+    // --- charged, but the wallet would not take the credit ---
+    // The worst state this code can reach: the customer's money is gone and the
+    // balance did not move. It must not be recorded as a declined card, and it
+    // must never charge again on the next message.
+    db = topUpDb();
+    globalThis.__DB = {
+      ...db.client,
+      rpc: async () => ({ data: null, error: { message: 'wallet unavailable' } }),
+    };
+    fetchCalls = 0;
+    globalThis.fetch = stripeOk;
+    result = await topup.maybeAutoTopUp('co-a');
+    check('a charge that cannot be credited is reported as a failure',
+      result.status === 'failed' && fetchCalls === 1);
+    check('the attempt records the payment as taken, with the crediting fault',
+      db.store.company_auto_topup_attempts[0]?.status === 'succeeded' &&
+        db.store.company_auto_topup_attempts[0]?.stripe_payment_intent_id === 'pi_1' &&
+        typeof db.store.company_auto_topup_attempts[0]?.error === 'string');
+    check('auto top-up switches itself off rather than charging again',
+      db.store.company_auto_topup[0].is_enabled === false &&
+        db.store.company_auto_topup[0].claimed_at === null);
+    fetchCalls = 0;
+    globalThis.__DB = db.client;
+    result = await topup.maybeAutoTopUp('co-a');
+    check('and the next message charges nothing',
+      result.status === 'disabled' && fetchCalls === 0);
 
     // --- missing Stripe configuration fails safely ---
     db = topUpDb();

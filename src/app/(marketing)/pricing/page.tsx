@@ -55,6 +55,49 @@ export const metadata: Metadata = {
 const CHANNEL_COUNT = CHANNEL_KEYS.length;
 
 /**
+ * Turning a reply allowance into something a shop owner can picture.
+ *
+ * WHY THE PAGE NEEDS THIS AT ALL
+ * ------------------------------
+ * Every number on this page was in replies, and a reply is our unit, not the
+ * buyer's. Nobody knows whether their business does 500 replies a month. They
+ * do know roughly how many customers message them, so the choice between £19
+ * and £49 was being made on a figure the reader could not convert — which is a
+ * different failure from being told a wrong number, and just as expensive.
+ *
+ * WHERE THE DIVISOR COMES FROM
+ * ----------------------------
+ * From this page's own FAQ, which is the definition the billing code counts to:
+ * one reply is one message written by the assistant, so a customer asking four
+ * questions in one conversation spends four. A chat that resolves something
+ * typically runs three to six assistant messages, so the allowance divided by
+ * six is the cautious end and divided by three the generous one.
+ *
+ * It is deliberately a WIDE range, deliberately rounded DOWN at both ends, and
+ * deliberately called an estimate everywhere it appears. A single confident
+ * number here would be a promise about someone else's customers' behaviour, and
+ * the first buyer whose conversations run long would have been misled by us on
+ * the page that took their money.
+ */
+const REPLIES_PER_CONVERSATION_LOW = 3;
+const REPLIES_PER_CONVERSATION_HIGH = 6;
+
+function conversationEstimate(replies: number | null): string | null {
+  // Unmetered has nothing to divide, and a handful of replies rounds down to a
+  // range like "0–5" that tells a reader less than the raw figure did.
+  if (replies == null || replies < REPLIES_PER_CONVERSATION_HIGH * 4) return null;
+  const most = Math.floor(replies / REPLIES_PER_CONVERSATION_LOW);
+  // Rounded to a step that matches the size of the number, so the estimate does
+  // not read with a precision it does not have: "80–160", never "83–166".
+  const step = most >= 1000 ? 50 : most >= 100 ? 10 : 5;
+  const down = (value: number) => Math.floor(value / step) * step;
+  const fewest = down(replies / REPLIES_PER_CONVERSATION_HIGH);
+  const upper = down(most);
+  if (fewest <= 0 || upper <= fewest) return null;
+  return `${count(fewest)}–${count(upper)}`;
+}
+
+/**
  * Competitor pricing, from each vendor's own published page, September 2026.
  *
  * Kept as flat data with the date attached because it is the one part of this
@@ -188,12 +231,51 @@ const FAQS: Array<[string, React.ReactNode]> = [
     </>,
   ],
   [
+    'How many conversations is that?',
+    <>
+      It depends on how much your customers ask, so this is an estimate rather than a promise. A chat
+      that gets somewhere usually takes the assistant three to six messages, so dividing a
+      package&rsquo;s reply allowance by three, and again by six, brackets the number of real
+      conversations it covers. Each card above shows that sum done for its own allowance. Once you
+      are running, your own figure is on your usage page within a week, and it is worth more than any
+      estimate we can make from out here.
+    </>,
+  ],
+  [
     'What happens when I run out?',
     <>
-      Nothing gets charged to your card. The assistant stops writing AI answers, tells the customer a
-      team member will follow up, and the message still lands in your inbox for someone to pick up. No
-      overage bill, no surprise invoice. If you would rather it kept answering, you can switch on
-      automatic top-up — off by default, and it is your choice to turn on.
+      {/*
+        WHY THIS ANSWER IS LONGER THAN IT LOOKS LIKE IT NEEDS TO BE
+        This used to say "switch on automatic top-up" and stop, which was not
+        true. Two independent limits can silence the assistant — the package's
+        monthly reply allowance and the prepaid credit that pays the model —
+        and automatic top-up only buys the second. A customer who kept hitting
+        the allowance could have turned it on, been charged, and had nothing
+        change. Both are named here, with what each one does about it, because
+        a customer whose assistant has gone quiet needs to know WHICH thing
+        stopped before they can fix it.
+      */}
+      <p>
+        Nothing is charged to your card for going over. The assistant stops writing AI answers, tells
+        the customer a team member will follow up, and the message still lands in your inbox for
+        someone to pick up. No overage bill, no surprise invoice.
+      </p>
+      <p className="mt-2">
+        There are two separate things that can stop it, and your billing page says which. The first
+        is your package&rsquo;s monthly AI reply allowance — the figure on the cards above. It resets
+        at the start of each billing month, and moving to a larger package raises it straight away.
+      </p>
+      <p className="mt-2">
+        The second is the prepaid AI credit that pays for the model behind each reply. Every package
+        includes credit sized to cover the replies it advertises, and while your subscription is
+        running that credit is topped back up to the included amount every month. If an unusually
+        heavy month spends it early, automatic top-up will buy more with a saved card — it is off by
+        default and it is entirely your choice to turn on.
+      </p>
+      <p className="mt-2">
+        Automatic top-up buys credit. It does not raise the reply allowance, so if it is the
+        allowance you keep reaching, the thing that helps is a larger package.
+      </p>
     </>,
   ],
   [
@@ -332,7 +414,9 @@ export default async function PricingPage() {
           </h2>
           <p className="mt-2 max-w-2xl text-muted-foreground">
             The same list your billing page shows once you are inside, because it is read from the same
-            catalogue.
+            catalogue. The conversations row is our own estimate — the allowance divided by three to
+            six replies per chat — and it is there to help you pick a size, not as a figure to hold us
+            to.
           </p>
 
           <p className="mt-4 text-sm text-muted-foreground md:hidden">
@@ -376,6 +460,14 @@ export default async function PricingPage() {
                   label="AI replies each month"
                   plans={plans}
                   render={(plan) => count(plan.monthlyReplies)}
+                />
+                {/* The same allowance in the unit a buyer actually plans in. An
+                    em dash where the sum says nothing useful, so the row never
+                    invents a range for an unmetered or tiny allowance. */}
+                <MatrixNumberRow
+                  label="Roughly, in conversations"
+                  plans={plans}
+                  render={(plan) => conversationEstimate(plan.monthlyReplies) ?? '—'}
                 />
                 {/* "Unmetered" is the right word for replies and the wrong one
                     for a countable thing, so the countable rows say
@@ -635,6 +727,7 @@ export default async function PricingPage() {
 function PlanCard({ plan, highlighted }: { plan: PublicPlan; highlighted: boolean }) {
   const free = plan.priceMonthlyGbp === 0;
   const included = plan.features.filter((feature) => feature.included);
+  const conversations = conversationEstimate(plan.monthlyReplies);
 
   return (
     <div
@@ -672,6 +765,17 @@ function PlanCard({ plan, highlighted }: { plan: PublicPlan; highlighted: boolea
         <Spec label="Team seats" value={count(plan.seats, 'Unlimited')} />
         <Spec label="Connected systems" value={count(plan.integrations, 'Unlimited')} />
       </dl>
+
+      {/* Directly under the allowance, because it is the same fact in the unit
+          the reader thinks in. Left out entirely when there is nothing sensible
+          to divide, rather than printed as a dash — an empty estimate is worse
+          than no estimate. */}
+      {conversations ? (
+        <p className="mt-2 text-xs text-muted-foreground">
+          Roughly {conversations} customer conversations a month, if a chat takes three to six
+          replies. An estimate to size a package by, not a promise.
+        </p>
+      ) : null}
 
       <div className="mt-4 border-t pt-4 text-sm">
         {included.length === 0 ? (

@@ -17,7 +17,10 @@ import { retrieveContext } from '@/lib/ai/rag';
 import { getChatProviderAsync } from '@/lib/ai/providers';
 import { runToolLoop } from '@/lib/ai/agent';
 import { logAiUsage } from '@/lib/ai/usage';
-import { getReplyAllowanceUsage, withinMessageQuota, type ReplyAllowanceUsage } from '@/lib/billing';
+import { getReplyAllowanceUsage, type ReplyAllowanceUsage } from '@/lib/billing';
+import { notifyReplyGateBlocked, type ReplyGate } from '@/lib/ai/inbound';
+import { isAiBudgetExceeded } from '@/lib/ai/cost-controls';
+import { getAiCreditAccess } from '@/lib/billing/credits';
 import { getToolSchemas } from '@/lib/tools';
 import { loadContextualQuickActions, loadInternalQuickActions } from '@/lib/quick-actions';
 import {
@@ -54,6 +57,57 @@ function publicReplyUsage(usage: ReplyAllowanceUsage) {
     resetAt: usage.resetAt,
   };
 }
+
+/**
+ * The gates that apply to an INTERNAL assistant. Two of the three the widget
+ * runs, and the third is left out on purpose — this is the same decision, for
+ * the same reason, as `assertCanSpend` in src/lib/ai/copilot.ts.
+ *
+ * The AI budget and the credit balance are about MONEY. A staffer's question
+ * burns exactly the tokens a visitor's does, so both apply here unchanged; the
+ * route previously ran neither, and a company sitting at £0 credit or past the
+ * hard stop it set for itself in /company/ai-controls kept spending provider
+ * money on this screen at full cost while its widget was switched off.
+ *
+ * The third gate — the plan's monthly reply allowance — does NOT apply, because
+ * as of this change the usage row below is no longer logged as 'chat' and so no
+ * longer consumes that allowance. The allowance is the number of answers the
+ * company bought for THEIR customers to receive; a staffer asking how to refund
+ * an order is not one of them. Gating on it would also stop internal help at
+ * precisely the moment the allowance ran out and the team has to answer every
+ * conversation by hand — the worst possible time to take their assistant away.
+ * The two halves have to move together: while this route logged 'chat', the
+ * quota gate it ran was self-inflicted, and dropping the gate without changing
+ * the operation type would have let it drain a cap it no longer respected.
+ *
+ * The order matches `checkReplyGates` so a company crossing both limits is told
+ * about the same one wherever they hit it.
+ */
+type InternalSpendGate = Extract<ReplyGate, 'budget' | 'credit'>;
+
+async function checkInternalSpendGates(companyId: string): Promise<InternalSpendGate | null> {
+  const [budgetExceeded, credit] = await Promise.all([
+    isAiBudgetExceeded(companyId),
+    getAiCreditAccess(companyId),
+  ]);
+  if (budgetExceeded) return 'budget';
+  if (!credit.allowed) return 'credit';
+  return null;
+}
+
+/** What the staffer is told, and the code the Help Desk client surfaces. */
+const INTERNAL_GATE_RESPONSE: Record<InternalSpendGate, { error: string; message: string }> = {
+  budget: {
+    error: 'ai_budget_exceeded',
+    message:
+      'The monthly AI spend limit has been reached, so Help Desk AI is paused. Raise or turn off the limit in AI controls to continue.',
+  },
+  credit: {
+    error: 'ai_credit_exhausted',
+    message:
+      'This account has no AI credit left, so Help Desk AI is paused. Top up your AI credit to continue.',
+  },
+};
 
 function appRole(platformRole: string | null, suppliedRole?: string): string {
   if (suppliedRole?.trim()) return suppliedRole.trim();
@@ -219,15 +273,23 @@ export async function POST(req: Request) {
   const capabilityFlags = Array.isArray(bot.capability_flags) ? bot.capability_flags.map(String) : [];
   const language = detectLanguage(parsed.data.text);
 
-  if (!(await withinMessageQuota(companyId))) {
+  const spendGate = await checkInternalSpendGates(companyId);
+  if (spendGate) {
     const replyUsage = await getReplyAllowanceUsage(companyId);
+    // The 402 below already tells the staffer what happened and what to do, and
+    // that is enough here: this is an internal tool with a signed-in person in
+    // front of it, so there is no visitor to apologise to and no handoff to
+    // build. What was missing is the company-level alert, and it is the SAME
+    // one the customer-facing surfaces fire — once per limit per window across
+    // all of them, so a company whose widget went quiet this morning is not
+    // alerted again now.
+    await notifyReplyGateBlocked(companyId, spendGate, { surface: 'helpdesk_chat' });
     return json(
       {
-        error: 'reply_allowance_exhausted',
-        message: 'Monthly AI replies are used up. Add extra replies or upgrade the plan to continue using Help Desk AI.',
+        ...INTERNAL_GATE_RESPONSE[spendGate],
         replyUsage: publicReplyUsage(replyUsage),
       },
-      429,
+      402,
     );
   }
 
@@ -359,7 +421,21 @@ export async function POST(req: Request) {
     conversationId: convo.id,
     provider: resolved.provider.name,
     model: resolved.model,
-    operationType: 'chat',
+    // Internal staff spend, not a sold reply — the same call the copilot makes
+    // and for the same reason (see src/lib/ai/copilot.ts and migration 0092).
+    // Cost still lands in full: `logAiUsage` deducts the credit and every cost
+    // and profit report sums `estimated_cost` across all operation types, so
+    // this question is charged for like any other model call. What it must not
+    // touch is the plan's reply allowance, which `getMonthlyMessageCount`
+    // measures by counting operation_type='chat' rows. Logged as 'chat', a
+    // manager spending an afternoon asking the internal assistant how the
+    // product works silently drained the answers the company bought for THEIR
+    // customers, switched the widget off when it ran out, and showed up on the
+    // billing page as "AI replies used" by visitors who never existed.
+    // Migration 0097 adds 'helpdesk' to the ai_usage_logs check constraint; if
+    // it has not been applied, `logAiUsage` swallows the rejection and the
+    // charge is lost, so the two must ship together.
+    operationType: 'helpdesk',
     inputTokens,
     outputTokens,
   });

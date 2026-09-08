@@ -47,7 +47,11 @@ export default function MarketingLayout({ children }: { children: React.ReactNod
       </a>
       <header className="sticky top-0 z-30 border-b bg-background/95 backdrop-blur">
         <div className="mx-auto flex max-w-6xl items-center justify-between gap-4 px-5 py-3 sm:px-8">
-          <Link href="/pricing" className="flex items-center rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2">
+          {/* The logo points home, which is the one link a visitor assumes
+              without being told. It pointed at /pricing while `/` was a
+              redirect with no Location header, so "go back to the start" was
+              the only navigation on the site that could not be performed. */}
+          <Link href="/" className="flex items-center rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2">
             <span className="inline-flex rounded-lg bg-brand-plate p-2">
               <Image
                 src="/brand/switch-save-logo.png"

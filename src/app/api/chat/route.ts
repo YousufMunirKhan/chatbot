@@ -23,16 +23,21 @@ import { getToolSchemas } from '@/lib/tools';
 import { runToolLoop } from '@/lib/ai/agent';
 import { logAiUsage } from '@/lib/ai/usage';
 import { inferFailureReason, logAnswerQuality } from '@/lib/ai/quality';
-import { withinMessageQuota } from '@/lib/billing';
+import {
+  checkReplyGates,
+  handleReplyGateBlock,
+  liftBillingPause,
+  whyIsAiOff,
+  type BillingPause,
+} from '@/lib/ai/inbound';
 import { companyAllowsPremiumModel } from '@/lib/ai/model-policy';
-import { getAiCreditAccess } from '@/lib/billing/credits';
 import { rateLimitDistributed } from '@/lib/ratelimit';
 import { logger } from '@/lib/logger';
 import { notify } from '@/lib/notify';
 import { createSupabaseServiceClient } from '@/lib/db/server';
 import { loadContextualQuickActions } from '@/lib/quick-actions';
 import { assignBestAvailableAgent } from '@/lib/agent-routing';
-import { getCachedAnswer, isAiBudgetExceeded, saveCachedAnswer } from '@/lib/ai/cost-controls';
+import { getCachedAnswer, saveCachedAnswer } from '@/lib/ai/cost-controls';
 import {
   formatHelpdeskActionCatalog,
   hasHelpdeskRuntime,
@@ -149,7 +154,27 @@ export async function POST(req: Request) {
     language,
   });
 
-  const humanActive = !bot.aiEnabled || !convo.aiEnabled || convo.status === 'human_active';
+  // Two very different things switch AI off on a conversation, and until the
+  // gate block below started recording which, this line could not tell them
+  // apart. A person taking the thread over is permanent and theirs. A spend
+  // limit closing is temporary — and `public/widget/widget.js` keeps
+  // `conversationId` in localStorage, so a visitor blocked in one window comes
+  // back weeks later on the SAME thread: without this, `ai_enabled = false`
+  // meant that returning visitor never got an AI answer again, even though the
+  // allowance had reset and the widget was answering everybody else. That is
+  // the failure `whyIsAiOff` and `liftBillingPause` were written for on the
+  // messaging channels; the widget reads them rather than growing its own copy.
+  let billingPause: BillingPause | null = null;
+  let humanActive = !bot.aiEnabled || !convo.aiEnabled || convo.status === 'human_active';
+  // `!bot.aiEnabled` is the company switching the assistant off, which no gate
+  // clearing may undo — only a conversation-level pause is asked about.
+  if (humanActive && bot.aiEnabled) {
+    const paused = await whyIsAiOff(bot.companyId, convo.id);
+    if (paused.owner === 'billing') {
+      billingPause = paused.pause;
+      humanActive = false;
+    }
+  }
   const visitorMessageId = await saveMessage({
     companyId: bot.companyId,
     conversationId: convo.id,
@@ -245,45 +270,57 @@ export async function POST(req: Request) {
         return;
       }
 
-      // Plan enforcement (Module 19): stop AI replies once the monthly message
-      // limit is reached (visitor messages are still saved for the inbox).
-      if (!(await withinMessageQuota(bot.companyId))) {
-        send({
-          type: 'token',
-          value:
-            language === 'ar'
-              ? 'عذراً، المساعد غير متاح مؤقتاً. سيتواصل معك أحد الموظفين.'
-              : 'Sorry, the assistant is temporarily unavailable. A team member will follow up.',
+      // Plan enforcement (Module 19). All three gates — the plan's reply
+      // allowance, the company's own AI spend hard stop, and the prepaid credit
+      // balance — still run here, in this order, and `checkReplyGates` is the
+      // one that the messaging channels in `@/lib/ai/inbound` now run too, so
+      // the widget and WhatsApp cannot enforce different rules again.
+      //
+      // Each branch used to stream an apology and close the socket and do
+      // nothing else: the apology never reached the transcript, the
+      // conversation stayed `ai_active` and so never appeared in the inbox's
+      // default `needs_human` queue, and the promised team member was never
+      // told they had been volunteered. `handleReplyGateBlock` persists the
+      // message, queues the thread, assigns it and alerts the company once per
+      // window — and never throws, because a throw here would error the stream
+      // and cost the visitor the message telling them a person is coming.
+      const gate = await checkReplyGates(bot.companyId);
+      if (gate) {
+        const blocked = await handleReplyGateBlock({
+          companyId: bot.companyId,
+          conversationId: convo.id,
+          gate,
+          language,
+          channel: 'web_chat',
+          // The visitor's message was saved above with `bumpUnread: humanActive`
+          // — false here, because the AI was still expected to answer it. It is
+          // unread work for a human now, so this is where the thread is marked.
+          bumpUnread: true,
         });
-        send({ type: 'done' });
-        controller.close();
-        return;
-      }
-      if (await isAiBudgetExceeded(bot.companyId)) {
-        send({
-          type: 'token',
-          value:
-            language === 'ar'
-              ? 'المساعد غير متاح مؤقتا بسبب حد تكلفة الذكاء الاصطناعي.'
-              : 'The assistant is temporarily unavailable because the AI budget limit has been reached.',
-        });
+        send({ type: 'token', value: blocked });
+        // Same signal the human-handoff branch sends, so the widget switches to
+        // its "waiting for an agent" state instead of inviting another question
+        // the assistant cannot answer either.
+        send({ type: 'human' });
         send({ type: 'done' });
         controller.close();
         return;
       }
 
-      const creditAccess = await getAiCreditAccess(bot.companyId);
-      if (!creditAccess.allowed) {
-        send({
-          type: 'token',
-          value:
-            language === 'ar'
-              ? 'عذراً، المساعد غير متاح مؤقتاً. سيتواصل معك أحد أفراد الفريق.'
-              : 'Sorry, the assistant is temporarily unavailable. A team member will follow up.',
-        });
-        send({ type: 'done' });
-        controller.close();
-        return;
+      // The gates pass on a thread an earlier block paused — the allowance
+      // reset, the wallet was topped up, or the budget was raised. Hand it back
+      // to the AI before answering, so the row stops claiming a human is on it
+      // and the inbox is not left holding a thread nobody needs to look at.
+      if (billingPause) {
+        const lifted = await liftBillingPause(bot.companyId, convo.id);
+        if (!lifted) {
+          // A person took the thread over between the read above and this
+          // write. It is theirs, so say what the human branch says and stop.
+          send({ type: 'human' });
+          send({ type: 'done' });
+          controller.close();
+          return;
+        }
       }
 
       try {

@@ -7,7 +7,22 @@ import { deductAiCreditForUsage } from '@/lib/billing/credits';
  * estimated cost into ai_usage_logs, powering company analytics and the
  * super-admin profit/loss view.
  */
-type Operation = 'chat' | 'embedding' | 'rerank' | 'contextualize' | 'tool_call' | 'insights';
+// Keep in step with the ai_usage_logs.operation_type check constraint (latest
+// spelling lives in the most recent migration that re-adds it). A value that is
+// only in this union inserts nothing: logAiUsage swallows the constraint
+// violation so a chat turn never dies over bookkeeping, so the row and its
+// credit deduction vanish silently and the spend is never billed.
+type Operation =
+  | 'chat'
+  | 'embedding'
+  | 'rerank'
+  | 'contextualize'
+  | 'tool_call'
+  | 'insights'
+  | 'copilot'
+  // The internal Help Desk assistant, separated from 'chat' by migration 0097
+  // for the reason 'copilot' was: staff spend is not a reply the customer bought.
+  | 'helpdesk';
 
 // USD per 1M tokens [input, output]. Matched by model-name substring.
 const PRICING: Array<[RegExp, number, number]> = [

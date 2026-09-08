@@ -267,6 +267,13 @@ export interface SubscriptionInfo {
   agentLimit: number | null;
   botLimit: number | null;
   integrationLimit: number | null;
+  /**
+   * The negotiated monthly AI credit for this company (migration 0093), or null
+   * to follow the package. Carried for the same reason as `featureOverrides`
+   * below: the form that WRITES it could not READ it, so the box drew empty on
+   * a company that had a figure and an operator could only overwrite blind.
+   */
+  includedCreditGbp: number | null;
   /** Per-company exceptions to the plan, as stored on subscriptions. */
   featureOverrides: PlanFeatureSet;
 }
@@ -467,6 +474,11 @@ export async function getCompanyDetail(id: string): Promise<CompanyDetail | null
       agentLimit: (sub.agent_limit as number) ?? null,
       botLimit: (sub.bot_limit as number) ?? null,
       integrationLimit: (sub.integration_limit as number) ?? null,
+      // Numeric in Postgres, so it can arrive as a string. `?? null` alone is
+      // not enough here — a stored 0 is a real decision ("no AI credit for this
+      // company") that `resolveIncludedCredit` honours, so it has to reach the
+      // form as 0 and not as a blank meaning "follow the package".
+      includedCreditGbp: sub.included_credit_gbp == null ? null : Number(sub.included_credit_gbp),
       featureOverrides: (sub.feature_overrides ?? {}) as PlanFeatureSet,
     },
     members: (members ?? []).map((m) => {

@@ -306,9 +306,17 @@ async function resolveBot(companyId: string, botId: string | null): Promise<Assi
 }
 
 /**
- * Refuse before spending anything the company has already capped. The widget
- * does the same checks before a customer-facing reply; a copilot draft costs
- * the same tokens and comes out of the same budget.
+ * Refuse before spending anything the company has already capped.
+ *
+ * Two of the three gates the widget runs, and the omission is deliberate. The
+ * AI budget and the credit balance are about MONEY — a draft burns the same
+ * tokens a customer-facing reply does, so both apply here unchanged. The third
+ * gate, the plan's monthly reply allowance, does not: that allowance is the
+ * number of answers the company bought for THEIR customers, and an internal
+ * draft is not one of them. Pausing the copilot on it would take help away from
+ * agents at exactly the point the queue is busiest and they are answering by
+ * hand. This is only coherent because the usage row below is no longer logged
+ * as 'chat'; while it was, the copilot ran past a cap it had itself drained.
  */
 async function assertCanSpend(companyId: string): Promise<void> {
   const [budgetExceeded, credit] = await Promise.all([
@@ -436,10 +444,18 @@ export async function runCopilot(params: {
       conversationId: conversation.id,
       provider: resolved.provider.name,
       model: resolved.model,
-      // 'copilot' is not one of the operation types the ai_usage_logs check
-      // constraint allows, and this run has no migration; a copilot call is a
-      // chat completion, so it is logged and billed as one.
-      operationType: 'chat',
+      // Model spend, not a sold reply — the two are not the same thing and this
+      // row is what separates them. Cost still lands: `logAiUsage` deducts the
+      // credit and `getMonthlyAiCost` sums every row whatever its type, so an
+      // internal draft is charged for like any other model call. What it must
+      // not touch is the plan's reply allowance, which `getMonthlyMessageCount`
+      // measures by counting operation_type='chat' rows: that allowance is
+      // answers the customer bought for THEIR customers to receive. Logged as
+      // 'chat', an agent rewording one message three times spent three of them
+      // on drafts nobody outside the inbox ever saw, silenced the widget those
+      // replies were sold for, and inflated "AI replies used" on the billing
+      // page with work that never left the building.
+      operationType: 'copilot',
       inputTokens: completion.usage.inputTokens,
       outputTokens: completion.usage.outputTokens,
     });

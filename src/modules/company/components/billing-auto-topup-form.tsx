@@ -127,6 +127,18 @@ export function BillingAutoTopUpForm({
         </Alert>
       ) : null}
 
+      {/* What the money on this card actually buys, said before the controls.
+          Credit and the monthly reply allowance are two independent gates in
+          `src/app/api/chat/route.ts`, and a customer whose assistant had gone
+          quiet had no way to tell which one had closed — so some of them bought
+          credit to fix an exhausted reply allowance, which does nothing. */}
+      <p className="text-sm text-muted-foreground">
+        Credit pays for the AI model behind each reply. Your package includes an amount that is
+        topped back up to that figure every month while your subscription is running; this buys more
+        when a heavy month spends it early. It is a separate limit from your monthly reply
+        allowance, and buying credit does not raise that allowance.
+      </p>
+
       <form action={saveAction} className="space-y-4">
         {/* The master switch, as a bordered target rather than a bare tick box:
             it is the one control on this card that decides whether any of the
@@ -146,8 +158,15 @@ export function BillingAutoTopUpForm({
           />
           <span>
             <span className="block font-medium">Top up automatically when my credit runs low</span>
+            {/* This used to end "…once the credit runs out", full stop, which
+                read as permanent — and until included credit was made to
+                replenish it very nearly was. It refills monthly now, so the
+                honest answer is that leaving this off costs a gap, not the
+                assistant. */}
             <span className="block text-xs text-muted-foreground">
-              Off, your assistant simply stops replying once the credit runs out.
+              Leave it off and you are never charged for credit. If you spend this month&rsquo;s
+              before it is topped up again, the assistant stops writing AI answers until the next
+              month&rsquo;s credit arrives.
             </span>
           </span>
         </label>

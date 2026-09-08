@@ -5,6 +5,7 @@
 #   sudo bash scripts/deploy.sh                 # show what it WOULD do
 #   sudo bash scripts/deploy.sh --apply         # actually deploy
 #   sudo bash scripts/deploy.sh --apply --ref feat/competitor-parity
+#   sudo bash scripts/deploy.sh --apply --install-cron   # ...and write the crons
 #
 # The server hosts more than one application (nginx also serves "Retail
 # Backoffice"), so this script refuses to touch anything it has not positively
@@ -16,23 +17,33 @@
 #   3. Fetch and check out the requested ref.
 #   4. Install dependencies and build. If the build fails, nothing is restarted
 #      — the old build keeps serving.
-#   5. Restart, then poll /api/health until it answers or time runs out.
-#   6. If health never comes back, roll the checkout back and restart again.
+#   5. Swap the new build in and restart.
+#   6. Show the crontab block the scheduled jobs need — or install it, with
+#      --install-cron. Nothing on this box reads vercel.json.
+#   7. Poll /api/health until it answers or time runs out, and if it never comes
+#      back, roll the checkout back and restart again.
 set -uo pipefail
 
 REF="feat/competitor-parity"
 APPLY=0
+INSTALL_CRON=0
 HEALTH_URL="${HEALTH_URL:-https://chatbot.ssepos.co.uk/api/health}"
 
 while [ $# -gt 0 ]; do
   case "$1" in
     --apply) APPLY=1 ;;
+    --install-cron) INSTALL_CRON=1 ;;
     --ref) REF="${2:?--ref needs a branch or tag}"; shift ;;
     --health) HEALTH_URL="${2:?--health needs a URL}"; shift ;;
     *) echo "Unknown argument: $1" >&2; exit 2 ;;
   esac
   shift
 done
+
+# The scheduled jobs hit the same origin the health check does, so one flag
+# moves both rather than leaving a hardcoded hostname in the cron lines to go
+# stale the first time this is deployed anywhere else.
+BASE_URL="${HEALTH_URL%/api/health}"
 
 say() { printf '%s\n' "$*"; }
 run() {
@@ -156,7 +167,7 @@ if ! NEXT_DIST_DIR="$BUILD_DIR" run npm run build; then
   exit 1
 fi
 
-# --- 5. Swap, restart and check health ------------------------------------
+# --- 5. Swap and restart ---------------------------------------------------
 say ""
 say "== Swapping the new build in =="
 run rm -rf .next-previous
@@ -173,12 +184,121 @@ say ""
 say "== Restarting =="
 run bash -c "$RESTART" || { say "restart command failed"; exit 1; }
 
+# --- 6. Scheduled jobs -----------------------------------------------------
+#
+# WHY THE CRONTAB IS THE ONLY PLACE THIS COUNTS
+# ---------------------------------------------
+# `vercel.json` lists these same jobs and this server never reads it — nothing
+# here is deployed through Vercel. A scheduling change that goes only into that
+# file is dead on arrival, and one already was: it sat there for weeks looking
+# like it had shipped. So the schedule lives here, next to the deploy that
+# installs it.
+#
+# WHY THE BILLING LINE IS A LOOP AND NOT A CURL
+# ---------------------------------------------
+# /api/cron/billing sweeps every active company for monthly credit and usage
+# warnings. It cannot finish an unbounded list inside one request, so it works
+# through the company list in id order until its time budget is spent and then
+# hands back where it got to on an `X-Next-Cursor` header. Nothing ever passed
+# that back: the old line here was a bare curl, so every run restarted at the
+# first company and — once there were more than one run's worth — the tail of
+# the list would never be replenished and never warned, silently. The loop below
+# is what chases the cursor: it re-calls with `?after=<cursor>` until the header
+# comes back empty. `flock` keeps a slow walk from being overlapped by the next
+# tick, and the iteration cap stops a bad cursor spinning forever.
+#
+# The secret is read out of the app's own .env at RUN time rather than written
+# into the crontab, so rotating CRON_SECRET does not mean re-installing cron,
+# and the secret exists in one file instead of two. The extractor matches how
+# the app parses that file (scripts/check-env.mjs): KEY=value, unquoted.
+say ""
+say "== Scheduled jobs =="
+CRON_ENV_FILE="$APP_DIR/.env.production"
+CRON_BEGIN="# >>> ai-business-assistant cron (managed by scripts/deploy.sh) >>>"
+CRON_END="# <<< ai-business-assistant cron <<<"
+SECRET_SH="s=\$(grep -m1 \"^CRON_SECRET=\" $CRON_ENV_FILE | cut -d= -f2-)"
+
+if command -v flock >/dev/null 2>&1; then
+  LOCK="flock -n /tmp/ai-business-assistant-billing.lock "
+else
+  LOCK=""
+  say "  NOTE: flock is not installed, so a slow billing walk can overlap the next"
+  say "        tick. Harmless (every job in the sweep is idempotent) but wasteful."
+fi
+
+# One self-contained line per job: cron gives each command a bare /bin/sh with
+# no environment, so nothing can be shared between them.
+job() { # schedule, path
+  printf '%s bash -c \x27%s; curl -fsS -m 60 -H "Authorization: Bearer $s" "%s%s" >/dev/null\x27\n' \
+    "$1" "$SECRET_SH" "$BASE_URL" "$2"
+}
+
+cron_block() {
+  printf '%s\n' "$CRON_BEGIN"
+  printf '%s\n' "# Managed block. Edit scripts/deploy.sh, not this: --install-cron replaces"
+  printf '%s\n' "# everything between the markers and leaves the rest of the crontab alone."
+  job "* * * * *"    "/api/cron/sla"
+  job "*/2 * * * *"  "/api/cron/channels"
+  job "*/5 * * * *"  "/api/cron/automations"
+  job "*/5 * * * *"  "/api/cron/broadcasts"
+  job "*/5 * * * *"  "/api/cron/snooze"
+  job "0 3 * * *"    "/api/cron/retention"
+  job "0 6 * * 1"    "/api/cron/insights"
+  # The billing walker. 40 calls is far more than ten thousand companies needs
+  # (one call already covers thousands); it is a stop, not a target.
+  printf '%s\n' "*/15 * * * * ${LOCK}bash -c '$SECRET_SH; c=\"\"; for i in \$(seq 1 40); do h=\$(curl -fsS -m 120 -D - -o /dev/null -H \"Authorization: Bearer \$s\" \"$BASE_URL/api/cron/billing?after=\$c\") || break; c=\$(echo \"\$h\" | tr -d \"\\r\" | grep -i \"^x-next-cursor:\" | cut -d\" \" -f2); [ -n \"\$c\" ] || break; done'"
+  printf '%s\n' "$CRON_END"
+}
+
+if [ "$INSTALL_CRON" -eq 1 ] && [ "$APPLY" -eq 1 ]; then
+  if ! command -v crontab >/dev/null 2>&1; then
+    say "  crontab is not installed — cannot schedule anything. Install cron first."
+  else
+    CRON_NOW="$(crontab -l 2>/dev/null || true)"
+    BACKUP="/root/crontab-before-deploy-$(date +%Y%m%d-%H%M%S).txt"
+    printf '%s\n' "$CRON_NOW" > "$BACKUP" 2>/dev/null && say "  previous crontab saved to $BACKUP"
+
+    # Anything outside the markers is somebody else's — this box also runs
+    # "Retail Backoffice" — so it is copied through untouched. Only the managed
+    # block is replaced.
+    KEPT="$(printf '%s\n' "$CRON_NOW" | awk -v b="$CRON_BEGIN" -v e="$CRON_END" \
+      '$0==b{skip=1; next} $0==e{skip=0; next} skip==0{print}')"
+
+    # A line the operator pasted by hand from an older version of this script
+    # would double-schedule the job. Never deleted — that is their crontab — but
+    # said out loud, because a leftover bare billing curl is exactly the thing
+    # that restarts the sweep at the first company every 15 minutes.
+    STRAY="$(printf '%s\n' "$KEPT" | grep -n '/api/cron/' || true)"
+    if [ -n "$STRAY" ]; then
+      say "  WARNING: crontab lines outside the managed block also call /api/cron/:"
+      printf '    %s\n' "$STRAY"
+      say "  They were kept. Delete them with 'crontab -e' or these jobs run twice."
+    fi
+
+    { printf '%s\n' "$KEPT"; cron_block; } | grep -v '^$' | crontab - \
+      && say "  installed $(cron_block | grep -c 'curl') scheduled jobs" \
+      || say "  FAILED to install the crontab — the backup above is still valid."
+  fi
+else
+  say "  Not installing (needs --apply --install-cron). This is the block it writes,"
+  say "  and 'crontab -e' takes it as-is:"
+  say ""
+  cron_block | sed 's/^/    /'
+  say ""
+  say "  Every job needs CRON_SECRET in $CRON_ENV_FILE. Without it the header is"
+  say "  sent empty, the endpoints answer 401, and nothing scheduled ever runs."
+fi
+
 if [ "$APPLY" -eq 0 ]; then
   say ""
   say "Dry run finished. Nothing was changed. Re-run with --apply."
   exit 0
 fi
 
+# --- 7. Health check and rollback ------------------------------------------
+# The crontab above is installed before this point on purpose: it only names
+# URLs, so it is correct for the rolled-back build too, and leaving the box with
+# no schedule because a health check flapped would be the worse failure.
 say ""
 say "== Waiting for $HEALTH_URL =="
 HEALTHY=0
@@ -222,11 +342,8 @@ say "  EMAIL_API_URL/_KEY     replying to email (reading it already works)"
 say "  VAPID_* keys           phone alerts for the dashboard"
 say "  SHOPIFY_WEBHOOK_SECRET / WOOCOMMERCE_WEBHOOK_SECRET   store order automations"
 say ""
-say "The six scheduled jobs in vercel.json do NOT run on a plain server."
-say "Add them to cron, for example:"
-say "  * * * * *  curl -fsS -H \"Authorization: Bearer \$CRON_SECRET\" https://chatbot.ssepos.co.uk/api/cron/sla"
-say "  */2 * * * * curl -fsS -H \"Authorization: Bearer \$CRON_SECRET\" https://chatbot.ssepos.co.uk/api/cron/channels"
-say "  */5 * * * * curl -fsS -H \"Authorization: Bearer \$CRON_SECRET\" https://chatbot.ssepos.co.uk/api/cron/automations"
-say "  */5 * * * * curl -fsS -H \"Authorization: Bearer \$CRON_SECRET\" https://chatbot.ssepos.co.uk/api/cron/broadcasts"
-say "  */15 * * * * curl -fsS -H \"Authorization: Bearer \$CRON_SECRET\" https://chatbot.ssepos.co.uk/api/cron/billing"
-say "  0 6 * * 1   curl -fsS -H \"Authorization: Bearer \$CRON_SECRET\" https://chatbot.ssepos.co.uk/api/cron/insights"
+say "The cron list in vercel.json does NOT run here — this box is not on Vercel."
+say "The scheduled jobs are the crontab block printed above; add or refresh it with:"
+say "  sudo bash scripts/deploy.sh --apply --install-cron"
+say "Editing vercel.json changes nothing on this server. It has been mistaken for"
+say "a shipped change before."

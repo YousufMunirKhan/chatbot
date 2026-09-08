@@ -2,6 +2,7 @@ import type { Metadata } from 'next';
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import { SETUP_STEPS } from '@/lib/constants';
+import { env } from '@/lib/env';
 import {
   HOSTING_STATEMENT,
   VAT_SHORT,
@@ -74,8 +75,28 @@ const integrations: Array<[string, string]> = [
   ],
 ];
 
+/**
+ * The install snippet, and the browser chrome above it, read the host they are
+ * actually served from.
+ *
+ * Both used to name `switchandsave.ai` as a literal. That domain's certificate
+ * expired on 11 May 2026 and `/widget.js` was never there in the first place —
+ * so for four months the one instruction this page exists to give sent every
+ * prospect into a browser security interstitial and then a 404. The snippet is
+ * the product's install path; a wrong string here is not a typo, it is an
+ * outage that looks like documentation.
+ *
+ * `NEXT_PUBLIC_WIDGET_URL` is the same value the dashboard hands a customer for
+ * their own site, so the two can no longer drift. It is a build-time inlined
+ * public variable, which is why a module-level constant is safe here.
+ */
+const WIDGET_SRC = env.NEXT_PUBLIC_WIDGET_URL;
+
+/** Host only, for the fake address bar in the setup mock. */
+const APP_HOST = new URL(env.NEXT_PUBLIC_APP_URL).host;
+
 const SNIPPET = `<script
-  src="https://switchandsave.ai/widget.js"
+  src="${WIDGET_SRC}"
   data-bot="your-public-bot-id">
 </script>`;
 
@@ -182,7 +203,7 @@ export default async function CustomerOnboardingPage() {
                 <span aria-hidden="true" className="h-2.5 w-2.5 rounded-full bg-warning" />
                 <span aria-hidden="true" className="h-2.5 w-2.5 rounded-full bg-success" />
                 <span className="ms-2 truncate text-xs text-muted-foreground">
-                  switchandsave.ai/company/setup
+                  {APP_HOST}/company/setup
                 </span>
               </div>
 

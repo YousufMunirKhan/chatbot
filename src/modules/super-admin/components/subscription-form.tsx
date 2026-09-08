@@ -58,7 +58,9 @@ function LimitField({
           disabled={unlimited}
           value={unlimited ? '' : entered}
           onChange={(event) => setEntered(event.target.value)}
-          placeholder={planDefault == null ? 'Plan default: unlimited' : `Plan default: ${planDefault}`}
+          placeholder={
+            planDefault == null ? 'Plan default: unlimited' : `Plan default: ${planDefault}`
+          }
         />
       </FormField>
       <label className="flex items-center gap-2 text-xs text-muted-foreground">
@@ -73,6 +75,92 @@ function LimitField({
       </label>
     </div>
   );
+}
+
+/**
+ * The monthly AI credit this company's wallet is refilled to.
+ *
+ * The fifth limit, and the one that used to have no control because it had no
+ * column. It is not decoration: a widget reply passes three gates, and the third
+ * is the prepaid wallet — a company with credit at zero is silent however many
+ * replies its package allows. `custom` carries no catalogued figure at all, so
+ * before migration 0093 a company comped to `custom` was funded with nothing and
+ * went quiet the moment its opening balance ran out.
+ *
+ * Blank inherits the package, exactly as a blank `LimitField` does. There is no
+ * Unlimited tick: a wallet has no way to hold an unbounded balance, so the
+ * honest answer for a package with no reply cap is a figure, and the placeholder
+ * shows the one it will get.
+ *
+ * The hidden `_was` field carries what this box was DRAWN with, the same
+ * companion the feature exceptions use. The company detail page passes the
+ * stored figure in, so the box normally opens on it — but any caller that does
+ * not draws it empty, and without `_was` an operator saving an unrelated change
+ * on this form would then silently wipe a negotiated number. Unchanged means
+ * undecided, and the action leaves the column alone.
+ */
+function IncludedCreditField({
+  value,
+  planDefault,
+}: {
+  value: number | null;
+  /** `null` when the figure is derived server-side — see `effectiveIncludedCredit`. */
+  planDefault: number | null;
+}) {
+  const [openedAs] = useState(value == null ? '' : String(value));
+  const [entered, setEntered] = useState(openedAs);
+
+  return (
+    <FormField
+      label="Monthly AI credit (£)"
+      htmlFor="includedCreditGbp"
+      hint="What the wallet is topped up to each month. Blank follows the package."
+    >
+      <input type="hidden" name="includedCreditGbpWas" value={openedAs} />
+      <Input
+        id="includedCreditGbp"
+        name="includedCreditGbp"
+        type="number"
+        min={0}
+        step="0.01"
+        value={entered}
+        onChange={(event) => setEntered(event.target.value)}
+        placeholder={
+          planDefault == null
+            ? 'Plan default: sized from the reply allowance'
+            : `Plan default: £${planDefault.toFixed(2)}`
+        }
+      />
+    </FormField>
+  );
+}
+
+/**
+ * What the selected package will fund a wallet with — when that can be answered
+ * here at all.
+ *
+ * `resolveIncludedCredit` in `src/lib/billing/credits.ts` is the server's answer
+ * and the one that counts; this is only the placeholder, and it deliberately
+ * does NOT reproduce all of it. Two of its steps can be computed in a client
+ * bundle: the catalogue figure, and the price-list floor a package with no reply
+ * cap (`custom`, and anything an operator builds like it) falls back to, because
+ * a plan whose product limit is "unlimited replies" must not be capped by an
+ * empty wallet instead. The remaining step cannot: a package that names no
+ * credit but DOES cap replies is sized from that cap times the measured cost of
+ * a reply, and the measurement sits behind `@/lib/ai/model-policy`, which
+ * reaches the service-role client and must not be pulled into a client
+ * component. So that case answers `null` and the box says the figure is derived
+ * rather than printing one.
+ *
+ * It used to print £0.00 there, which is the single answer that is certainly
+ * wrong: zero is what the original defect did, and it told an operator building
+ * a package in the catalogue — where `included_credit_gbp` is seeded 0 — that it
+ * would fund nothing, when in fact it funds the replies that package sells.
+ */
+function effectiveIncludedCredit(plan: BillingPlan | null, plans: BillingPlan[]): number | null {
+  if (plan && plan.includedCreditGbp > 0) return plan.includedCreditGbp;
+  if (plan && plan.messageLimit != null) return null;
+  return Math.max(0, ...plans.map((entry) => entry.includedCreditGbp));
 }
 
 /**
@@ -154,18 +242,26 @@ export function SubscriptionForm({
   subscription,
   plans,
   featureOverrides,
+  includedCreditGbp,
 }: {
   companyId: string;
   subscription: SubscriptionInfo;
   plans: BillingPlan[];
   /**
    * The company's stored `feature_overrides`, so the controls open in the state
-   * the row is actually in. Optional because the page that renders this form
-   * does not pass it yet; until it does the controls open on "Inherit" and the
-   * action leaves untouched rows alone, so nothing an operator set by hand is
-   * lost by saving an unrelated change on this form.
+   * the row is actually in. Optional so a caller that has not got it still
+   * renders: the controls then open on "Inherit" and the action leaves untouched
+   * rows alone, so nothing an operator set by hand is lost by saving an
+   * unrelated change on this form.
    */
   featureOverrides?: PlanFeatureSet;
+  /**
+   * The company's stored `subscriptions.included_credit_gbp` (migration 0093).
+   * Optional for the same reason as `featureOverrides`: without it the box opens
+   * blank and its `_was` companion makes an untouched blank a no-op, so nothing
+   * an operator negotiated is lost by saving an unrelated change here.
+   */
+  includedCreditGbp?: number | null;
 }) {
   const [state, action] = useFormState(updateSubscriptionAction, initial);
   const [planKey, setPlanKey] = useState(subscription.plan ?? plans[0]?.key ?? 'free_trial');
@@ -234,13 +330,21 @@ export function SubscriptionForm({
           value={subscription.integrationLimit}
           planDefault={selectedPlan?.integrationLimit ?? null}
         />
+        <IncludedCreditField
+          value={includedCreditGbp ?? null}
+          planDefault={effectiveIncludedCredit(selectedPlan, plans)}
+        />
       </div>
 
       <p className="rounded-md border bg-muted/20 p-3 text-xs text-muted-foreground">
         <strong className="font-medium text-foreground">How limits are read:</strong> a number is
         used exactly as typed (<code>0</code> is a valid limit and blocks the feature). Leave a box
         blank to inherit the selected plan&apos;s default. Tick <em>Unlimited</em> to remove the cap
-        entirely — the same rule the onboarding form uses.
+        entirely — the same rule the onboarding form uses. <em>Monthly AI credit</em> has no
+        unlimited option: it is the balance the wallet is refilled to, and a reply is refused when
+        it reaches zero however many replies the package allows. On a quoted or comped deal, type
+        what was agreed — leaving it blank funds the company like the largest package in the price
+        list rather than leaving it silent.
       </p>
 
       {/* Migration 0065 — the per-company exception to the package. It sits

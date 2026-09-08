@@ -13,12 +13,22 @@ export default function SignUpPage() {
    * the copy, because the signup action provisions on `PLANS.free_trial` and a
    * promise on this page that no longer matches what the account gets is the
    * kind of thing nobody notices until a customer counts their messages.
+   *
+   * "AI replies", NOT "AI conversations". `messageLimit` counts one thing: rows
+   * in `ai_usage_logs` with `operation_type = 'chat'`, which is one message
+   * written by the assistant. The pricing page's own FAQ spells that out — a
+   * customer asking four questions in one chat spends four. Calling the same
+   * number "conversations" here overstated the trial by however many turns a
+   * chat takes, so someone signing up for "100 AI conversations" was really
+   * being sold something closer to 25. Every surface that shows this number now
+   * says "AI replies"; if that wording is changed here it has to change on the
+   * pricing page, the billing page and the usage page in the same breath.
    */
   const trial = PLANS.free_trial;
   const terms = [
     `${trial.trialDays} days free, no card needed`,
-    `${trial.messageLimit} AI conversations included`,
-    `£${trial.includedCreditGbp} of AI credit to get started`,
+    `${trial.messageLimit} AI replies included — one reply is one message from the assistant`,
+    `£${trial.includedCreditGbp} of AI credit, which is what pays the model for those replies`,
   ];
 
   return (

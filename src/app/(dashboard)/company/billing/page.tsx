@@ -45,6 +45,23 @@ function gbpExact(cents: number) {
 }
 
 /**
+ * How close to the allowance is close enough to look worried.
+ *
+ * The bar was `tone="primary"` at every value, so 95% used and 5% used were the
+ * same colour and differed only in length — the one reading on this page a
+ * customer needs to catch BEFORE it bites looked identical to the one that does
+ * not matter at all. Amber from 80% is early enough to change package without a
+ * gap in service; red is kept for the point where AI answers have actually
+ * stopped, so the colour means something rather than just meaning "high".
+ */
+function usageTone(pct: number | null): 'primary' | 'warning' | 'danger' {
+  if (pct == null) return 'primary';
+  if (pct >= 100) return 'danger';
+  if (pct >= 80) return 'warning';
+  return 'primary';
+}
+
+/**
  * The badge tone for a subscription status.
  *
  * `past_due` and `incomplete` used to fall through to `secondary` — a neutral
@@ -218,7 +235,10 @@ export default async function BillingPage({
           <dl className="grid gap-3 text-sm [grid-template-columns:repeat(auto-fit,minmax(16rem,1fr))]">
             <Row label="Free until" value={formatDate(freeUntil)} />
             <Row label="Monthly AI replies" value={lim(messageLimit)} />
-            <Row label="Extra replies added" value={formatNumber(replyUsage.extraReplies)} />
+            {/* "Added by support" rather than "added": these come from a
+                super-admin grant and there is nowhere a customer can buy them,
+                so a bare "added" invites the question of what they cost. */}
+            <Row label="Extra replies added by support" value={formatNumber(replyUsage.extraReplies)} />
             <Row label="Allowance resets" value={formatDate(replyUsage.resetAt)} />
             <Row label="Assistant limit" value={lim(sub?.botLimit ?? subscription.botLimit)} />
             <Row label="Team seat limit" value={lim(sub?.agentLimit ?? subscription.agentLimit)} />
@@ -374,19 +394,56 @@ export default async function BillingPage({
               {totalAvailable == null ? 'Unlimited' : formatNumber(totalAvailable)}
             </span>
           </div>
-          <Progress value={usagePct ?? 0} label="AI replies used this month" />
+          <Progress
+            value={usagePct ?? 0}
+            tone={usageTone(usagePct)}
+            label="AI replies used this month"
+          />
           <p className="text-xs text-muted-foreground">
             {totalAvailable == null
               ? 'Unlimited AI replies on your current package.'
               : `${usagePct}% used. Your base monthly allowance is ${formatNumber(messageLimit ?? 0)}${
                   replyUsage.extraReplies > 0
-                    ? `, plus ${formatNumber(replyUsage.extraReplies)} extra replies added by support`
+                    ? `, plus ${formatNumber(replyUsage.extraReplies)} extra replies added to your account by support`
                     : ''
                 }.`}
           </p>
           <p className="text-xs text-muted-foreground">
             Unused monthly replies expire at the end of each billing month and do not roll over.
           </p>
+
+          {/*
+            WHAT HAPPENS AT 100%, WRITTEN DOWN
+            The whole of this card used to be a percentage and a figure. A
+            customer watching the bar climb had no answer anywhere in the
+            product to "and then what?", so the only way to find out was to
+            reach it — and the honest answer is reassuring, which made hiding it
+            doubly silly. It says what stops, what carries on, and the two
+            different things they can do, because the reply allowance and the
+            prepaid credit further down this page are separate limits and the
+            fix for one does nothing for the other.
+          */}
+          {totalAvailable == null ? null : (
+            <div className="space-y-2 rounded-md border bg-muted/40 p-3 text-xs text-muted-foreground">
+              <p className="font-medium text-foreground">When the allowance runs out</p>
+              <p>
+                The assistant stops writing AI answers and tells the customer that someone will
+                follow up. Nothing is charged to your card for going over, and no conversation is
+                lost: messages keep arriving in your inbox, and replies your own team types are free
+                and unlimited.
+              </p>
+              <p>
+                It starts again on {formatDate(replyUsage.resetAt)}. To raise the allowance before
+                then, move to a larger package under &ldquo;Change package&rdquo; below.
+              </p>
+              <p>
+                Prepaid AI credit is a separate limit — it pays for the model behind each reply, and
+                it is topped up to your package&rsquo;s included amount each month. Running out of
+                credit stops AI answers in the same way, and automatic top-up below is the answer to
+                that one. Buying credit does not raise the reply allowance.
+              </p>
+            </div>
+          )}
         </CardContent>
       </Card>
 

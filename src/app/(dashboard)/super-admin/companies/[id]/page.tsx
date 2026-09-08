@@ -241,7 +241,18 @@ export default async function CompanyDetailPage({
             <CardTitle>Plan and limits</CardTitle>
           </CardHeader>
           <CardContent>
-            <SubscriptionForm companyId={c.id} subscription={sub} plans={billingPlans} featureOverrides={sub.featureOverrides} />
+            {/* `featureOverrides` and `includedCreditGbp` are passed separately
+                from `subscription` because the form takes each as its own prop:
+                both are per-company exceptions the form both reads and writes,
+                and the credit box drew empty on every company until this line
+                gave it the stored figure. */}
+            <SubscriptionForm
+              companyId={c.id}
+              subscription={sub}
+              plans={billingPlans}
+              featureOverrides={sub.featureOverrides}
+              includedCreditGbp={sub.includedCreditGbp}
+            />
           </CardContent>
         </Card>
       ) : null}
