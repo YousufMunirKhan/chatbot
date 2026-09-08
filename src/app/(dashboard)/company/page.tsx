@@ -14,7 +14,7 @@ import {
   WebsitePrompt,
   type WebsitePromptLabels,
 } from '@/modules/company/components/website-prompt';
-import { formatNumber } from '@/lib/format';
+import { formatDate, formatNumber } from '@/lib/format';
 import { t, tOr, type Dictionary } from '@/lib/i18n';
 import { getRequestDictionary } from '@/lib/i18n/server';
 import { RefreshOnFocus } from '@/components/refresh-on-focus';
@@ -95,6 +95,10 @@ function websitePromptLabels(dict: Dictionary): WebsitePromptLabels {
     importedOne: t(dict, 'home.website.imported.one'),
     importedMany: t(dict, 'home.website.imported.many'),
     importedLink: t(dict, 'home.website.imported_link'),
+    connectedTitle: t(dict, 'home.website.connected.title'),
+    connectedBody: t(dict, 'home.website.connected.body'),
+    refresh: t(dict, 'home.website.refresh'),
+    refreshPending: t(dict, 'home.website.refreshing'),
   };
 }
 
@@ -399,6 +403,10 @@ export default async function CompanyOverview() {
       companyId={setup.companyId}
       done={setup.steps.find((step) => step.key === 'website')?.complete ?? true}
       defaultUrl={setup.websiteAddress}
+      // Formatted here rather than in the card: the card is a client component
+      // and `formatDate` is locale-sensitive, so doing it on the server keeps
+      // the markup identical on both sides of the hydration boundary.
+      lastReadAt={setup.websiteImport ? formatDate(setup.websiteImport.importedAt) : null}
       // The one place it carries the page's solid button is state B, where
       // finishing setup is the only thing on the screen. Anywhere a customer is
       // waiting, or there is no assistant yet, that outranks a missing website.

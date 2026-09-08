@@ -7,6 +7,7 @@ import type {
 } from '@/lib/ai/types';
 import { CACHE_BREAKPOINT } from '@/lib/ai/types';
 import { fetchWithRetry } from '@/lib/ai/http';
+import { EMBEDDING_DIMENSIONS, assertEmbeddingWidth } from '@/lib/ai/registry';
 
 /**
  * Google Gemini adapter (Generative Language API, API-key auth). Different shape
@@ -130,14 +131,19 @@ export function createGeminiEmbeddingProvider(apiKey: string): EmbeddingProvider
           requests: texts.map((t) => ({
             model: `models/${model}`,
             content: { parts: [{ text: t }] },
-            outputDimensionality: 1536,
+            // Was a bare 1536. Same number, but now tied to the column it has to
+            // fit, so it moves if the column ever does. `gemini-embedding-001`
+            // returns 3072 by default, so omitting this breaks every insert.
+            outputDimensionality: EMBEDDING_DIMENSIONS,
           })),
         }),
       });
       if (!res.ok) throw new Error(`Gemini embeddings error ${res.status}: ${await res.text()}`);
       const json = await res.json();
+      const vectors = (json.embeddings ?? []).map((e: { values: number[] }) => e.values);
+      assertEmbeddingWidth(vectors, model);
       return {
-        vectors: (json.embeddings ?? []).map((e: { values: number[] }) => e.values),
+        vectors,
         usage: { inputTokens: 0, outputTokens: 0 },
       };
     },

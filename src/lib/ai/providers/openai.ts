@@ -7,6 +7,7 @@ import type {
 } from '@/lib/ai/types';
 import { CACHE_BREAKPOINT } from '@/lib/ai/types';
 import { fetchWithRetry } from '@/lib/ai/http';
+import { EMBEDDING_DIMENSIONS, assertEmbeddingWidth } from '@/lib/ai/registry';
 
 const OPENAI_API = 'https://api.openai.com/v1';
 
@@ -108,7 +109,19 @@ export function createOpenAIProvider(apiKey: string, baseUrl = OPENAI_API): AIPr
   };
 }
 
-/** OpenAI embeddings (1536-dim default model: text-embedding-3-small). */
+/**
+ * OpenAI embeddings, always at the width the database stores.
+ *
+ * `dimensions` used to be omitted, which meant the width was whatever the
+ * selected model returned by default — 1536 for `text-embedding-3-small`, 3072
+ * for `text-embedding-3-large`. Both are offered in the super-admin settings, so
+ * choosing the larger one silently broke every ingestion until the INSERT threw
+ * `expected 1536 dimensions, not 3072` from inside a crawl loop.
+ *
+ * Asking for the width is better than restricting the list: `-3-large` is
+ * genuinely usable here when truncated to 1536, and an operator who picks it
+ * gets a working (if differently-weighted) index rather than an outage.
+ */
 export function createOpenAIEmbeddingProvider(apiKey: string): EmbeddingProvider {
   return {
     name: 'openai',
@@ -116,12 +129,20 @@ export function createOpenAIEmbeddingProvider(apiKey: string): EmbeddingProvider
       const res = await fetchWithRetry(`${OPENAI_API}/embeddings`, {
         method: 'POST',
         headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ model: model || 'text-embedding-3-small', input: texts }),
+        body: JSON.stringify({
+          model: model || 'text-embedding-3-small',
+          input: texts,
+          dimensions: EMBEDDING_DIMENSIONS,
+        }),
       });
       if (!res.ok) throw new Error(`OpenAI embeddings error ${res.status}: ${await res.text()}`);
       const json = await res.json();
+      const vectors = json.data.map((d: { embedding: number[] }) => d.embedding);
+      // A model that ignored `dimensions` (an older one, or a compatible API at
+      // a custom base URL) is caught here rather than at the INSERT.
+      assertEmbeddingWidth(vectors, model || 'text-embedding-3-small');
       return {
-        vectors: json.data.map((d: { embedding: number[] }) => d.embedding),
+        vectors,
         usage: { inputTokens: json.usage?.prompt_tokens ?? 0, outputTokens: 0 },
       };
     },

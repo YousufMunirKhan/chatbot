@@ -95,6 +95,41 @@ export interface EmbedProviderDef {
   defaultModel: string;
 }
 
+/**
+ * The width of every vector this product stores, fixed by the database.
+ *
+ * `knowledge_chunks.embedding` is `vector(1536)` (migration 0006). Postgres
+ * enforces that exactly — a model returning another width does not degrade, it
+ * fails the insert.
+ *
+ * THIS HAS ALREADY COST AN OUTAGE. The list below offers
+ * `text-embedding-3-large` and somebody selected it, so every page of every
+ * website import died with `expected 1536 dimensions, not 3072`, reaching the
+ * customer as a bare "Application error". It went unnoticed for a day because
+ * the import was unreachable in the UI and had therefore never run.
+ *
+ * The fix is to ALWAYS ask for this width rather than to police the model list:
+ * OpenAI takes `dimensions` and Gemini takes `outputDimensionality`, and both
+ * `-3-small` and `-3-large` honour it. `assertEmbeddingWidth` then catches any
+ * model that cannot, naming the model and the setting to change instead of
+ * leaving a Postgres error to be decoded out of a crawl loop.
+ *
+ * Changing this means changing the column, in a migration that also re-embeds
+ * everything already stored — vectors of different widths are not comparable.
+ */
+export const EMBEDDING_DIMENSIONS = 1536;
+
+/** Fail at the provider, with something a person can act on. */
+export function assertEmbeddingWidth(vectors: number[][], model: string): void {
+  const wrong = vectors.find((v) => v.length !== EMBEDDING_DIMENSIONS);
+  if (!wrong) return;
+  throw new Error(
+    `Embedding model "${model}" returned ${wrong.length}-dimension vectors, but this database ` +
+      `stores ${EMBEDDING_DIMENSIONS}. Change the embedding model in Super Admin → Settings → AI ` +
+      `to one that produces ${EMBEDDING_DIMENSIONS} dimensions, such as text-embedding-3-small.`,
+  );
+}
+
 export const EMBED_PROVIDERS: EmbedProviderDef[] = [
   { id: 'builtin', label: 'Free built-in search (no key)', apiType: 'mock', models: ['builtin'], defaultModel: 'builtin' },
   {

@@ -98,6 +98,13 @@ export interface WebsitePromptLabels {
    * the action has returned and the dictionary lives on the server. */
   importedMany: string;
   importedLink: string;
+  /** Heading of the connected row, once a site has actually been read. */
+  connectedTitle: string;
+  /** Carries `{date}` — when it was last read. */
+  connectedBody: string;
+  /** The resync control. */
+  refresh: string;
+  refreshPending: string;
 }
 
 export interface WebsitePromptProps {
@@ -114,6 +121,14 @@ export interface WebsitePromptProps {
   /** `companies.website`, to prefill. Not evidence of an import. */
   defaultUrl?: string | null;
   /**
+   * When the site was last read, already formatted. Its presence — not
+   * `defaultUrl`, and not `done` — is what proves an import happened, so it is
+   * what switches this card into its connected/resync state. `done` alone is
+   * not enough: it is also true for a business with no website at all, which
+   * has nothing to resync.
+   */
+  lastReadAt?: string | null;
+  /**
    * Whether this card carries the page's single solid button. It does only
    * where it is the whole answer to "what should I do next"; anywhere a waiting
    * customer or an unmade assistant is on the same screen, that outranks it.
@@ -128,6 +143,7 @@ export function WebsitePrompt({
   companyId,
   done,
   defaultUrl,
+  lastReadAt,
   solid = false,
   labels,
 }: WebsitePromptProps) {
@@ -174,6 +190,40 @@ export function WebsitePrompt({
               {labels.importedLink}
             </Link>
           </p>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  // A site that HAS been read keeps a place on this page — one line, the
+  // address, when it was last read, and a way to read it again.
+  //
+  // The card used to return null here, on the reasoning that asking again reads
+  // as an outstanding job. That is right about ASKING and wrong about the site
+  // the owner has already connected: their prices, hours and policies change,
+  // and until now the only way to pick that up was a "Refresh this site" button
+  // three navigations away on the knowledge tab, which nobody found — the same
+  // burial that kept the import itself from ever running.
+  //
+  // Re-running the import IS the resync: `importWebsiteOnboardingAction`
+  // updates the pages it already holds rather than adding a second copy, which
+  // is why this needs no separate action and no crawl id.
+  if (done && lastReadAt && defaultUrl) {
+    return (
+      <Card>
+        <CardContent className="flex flex-wrap items-center justify-between gap-3 p-4">
+          <div className="min-w-0">
+            <p className="truncate text-sm font-medium">{labels.connectedTitle}</p>
+            <p className="truncate text-xs text-muted-foreground">
+              {labels.connectedBody.replace('{date}', lastReadAt)}
+            </p>
+          </div>
+          <form action={action} className="shrink-0">
+            <input type="hidden" name="websiteUrl" value={defaultUrl} />
+            <SubmitButton size="sm" variant="outline" pendingLabel={labels.refreshPending}>
+              {labels.refresh}
+            </SubmitButton>
+          </form>
         </CardContent>
       </Card>
     );
