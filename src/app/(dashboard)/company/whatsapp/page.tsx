@@ -169,9 +169,12 @@ export default async function WhatsAppPage() {
               {status?.error ? (
                 <Alert tone="warning" title="Live status could not be read from Meta">
                   <p>
-                    The figures above may be out of date. This usually means the access token
-                    saved on the Messaging apps page has expired, or is missing the permission
-                    called <code className="rounded bg-background/60 px-1">whatsapp_business_management</code>.
+                    The figures above may be out of date. This usually means the access token saved
+                    on the Messaging apps page has expired, or is missing the permission called{' '}
+                    <code className="rounded bg-background/60 px-1">
+                      whatsapp_business_management
+                    </code>
+                    .
                   </p>
                   {/* Meta's own error text is kept, but demoted: useful to whoever
                       set the number up, meaningless to everyone else. */}

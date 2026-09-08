@@ -151,7 +151,11 @@ export function SecurityTwoFactorCard({ panel }: { panel: TwoFactorPanel }) {
           unwrapped badge beside it was squeezed to two characters wide. */}
       <CardHeader className="flex-row flex-wrap items-center justify-between gap-3 space-y-0">
         <CardTitle>Two-step sign-in</CardTitle>
-        <Badge variant={panel.status === 'on' ? 'success' : panel.status === 'pending' ? 'warning' : 'secondary'}>
+        <Badge
+          variant={
+            panel.status === 'on' ? 'success' : panel.status === 'pending' ? 'warning' : 'secondary'
+          }
+        >
           {panel.status === 'on' ? 'On' : panel.status === 'pending' ? 'Half set up' : 'Off'}
         </Badge>
       </CardHeader>
@@ -228,8 +232,8 @@ export function SecurityTwoFactorCard({ panel }: { panel: TwoFactorPanel }) {
             </div>
 
             <Alert tone="info">
-              Nothing changes on your account until you enter a working code below. If you close this
-              page now, two-step sign-in stays off.
+              Nothing changes on your account until you enter a working code below. If you close
+              this page now, two-step sign-in stays off.
             </Alert>
 
             <form action={confirmAction} className="space-y-3">
@@ -283,9 +287,7 @@ export function SecurityTwoFactorCard({ panel }: { panel: TwoFactorPanel }) {
                     outline, so this was a control a keyboard could reach and
                     could not see. `rounded-sm` keeps the ring off the panel's
                     own corner. */}
-                <summary
-                  className={`cursor-pointer rounded-sm text-sm font-medium ${RING}`}
-                >
+                <summary className={`cursor-pointer rounded-sm text-sm font-medium ${RING}`}>
                   Generate new recovery codes
                 </summary>
                 <form action={regenAction} className="mt-3 space-y-3">

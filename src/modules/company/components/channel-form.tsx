@@ -105,9 +105,7 @@ export function ChannelForm({
             this form got no staff alerts and nothing anywhere said why.
           */}
           <div className="rounded-md border bg-muted/30 p-3 text-xs text-muted-foreground">
-            <p className="font-medium text-foreground">
-              This is the number your customers message
-            </p>
+            <p className="font-medium text-foreground">This is the number your customers message</p>
             <p className="mt-1">
               Getting a WhatsApp message <em>yourself</em> when a new enquiry or order comes in is a
               separate setting, on{' '}

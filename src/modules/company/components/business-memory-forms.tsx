@@ -313,11 +313,7 @@ export function BusinessMemoryForm({ profile }: { profile: BusinessMemoryFormPro
             its text off mid-word rather than truncating politely. A 20rem floor
             is what guarantees "Grounded: prefer company data" fits. */}
         <div className={FIELD_GRID_WIDE}>
-          <FormField
-            label="Brand voice"
-            htmlFor="brandVoice"
-            hint="A few adjectives is enough."
-          >
+          <FormField label="Brand voice" htmlFor="brandVoice" hint="A few adjectives is enough.">
             <Input
               name="brandVoice"
               defaultValue={profile.brandVoice ?? ''}
@@ -471,11 +467,7 @@ export function HoursForm({ hours }: { hours: HoursRow[] }) {
               </div>
               <div className="grid gap-3 [grid-template-columns:repeat(auto-fit,minmax(8rem,1fr))]">
                 <FormField label="Opens" htmlFor={`open_${h.dayOfWeek}`}>
-                  <Input
-                    name={`open_${h.dayOfWeek}`}
-                    type="time"
-                    defaultValue={h.openTime ?? ''}
-                  />
+                  <Input name={`open_${h.dayOfWeek}`} type="time" defaultValue={h.openTime ?? ''} />
                 </FormField>
                 <FormField label="Closes" htmlFor={`close_${h.dayOfWeek}`}>
                   <Input

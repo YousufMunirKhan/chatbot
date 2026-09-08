@@ -7,6 +7,7 @@ import { Select } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
 import { FormField } from '@/components/ui/form-field';
 import { FormMessage } from '@/components/ui/form-message';
+import { FIELD_GRID } from './form-layout';
 import { SubmitButton } from '@/components/ui/submit-button';
 import { LEAD_STATUS_LABELS, labelFor } from '@/lib/constants';
 import { createBroadcastAction, type ActionState } from '../broadcasts-actions';
@@ -52,7 +53,11 @@ export function BroadcastForm({ templates = [] }: BroadcastFormProps) {
     <form ref={ref} action={action} className="space-y-4">
       <input type="hidden" name="scheduledTimezone" value={timezone} />
 
-      <div className="grid gap-4 sm:grid-cols-2">
+      {/* `sm:grid-cols-2` is a VIEWPORT query: it guarantees two columns from
+          640px upward regardless of how wide this card actually is. `FIELD_GRID`
+          asks the container instead — the rule this codebase settled on in
+          `form-layout.ts` after a `<select>` clipped its own text mid-word. */}
+      <div className={FIELD_GRID}>
         <FormField label="Channel" htmlFor="channel">
           {/* This select was one of two that hand-rolled their classes inline with
               a bare `border` and no focus ring; `Select` gives it `border-input`
@@ -126,7 +131,7 @@ export function BroadcastForm({ templates = [] }: BroadcastFormProps) {
       ) : null}
 
       {channel === 'whatsapp' ? (
-        <div className="grid gap-4 sm:grid-cols-2">
+        <div className={FIELD_GRID}>
           <FormField
             label="Template"
             htmlFor="templateName"

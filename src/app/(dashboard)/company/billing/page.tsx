@@ -421,11 +421,12 @@ export default async function BillingPage({
             ) : (
               <ul className="divide-y text-sm">
                 {autoTopUpAttempts.map((attempt) => (
-                  <li key={attempt.id} className="flex flex-wrap items-center justify-between gap-2 py-2">
+                  <li
+                    key={attempt.id}
+                    className="flex flex-wrap items-center justify-between gap-2 py-2"
+                  >
                     <div className="min-w-0">
-                      <span className="font-medium">
-                        {gbpExact(attempt.amountCents)}
-                      </span>{' '}
+                      <span className="font-medium">{gbpExact(attempt.amountCents)}</span>{' '}
                       <span className="text-muted-foreground">{formatDate(attempt.createdAt)}</span>
                       {attempt.error ? (
                         <p className="text-xs text-danger-fg">{attempt.error}</p>
@@ -476,7 +477,10 @@ export default async function BillingPage({
               is what someone weighing up a change actually wants to read. */}
           <p className="text-xs text-muted-foreground">
             Every package is compared side by side on the{' '}
-            <Link href="/pricing" className="font-medium text-primary underline-offset-4 hover:underline">
+            <Link
+              href="/pricing"
+              className="font-medium text-primary underline-offset-4 hover:underline"
+            >
               public price list
             </Link>
             .

@@ -83,7 +83,11 @@ export function BillingAutoTopUpForm({
     }));
     if (savedCardId && !savedCardIsListed) {
       return [
-        { id: savedCardId, expired: false, label: 'Card on file — Stripe could not confirm the details' },
+        {
+          id: savedCardId,
+          expired: false,
+          label: 'Card on file — Stripe could not confirm the details',
+        },
         ...listed,
       ];
     }
@@ -92,9 +96,7 @@ export function BillingAutoTopUpForm({
 
   const savedCardExpired = cards.some((card) => card.id === savedCardId && cardHasExpired(card));
 
-  const [amount, setAmount] = React.useState(
-    ((config?.topupAmountCents ?? 2000) / 100).toFixed(2),
-  );
+  const [amount, setAmount] = React.useState(((config?.topupAmountCents ?? 2000) / 100).toFixed(2));
 
   return (
     <div className="space-y-4">
@@ -143,9 +145,7 @@ export function BillingAutoTopUpForm({
             className={CHECKBOX}
           />
           <span>
-            <span className="block font-medium">
-              Top up automatically when my credit runs low
-            </span>
+            <span className="block font-medium">Top up automatically when my credit runs low</span>
             <span className="block text-xs text-muted-foreground">
               Off, your assistant simply stops replying once the credit runs out.
             </span>

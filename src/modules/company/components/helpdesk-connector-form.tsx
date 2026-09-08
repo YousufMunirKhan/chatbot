@@ -9,6 +9,7 @@ import { Select } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
 import { FormField } from '@/components/ui/form-field';
 import { FormMessage } from '@/components/ui/form-message';
+import { FIELD_GRID } from './form-layout';
 import { SubmitButton } from '@/components/ui/submit-button';
 import { RefreshDashboardShell } from '@/components/refresh-dashboard-shell';
 import {
@@ -27,8 +28,11 @@ export function HelpdeskConnectorForm() {
   return (
     <form action={action} className="space-y-4">
       <RefreshDashboardShell state={state} />
-      <div className="grid gap-4 sm:grid-cols-2">
-        <FormField label="Connector name" htmlFor="connector-name">
+      {/* Container, not viewport. ".NET / Windows POS" and "Laravel backend"
+          are options a native `<select>` cannot truncate, and `sm:grid-cols-2`
+          promised two columns from 640px however narrow the card really was. */}
+      <div className={FIELD_GRID}>
+        <FormField label="Connector name" htmlFor="connector-name" required>
           <Input name="name" placeholder="Main POS connector" required />
         </FormField>
         <FormField
