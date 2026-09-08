@@ -6,7 +6,10 @@
 - Migration: `supabase/migrations/0003_auth_rbac.sql` (auth.users→users trigger, `is_super_admin` flag + helper, super-admin RLS policies)
 - Server auth helpers: `src/lib/auth/index.ts` (`getSessionUser`, `requireUser`, `requireRole`, `assertRole`, `homePathFor`)
 - Session middleware + route protection: `src/middleware.ts`
-- Login flow: `src/app/(auth)/login/` (form + optional Google), server actions in `src/app/(auth)/actions.ts`, OAuth callback `src/app/(auth)/auth/callback/route.ts`
+- Login flow: `src/app/(auth)/login/` (email and password), server actions in `src/app/(auth)/actions.ts`
+- Self-serve signup: `src/app/(auth)/signup/`, which provisions a company through `src/modules/onboarding/`
+- Code-exchange callback: `src/app/(auth)/auth/callback/route.ts`. Named for OAuth, but the only thing that
+  reaches it today is the password-reset link — keep it.
 - Role-based shell + guards: `src/app/(dashboard)/layout.tsx`, `super-admin/layout.tsx`, `company/layout.tsx`
 - Bootstrap & verify: `npm run seed:admin -- <email> <password>`, `npm run test:auth`
 
@@ -15,7 +18,7 @@ Add login and role-based access control on top of Supabase Auth, with protected 
 
 ## 📦 What to build
 - Email/password login (or auth provider integration)
-- Optional Google login
+- ~~Optional Google login~~ — built as a component, never wired to anything, and removed. It rendered a button that did nothing. Wiring it means Supabase Auth's `signInWithOAuth` plus a callback route, and a Google signup must provision a company the way `/signup` does or it creates a half-made account.
 - Protected routes
 - Role-based navigation
 - Super admin access path

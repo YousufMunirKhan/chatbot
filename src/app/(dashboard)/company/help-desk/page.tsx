@@ -906,10 +906,14 @@ function ConnectorPowerMap() {
   );
 }
 
-export default async function HelpDeskPage({ searchParams }: { searchParams?: { tab?: string } }) {
+export default async function HelpDeskPage({
+  searchParams,
+}: {
+  searchParams?: { tab?: string; healthLogPage?: string };
+}) {
   const companyId = await getCompanyId();
   const [workspace, bots, replyUsage, automationEndpoints] = await Promise.all([
-    getHelpdeskConnectorWorkspace(),
+    getHelpdeskConnectorWorkspace({ healthLogPage: Number(searchParams?.healthLogPage ?? 1) }),
     listBots(),
     getReplyAllowanceUsage(companyId),
     listWebhookEndpoints(),
@@ -1335,8 +1339,16 @@ export default async function HelpDeskPage({ searchParams }: { searchParams?: { 
             <CardContent className="space-y-3">
               <div className="grid gap-3 sm:grid-cols-3">
                 <div className="rounded-md border p-3">
-                  <p className="text-xs uppercase tracking-wider text-muted-foreground">Recent health logs</p>
-                  <p className="mt-1 text-2xl font-semibold">{workspace.healthLogs.length}</p>
+                  <p className="text-xs uppercase tracking-wider text-muted-foreground">
+                    Recent health logs (last {workspace.healthLogWindowDays} days)
+                  </p>
+                  {/* One page of them, not all of them — saying "25" when there
+                      are thousands is worse than saying "25+". */}
+                  <p className="mt-1 text-2xl font-semibold">
+                    {workspace.healthLogsHaveMore
+                      ? `${workspace.healthLogPageSize}+`
+                      : workspace.healthLogs.length}
+                  </p>
                 </div>
                 <div className="rounded-md border p-3">
                   <p className="text-xs uppercase tracking-wider text-muted-foreground">Generated pills</p>
@@ -1388,6 +1400,29 @@ export default async function HelpDeskPage({ searchParams }: { searchParams?: { 
                   </TableBody>
                 </Table>
               </div>
+              {/* The table reads one page at a time now, so without these the
+                  older entries exist and are unreachable. */}
+              {workspace.healthLogsHaveMore || workspace.healthLogPage > 1 ? (
+                <div className="flex items-center justify-between gap-3 border-t px-4 py-3 text-sm">
+                  <span className="text-muted-foreground">Page {workspace.healthLogPage}</span>
+                  <div className="flex gap-2">
+                    {workspace.healthLogPage > 1 ? (
+                      <Button asChild size="sm" variant="outline">
+                        <Link href={`?tab=logs&healthLogPage=${workspace.healthLogPage - 1}`}>
+                          Newer
+                        </Link>
+                      </Button>
+                    ) : null}
+                    {workspace.healthLogsHaveMore ? (
+                      <Button asChild size="sm" variant="outline">
+                        <Link href={`?tab=logs&healthLogPage=${workspace.healthLogPage + 1}`}>
+                          Older
+                        </Link>
+                      </Button>
+                    ) : null}
+                  </div>
+                </div>
+              ) : null}
             </CardContent>
           </Card>
 
