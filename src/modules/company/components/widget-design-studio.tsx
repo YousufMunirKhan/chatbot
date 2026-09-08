@@ -824,11 +824,24 @@ export function WidgetDesignStudio({
               )}
               {/* These two are pixels and said so nowhere, so "20" could have
                   meant anything. The unit goes in the hint, matching how the
-                  two auto-open delays above spell out their seconds. */}
+                  two auto-open delays above spell out their seconds.
+
+                  The bottom hint also names the SITUATION, not just the
+                  property. "Pixels between the launcher and the bottom of the
+                  screen" is accurate and tells an owner nothing about when to
+                  change it — so a shop with a fixed mobile nav bar (Home /
+                  Shop / Cart, which most storefronts now have) sees the
+                  launcher sitting on top of it and reports the widget as
+                  broken, because nothing connected the collision to this box.
+
+                  The number reaches the phone as an inline style set in
+                  widget.js, which is why it works there at all: the mobile
+                  media query pins the launcher to 16px, and only an inline
+                  style outranks it. */}
               <FormField
                 label="Bottom spacing"
                 htmlFor="bottomOffset"
-                hint="Pixels between the launcher and the bottom of the visitor's screen."
+                hint="Pixels between the launcher and the bottom of the visitor's screen. Raise it if your site has a fixed bar along the bottom on mobile — a nav bar or a cart button — so the launcher sits above it instead of on top of it. A typical mobile nav bar needs about 80."
               >
                 <Input
                   name="bottomOffset"
