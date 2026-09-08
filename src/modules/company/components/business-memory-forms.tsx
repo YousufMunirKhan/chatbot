@@ -101,7 +101,18 @@ function RuleField({
   );
 }
 
-export function BusinessMemoryForm({ profile }: { profile: BusinessProfileMemory }) {
+/**
+ * `dialCode` is spelled out here rather than taken from `BusinessProfileMemory`
+ * because the reader that builds that type does not carry the column yet. An
+ * optional field means the page can pass its profile object unchanged today,
+ * and the box prefills itself the moment the reader starts returning it —
+ * `undefined` (the reader never asked) and `null` (asked, nothing stored) are
+ * different answers, and the hidden `dialCodeKnown` below tells the action
+ * which of the two it is looking at.
+ */
+type BusinessMemoryFormProfile = BusinessProfileMemory & { dialCode?: string | null };
+
+export function BusinessMemoryForm({ profile }: { profile: BusinessMemoryFormProfile }) {
   const [state, action] = useFormState(updateBusinessMemoryAction, initial);
   return (
     <form action={action} className="space-y-5">
@@ -194,6 +205,21 @@ export function BusinessMemoryForm({ profile }: { profile: BusinessProfileMemory
             inputMode="tel"
             placeholder="+971 4 000 0000"
             defaultValue={profile.primaryPhone ?? ''}
+          />
+        </FormField>
+        <input type="hidden" name="dialCodeKnown" value={profile.dialCode === undefined ? '' : '1'} />
+        <FormField
+          label="Country dial code"
+          htmlFor="dialCode"
+          hint="The calling code your customers dial from, on its own — it turns a number written nationally (07946 322081) into one WhatsApp can reach (+447946322081), and is how we recognise both as the same person. Left empty, a national number is kept exactly as it was typed rather than guessed at."
+        >
+          <Input
+            id="dialCode"
+            name="dialCode"
+            type="tel"
+            inputMode="tel"
+            placeholder="+44"
+            defaultValue={profile.dialCode ?? ''}
           />
         </FormField>
         <FormField

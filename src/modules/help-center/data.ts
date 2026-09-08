@@ -3,7 +3,7 @@ import { createSupabaseServiceClient } from '@/lib/db/server';
 import { env } from '@/lib/env';
 import { logger } from '@/lib/logger';
 import { summarize } from './markdown';
-import { looksLikeBotId } from './slug';
+import { isReservedHandle, looksLikeBotId } from './slug';
 
 /**
  * The PUBLIC side of the help centre — everything an anonymous reader sees.
@@ -20,12 +20,16 @@ import { looksLikeBotId } from './slug';
  *
  * THE HANDLE
  * ----------
- * `/help/<handle>` accepts two things. A company's chosen help-centre slug is
- * the canonical one and is what every link and every `<link rel=canonical>`
- * uses. A bot's `public_bot_id` also resolves, because that is the only address
- * this feature had before migration 0078 and customers have already published
- * those links. Both land on the same content; the canonical tag is what stops
- * a company with three bots from competing against itself in search results.
+ * `/help/<handle>` accepts three things. A company's help-centre slug is the
+ * canonical one and is what every link and every `<link rel=canonical>` uses;
+ * migration 0087 derives one for every company from the slug it already has, so
+ * this address exists whether or not anybody chose it. A bot's `public_bot_id`
+ * also resolves, because that is the only address this feature had before
+ * migration 0078 and customers have already published those links. And the
+ * company's own slug resolves as a last resort, for the company whose settings
+ * row is missing or whose handle was cleared by hand — see
+ * `resolveByCompanySlug`. All three land on the same content; the canonical tag
+ * is what stops a company from competing against itself in search results.
  *
  * ROUND TRIPS
  * -----------
@@ -149,13 +153,82 @@ interface SettingsRow {
 const one = <T,>(v: T | T[] | null | undefined): T | null =>
   Array.isArray(v) ? (v[0] ?? null) : (v ?? null);
 
+type ServiceClient = ReturnType<typeof createSupabaseServiceClient>;
+
+/** The brand colour of a company's oldest assistant, or the product default. */
+async function brandColorFor(sb: ServiceClient, companyId: string): Promise<string> {
+  const { data } = await sb
+    .from('bots')
+    .select('appearance_json')
+    .eq('company_id', companyId)
+    .order('created_at', { ascending: true })
+    .limit(1)
+    .maybeSingle();
+  return appearanceColor((data as { appearance_json?: unknown } | null)?.appearance_json);
+}
+
+/**
+ * The company's own slug, as a last-resort handle.
+ *
+ * Migration 0087 derives every company's handle from this exact value, so this
+ * path is normally dead: the settings row exists and the lookup above finds it.
+ * It is here for the two cases where it does not — a database that has not had
+ * 0087 applied yet, and an owner who emptied the address field by hand — because
+ * both of those are the 404 this whole change exists to remove.
+ *
+ * It resolves ONLY for a company that has no handle of its own. The moment a
+ * company has one, that handle is its single canonical address and this returns
+ * null, so the two can never both serve the same articles and compete in a
+ * search index.
+ */
+async function resolveByCompanySlug(
+  sb: ServiceClient,
+  slug: string,
+): Promise<HelpCenterBrand | null> {
+  // A company slug is not filtered the way a chosen handle is, so the same
+  // refusal has to be applied here: a handle may not be a word the routes own
+  // or the shape of a bot id. Such a company still has its backfilled handle.
+  if (isReservedHandle(slug)) return null;
+
+  const { data } = await sb
+    .from('companies')
+    .select('id,name,help_center_settings(slug,title,description,is_published)')
+    .eq('slug', slug)
+    .maybeSingle();
+  if (!data) return null;
+
+  const row = data as {
+    id: string;
+    name: string | null;
+    help_center_settings?: Omit<SettingsRow, 'company_id' | 'companies'>
+      | Array<Omit<SettingsRow, 'company_id' | 'companies'>>
+      | null;
+  };
+  const settings = one(row.help_center_settings);
+  // A handle of its own wins; switched off is switched off. Both are a 404 at
+  // this address, and the first of them has a working address elsewhere.
+  if (settings && (settings.slug || !settings.is_published)) return null;
+
+  const name = row.name ?? '';
+  return {
+    handle: slug,
+    companyId: row.id,
+    name: name || DEFAULT_TITLE,
+    title: settings?.title || `${name} ${DEFAULT_TITLE}`.trim(),
+    description: settings?.description ?? '',
+    primaryColor: await brandColorFor(sb, row.id),
+  };
+}
+
 /**
  * Handle → brand, or null when there is nothing public at that address.
  *
  * Null covers four different situations on purpose, because the reader must not
  * be able to tell them apart: no such handle, a company that has switched its
  * help centre off, an internal-only assistant, and a bot id that does not
- * exist. Every one of them is a 404.
+ * exist. Every one of them is a 404. An EMPTY help centre is not on that list —
+ * a company with a handle and nothing written resolves, and the index page says
+ * it is empty.
  */
 export const resolveHelpCenter = cache(async function resolveHelpCenter(
   handle: string,
@@ -175,15 +248,8 @@ export const resolveHelpCenter = cache(async function resolveHelpCenter(
       .eq('slug', trimmed)
       .maybeSingle();
     const row = data as SettingsRow | null;
-    if (!row || !row.is_published) return null;
-
-    const { data: bot } = await sb
-      .from('bots')
-      .select('appearance_json')
-      .eq('company_id', row.company_id)
-      .order('created_at', { ascending: true })
-      .limit(1)
-      .maybeSingle();
+    if (!row) return resolveByCompanySlug(sb, trimmed);
+    if (!row.is_published) return null;
 
     const company = one(row.companies);
     return {
@@ -192,7 +258,7 @@ export const resolveHelpCenter = cache(async function resolveHelpCenter(
       name: company?.name ?? row.title ?? DEFAULT_TITLE,
       title: row.title || `${company?.name ?? ''} ${DEFAULT_TITLE}`.trim(),
       description: row.description ?? '',
-      primaryColor: appearanceColor((bot as { appearance_json?: unknown } | null)?.appearance_json),
+      primaryColor: await brandColorFor(sb, row.company_id),
     };
   }
 
@@ -275,8 +341,15 @@ function toCard(row: ArticleRow): HelpArticleCard {
  * regression dressed as a feature. Articles this module indexed for the
  * assistant are excluded by their `source_url` marker, or every published
  * article would appear twice.
+ *
+ * Cached per request like the reads around it, because `generateMetadata` needs
+ * the same counts the page does — a help centre with nothing published is a
+ * thin page and asks not to be indexed — and paying for those three queries
+ * twice to answer one request is not worth the tidier call site.
  */
-export async function getHelpCenterIndex(handle: string): Promise<HelpCenterIndex | null> {
+export const getHelpCenterIndex = cache(async function getHelpCenterIndex(
+  handle: string,
+): Promise<HelpCenterIndex | null> {
   const brand = await resolveHelpCenter(handle);
   if (!brand) return null;
   const sb = createSupabaseServiceClient();
@@ -344,7 +417,7 @@ export async function getHelpCenterIndex(handle: string): Promise<HelpCenterInde
   );
 
   return { brand, categories, uncategorized, documents, articleCount };
-}
+});
 
 /** One category page: its own articles, for browsing and for a crawlable URL. */
 export const getHelpCategory = cache(async function getHelpCategory(
@@ -548,27 +621,41 @@ export async function getHelpCenterSitemap(handle: string): Promise<SitemapEntry
   const [articlesRes, categoriesRes] = await Promise.all([
     sb
       .from('help_articles')
-      .select('slug,updated_at')
+      .select('slug,updated_at,category_id')
       .eq('company_id', brand.companyId)
       .eq('status', 'published')
       .order('updated_at', { ascending: false })
       .limit(5000),
     sb
       .from('help_categories')
-      .select('slug,updated_at')
+      .select('id,slug,updated_at')
       .eq('company_id', brand.companyId)
       .limit(500),
   ]);
 
-  const articles = (articlesRes.data ?? []) as Array<{ slug: string; updated_at: string }>;
+  const articles = (articlesRes.data ?? []) as Array<{
+    slug: string;
+    updated_at: string;
+    category_id: string | null;
+  }>;
   const newest = articles[0]?.updated_at ?? null;
+
+  // A section whose articles are all drafts renders as an empty page and asks
+  // not to be indexed (see the category route's `robots`). Handing a crawler a
+  // sitemap full of those is the fastest way to be judged a thin site, so the
+  // sitemap lists the sections a reader would actually find something in.
+  const populated = new Set(
+    articles.map((row) => row.category_id).filter((id): id is string => Boolean(id)),
+  );
 
   return [
     { loc: helpCenterUrl(helpCenterPath(brand.handle)), lastmod: newest },
-    ...((categoriesRes.data ?? []) as Array<{ slug: string; updated_at: string }>).map((row) => ({
-      loc: helpCenterUrl(helpCategoryPath(brand.handle, row.slug)),
-      lastmod: row.updated_at,
-    })),
+    ...((categoriesRes.data ?? []) as Array<{ id: string; slug: string; updated_at: string }>)
+      .filter((row) => populated.has(row.id))
+      .map((row) => ({
+        loc: helpCenterUrl(helpCategoryPath(brand.handle, row.slug)),
+        lastmod: row.updated_at,
+      })),
     ...articles.map((row) => ({
       loc: helpCenterUrl(helpArticlePath(brand.handle, row.slug)),
       lastmod: row.updated_at,

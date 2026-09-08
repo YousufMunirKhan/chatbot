@@ -1,4 +1,5 @@
 import { Fragment } from 'react';
+import Link from 'next/link';
 import { requireRole } from '@/lib/auth';
 import { ROLES } from '@/lib/constants';
 import { companyLabel } from '@/lib/labels';
@@ -22,7 +23,7 @@ import {
   type BusinessReadinessItem,
 } from '@/modules/company/business-profile-data';
 import { getCurrentCompany, listBots } from '@/modules/company/data';
-import { listDocuments } from '@/modules/company/knowledge-data';
+import { documentEditRefusal, listDocuments } from '@/modules/company/knowledge-data';
 import {
   deleteFaqAction,
   deleteLocationAction,
@@ -607,30 +608,50 @@ export default async function BusinessDataWorkspacePage() {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {docs.map((doc) => (
-                      <TableRow key={doc.id}>
-                        <TableCell className="font-medium">{doc.title}</TableCell>
-                        <TableCell>{doc.botName ?? 'All'}</TableCell>
-                        <TableCell>
-                          <Badge variant="secondary">
-                            {companyLabel('documentStatus', doc.status)}
-                          </Badge>
-                        </TableCell>
-                        <TableCell>{formatNumber(doc.charCount)} chars</TableCell>
-                        <TableCell className="text-muted-foreground">
-                          {formatDate(doc.createdAt)}
-                        </TableCell>
-                        <TableCell className="text-end">
-                          <DeleteButton
-                            id={doc.id}
-                            fieldName="documentId"
-                            action={deleteDocumentAction}
-                            label="Delete this file"
-                            question={`${doc.title} and everything your assistant learned from it are removed. This cannot be undone.`}
-                          />
-                        </TableCell>
-                      </TableRow>
-                    ))}
+                    {docs.map((doc) => {
+                      // Editing is offered wherever this database holds the
+                      // only copy of the text; where something else owns and
+                      // rewrites it, the row says so instead of quietly
+                      // dropping the button. See `documentEditRefusal`.
+                      const refusal = documentEditRefusal(doc);
+                      return (
+                        <TableRow key={doc.id}>
+                          <TableCell className="font-medium">{doc.title}</TableCell>
+                          <TableCell>{doc.botName ?? 'All'}</TableCell>
+                          <TableCell>
+                            <Badge variant="secondary">
+                              {companyLabel('documentStatus', doc.status)}
+                            </Badge>
+                          </TableCell>
+                          <TableCell>{formatNumber(doc.charCount)} chars</TableCell>
+                          <TableCell className="text-muted-foreground">
+                            {formatDate(doc.createdAt)}
+                          </TableCell>
+                          <TableCell className="text-end">
+                            <div className="flex flex-col items-end gap-2">
+                              {refusal ? (
+                                <p className="max-w-[22rem] text-start text-xs text-muted-foreground">
+                                  {refusal}
+                                </p>
+                              ) : (
+                                <Button asChild size="sm" variant="outline">
+                                  <Link href={`/company/business-data/documents/${doc.id}`}>
+                                    Edit this text
+                                  </Link>
+                                </Button>
+                              )}
+                              <DeleteButton
+                                id={doc.id}
+                                fieldName="documentId"
+                                action={deleteDocumentAction}
+                                label="Delete this file"
+                                question={`${doc.title} and everything your assistant learned from it are removed. This cannot be undone.`}
+                              />
+                            </div>
+                          </TableCell>
+                        </TableRow>
+                      );
+                    })}
                   </TableBody>
                 </Table>
               )}

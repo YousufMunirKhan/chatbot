@@ -4,6 +4,7 @@ import { requireRole } from '@/lib/auth';
 import { ROLES } from '@/lib/constants';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent } from '@/components/ui/card';
+import { PageHeader } from '@/components/ui/page-header';
 import { cn } from '@/lib/utils';
 import { formatAbsoluteTime, formatRelativeTime } from '@/lib/relative-time';
 import {
@@ -164,40 +165,35 @@ export default async function ConversationPage({
         <InboxRealtime conversationId={convo.id} />
         <ConversationPresence conversationId={convo.id} />
 
-        <div>
-          <Link href="/company/inbox" className="text-sm text-muted-foreground hover:underline">
-            <span className="dir-arrow" aria-hidden="true">
-              &larr;
-            </span>{' '}
-            Inbox
-          </Link>
-          <div className="mt-2 flex flex-wrap items-start justify-between gap-3">
-            <div className="min-w-0">
-              <div className="flex flex-wrap items-center gap-2">
-                <h1 className="text-xl font-semibold">
-                  {name}
-                  {suffix ? <span className="font-normal text-muted-foreground"> · {suffix}</span> : null}
-                </h1>
-                {chips.map((chip) => (
-                  <Badge key={chip.label} variant={chip.variant}>
-                    {chip.label}
-                  </Badge>
-                ))}
-              </div>
-              <p className="mt-1 text-xs text-muted-foreground">
-                {ticketNumber}
-                {contactLine ? ` · ${contactLine}` : ''}
-                {convo.startedAt ? ` · started ${formatRelativeTime(convo.startedAt, now)}` : ''}
-              </p>
-            </div>
+        {/* The way back to the list, in the one component every other drill-down
+            page in the app uses for it. It was hand-written here, which is how
+            this page ended up with the back-link convention `PageHeader` was
+            built to retire — a bare arrow above a bespoke title row. */}
+        <PageHeader
+          backTo={{ href: '/company/inbox', label: 'Inbox' }}
+          title={
+            <span className="flex flex-wrap items-center gap-2">
+              {name}
+              {suffix ? <span className="font-normal text-muted-foreground">· {suffix}</span> : null}
+              {chips.map((chip) => (
+                <Badge key={chip.label} variant={chip.variant}>
+                  {chip.label}
+                </Badge>
+              ))}
+            </span>
+          }
+          description={`${ticketNumber}${contactLine ? ` · ${contactLine}` : ''}${
+            convo.startedAt ? ` · started ${formatRelativeTime(convo.startedAt, now)}` : ''
+          }`}
+          actions={
             <ConversationAiToggle
               key={convo.id}
               conversationId={convo.id}
               aiEnabled={convo.aiEnabled}
               isClosed={convo.status === 'closed'}
             />
-          </div>
-        </div>
+          }
+        />
 
         <Card className="flex min-h-0 flex-1 flex-col">
           <CardContent className="max-h-[60vh] flex-1 space-y-3 overflow-y-auto p-4 lg:max-h-none">

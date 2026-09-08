@@ -35,15 +35,19 @@ export async function getHelpDeskOverview() {
   const companyId = await getCompanyId();
   const sb = createSupabaseServiceClient();
 
-  const [{ data: products, error: productError }, { data: inventory }, { data: orders }, { data: customers }] =
+  const [{ data: products, error: productError }, { data: orders }, { data: customers }] =
     await Promise.all([
       sb
+        // Stock is only ever shown against the 50 products below, so the
+        // inventory rows come back embedded under them. Read on its own it was
+        // the company's ENTIRE inventory table — unbounded in the catalogue
+        // size — and all but fifty products' worth was thrown away. Embedding
+        // keeps that to one round trip, which is the cost that matters here.
         .from('synced_products')
-        .select('id,title,sku,price,currency,status')
+        .select('id,title,sku,price,currency,status,synced_inventory(quantity,in_stock)')
         .eq('company_id', companyId)
         .order('created_at', { ascending: false })
         .limit(50),
-      sb.from('synced_inventory').select('product_id,quantity,in_stock').eq('company_id', companyId),
       sb
         .from('synced_orders')
         .select('id,order_number,customer_name,status,fulfillment_status,total,currency,placed_at')
@@ -60,15 +64,20 @@ export async function getHelpDeskOverview() {
 
   if (productError) throw productError;
 
+  // A product can carry several inventory rows (locations, variants), so the
+  // quantities are still summed per product exactly as before.
   const stockByProduct = new Map<string, { quantity: number; inStock: boolean }>();
-  for (const row of inventory ?? []) {
-    const productId = (row as { product_id?: string }).product_id;
+  for (const row of (products ?? []) as Array<Record<string, unknown>>) {
+    const productId = row.id as string;
     if (!productId) continue;
-    const current = stockByProduct.get(productId) ?? { quantity: 0, inStock: false };
-    const quantity = (row as { quantity?: number }).quantity ?? 0;
-    current.quantity += quantity;
-    current.inStock = current.inStock || Boolean((row as { in_stock?: boolean }).in_stock) || quantity > 0;
-    stockByProduct.set(productId, current);
+    const stock = { quantity: 0, inStock: false };
+    const rows = Array.isArray(row.synced_inventory) ? row.synced_inventory : [];
+    for (const entry of rows as Array<Record<string, unknown>>) {
+      const quantity = (entry.quantity as number) ?? 0;
+      stock.quantity += quantity;
+      stock.inStock = stock.inStock || Boolean(entry.in_stock) || quantity > 0;
+    }
+    stockByProduct.set(productId, stock);
   }
 
   return {
@@ -211,12 +220,47 @@ export interface HelpdeskActionAuditRow {
   completedAt: string | null;
 }
 
+/**
+ * `helpdesk_connector_health_logs` is append-only: every poll, reconnect and
+ * completed event adds a row and nothing has ever removed one, so the table is
+ * only ever larger than it was yesterday. Reads of it therefore have to be
+ * bounded on BOTH axes — a recent time window and a page of rows — or the Help
+ * Desk logs tab gets slower every week until it stops loading. The window and
+ * the page size below are what the tab actually renders; nothing fetches more.
+ *
+ * 30 days matches the default chat retention window this product already uses,
+ * so the tab shows the same span of history everything else here does.
+ */
+export const HELPDESK_HEALTH_LOG_WINDOW_DAYS = 30;
+export const HELPDESK_HEALTH_LOG_PAGE_SIZE = 25;
+
+/**
+ * How many recent `event_completed` rows fill in the per-connector latency
+ * column. It is read separately from the log list, on the
+ * (company_id, event_type, created_at desc) index, so latency no longer depends
+ * on a completed event happening to land on the page of logs being shown.
+ */
+const HELPDESK_LATENCY_SAMPLE_SIZE = 50;
+
+export interface HelpdeskHealthLogPage {
+  logs: HelpdeskHealthLogRow[];
+  /** 1-based, matching the other paged readers in this module. */
+  page: number;
+  pageSize: number;
+  windowDays: number;
+  hasMore: boolean;
+}
+
 export interface HelpdeskConnectorWorkspace {
   connectors: HelpdeskConnectorRow[];
   draftDocuments: HelpdeskConnectorDocumentRow[];
   actions: HelpdeskConnectorActionRow[];
   events: HelpdeskConnectorEventRow[];
   healthLogs: HelpdeskHealthLogRow[];
+  healthLogPage: number;
+  healthLogPageSize: number;
+  healthLogWindowDays: number;
+  healthLogsHaveMore: boolean;
   auditLogs: HelpdeskActionAuditRow[];
   quickPills: string[];
   connectorGeneratedPills: number;
@@ -241,16 +285,144 @@ function fields(value: unknown): Array<{ name: string; required: boolean; descri
     .filter((field) => field.name);
 }
 
-export async function getHelpdeskConnectorWorkspace(): Promise<HelpdeskConnectorWorkspace> {
+type HelpdeskServiceClient = ReturnType<typeof createSupabaseServiceClient>;
+
+const HEALTH_LOG_COLUMNS =
+  'id,connector_id,event_type,delivery_mode,status,message,action_name,duration_ms,events_returned,created_at';
+
+function healthLogWindowStartIso(): string {
+  return new Date(Date.now() - HELPDESK_HEALTH_LOG_WINDOW_DAYS * 24 * 60 * 60 * 1000).toISOString();
+}
+
+/**
+ * One page of health logs, newest first, within the window. We deliberately ask
+ * for one row MORE than the page holds and use its presence as "there is
+ * another page": a `count: 'exact'` would make PostgREST count every row in the
+ * table, which is the whole-table read this bound exists to remove.
+ *
+ * A failed read returns an empty page rather than throwing — this is a
+ * diagnostics panel, and it should not be able to take the Help Desk page down.
+ */
+async function fetchHealthLogPage(
+  sb: HelpdeskServiceClient,
+  companyId: string,
+  page: number,
+): Promise<{ rows: Array<Record<string, unknown>>; hasMore: boolean }> {
+  const from = (page - 1) * HELPDESK_HEALTH_LOG_PAGE_SIZE;
+  const { data } = await sb
+    .from('helpdesk_connector_health_logs')
+    .select(HEALTH_LOG_COLUMNS)
+    .eq('company_id', companyId)
+    .gte('created_at', healthLogWindowStartIso())
+    .order('created_at', { ascending: false })
+    // `.range()` is inclusive at both ends, so this asks for pageSize + 1 rows.
+    .range(from, from + HELPDESK_HEALTH_LOG_PAGE_SIZE);
+
+  const rows = (data ?? []) as Array<Record<string, unknown>>;
+  return {
+    rows: rows.slice(0, HELPDESK_HEALTH_LOG_PAGE_SIZE),
+    hasMore: rows.length > HELPDESK_HEALTH_LOG_PAGE_SIZE,
+  };
+}
+
+/**
+ * Latest round-trip latency per connector. Filtered on `event_type` so it rides
+ * the (company_id, event_type, created_at desc) index and reads a fixed handful
+ * of rows, instead of hoping a completed event happens to be inside whatever
+ * page of the log list the dashboard is showing.
+ */
+async function fetchConnectorLatencies(
+  sb: HelpdeskServiceClient,
+  companyId: string,
+): Promise<Map<string, number>> {
+  const { data } = await sb
+    .from('helpdesk_connector_health_logs')
+    .select('connector_id,duration_ms')
+    .eq('company_id', companyId)
+    .eq('event_type', 'event_completed')
+    .not('duration_ms', 'is', null)
+    .order('created_at', { ascending: false })
+    .limit(HELPDESK_LATENCY_SAMPLE_SIZE);
+
+  // Rows arrive newest-first, so the first hit for a connector is its latest.
+  const latency = new Map<string, number>();
+  for (const row of (data ?? []) as Array<Record<string, unknown>>) {
+    const connectorId = row.connector_id as string | null;
+    const ms = row.duration_ms as number | null;
+    if (connectorId && typeof ms === 'number' && !latency.has(connectorId)) {
+      latency.set(connectorId, ms);
+    }
+  }
+  return latency;
+}
+
+function toHealthLogRow(
+  row: Record<string, unknown>,
+  connectorName: Map<string, string>,
+): HelpdeskHealthLogRow {
+  const connectorId = row.connector_id as string;
+  return {
+    id: row.id as string,
+    connectorName: connectorName.get(connectorId) ?? 'Connector',
+    eventType: row.event_type as string,
+    deliveryMode: (row.delivery_mode as string) ?? null,
+    status: row.status as string,
+    message: (row.message as string) ?? null,
+    actionName: (row.action_name as string) ?? null,
+    durationMs: (row.duration_ms as number) ?? null,
+    eventsReturned: (row.events_returned as number) ?? null,
+    createdAt: row.created_at as string,
+  };
+}
+
+/**
+ * Pagination entry point for the health log list, for when the logs tab wants
+ * page 2 and beyond without re-reading the whole connector workspace.
+ */
+export async function getHelpdeskConnectorHealthLogPage(page = 1): Promise<HelpdeskHealthLogPage> {
   const companyId = await getCompanyId();
   const sb = createSupabaseServiceClient();
+  const safePage = Math.max(1, Math.floor(page));
+
+  const { rows, hasMore } = await fetchHealthLogPage(sb, companyId, safePage);
+
+  // Only the connectors named on this page — never the whole connector list.
+  const connectorIds = [...new Set(rows.map((row) => row.connector_id as string).filter(Boolean))];
+  const connectorName = new Map<string, string>();
+  if (connectorIds.length) {
+    const { data: connectors } = await sb
+      .from('helpdesk_connectors')
+      .select('id,name')
+      .eq('company_id', companyId)
+      .in('id', connectorIds);
+    for (const row of (connectors ?? []) as Array<Record<string, unknown>>) {
+      connectorName.set(row.id as string, row.name as string);
+    }
+  }
+
+  return {
+    logs: rows.map((row) => toHealthLogRow(row, connectorName)),
+    page: safePage,
+    pageSize: HELPDESK_HEALTH_LOG_PAGE_SIZE,
+    windowDays: HELPDESK_HEALTH_LOG_WINDOW_DAYS,
+    hasMore,
+  };
+}
+
+export async function getHelpdeskConnectorWorkspace(
+  options: { healthLogPage?: number } = {},
+): Promise<HelpdeskConnectorWorkspace> {
+  const companyId = await getCompanyId();
+  const sb = createSupabaseServiceClient();
+  const healthLogPageNumber = Math.max(1, Math.floor(options.healthLogPage ?? 1));
 
   const [
     { data: connectors, error },
     { data: docs },
     { data: actions },
     { data: events },
-    { data: healthLogs },
+    healthLogPage,
+    latencyByConnector,
     { data: auditLogs },
     { data: quickPills },
     { count: connectorGeneratedPills },
@@ -281,12 +453,8 @@ export async function getHelpdeskConnectorWorkspace(): Promise<HelpdeskConnector
         .eq('company_id', companyId)
         .order('created_at', { ascending: false })
         .limit(25),
-      sb
-        .from('helpdesk_connector_health_logs')
-        .select('id,connector_id,event_type,delivery_mode,status,message,action_name,duration_ms,events_returned,created_at')
-        .eq('company_id', companyId)
-        .order('created_at', { ascending: false })
-        .limit(25),
+      fetchHealthLogPage(sb, companyId, healthLogPageNumber),
+      fetchConnectorLatencies(sb, companyId),
       sb
         .from('helpdesk_action_audit_logs')
         .select('id,connector_id,action_name,source,status,confirmation_required,confirmed,dry_run,question,answer,error_message,delivery_mode,created_at,completed_at')
@@ -335,18 +503,6 @@ export async function getHelpdeskConnectorWorkspace(): Promise<HelpdeskConnector
     current.total += 1;
     if (x.is_enabled) current.enabled += 1;
     actionCounts.set(connectorId, current);
-  }
-
-  // Most-recent round-trip latency per connector, from completed-event health logs
-  // (logs are already ordered newest-first, so the first hit per connector wins).
-  const latencyByConnector = new Map<string, number>();
-  for (const log of healthLogs ?? []) {
-    const l = log as Record<string, unknown>;
-    const cid = l.connector_id as string;
-    const ms = l.duration_ms as number | null;
-    if (cid && !latencyByConnector.has(cid) && l.event_type === 'event_completed' && typeof ms === 'number') {
-      latencyByConnector.set(cid, ms);
-    }
   }
 
   return {
@@ -445,22 +601,11 @@ export async function getHelpdeskConnectorWorkspace(): Promise<HelpdeskConnector
         completedAt: (x.completed_at as string) ?? null,
       };
     }),
-    healthLogs: (healthLogs ?? []).map((row) => {
-      const x = row as Record<string, unknown>;
-      const connectorId = x.connector_id as string;
-      return {
-        id: x.id as string,
-        connectorName: connectorName.get(connectorId) ?? 'Connector',
-        eventType: x.event_type as string,
-        deliveryMode: (x.delivery_mode as string) ?? null,
-        status: x.status as string,
-        message: (x.message as string) ?? null,
-        actionName: (x.action_name as string) ?? null,
-        durationMs: (x.duration_ms as number) ?? null,
-        eventsReturned: (x.events_returned as number) ?? null,
-        createdAt: x.created_at as string,
-      };
-    }),
+    healthLogs: healthLogPage.rows.map((row) => toHealthLogRow(row, connectorName)),
+    healthLogPage: healthLogPageNumber,
+    healthLogPageSize: HELPDESK_HEALTH_LOG_PAGE_SIZE,
+    healthLogWindowDays: HELPDESK_HEALTH_LOG_WINDOW_DAYS,
+    healthLogsHaveMore: healthLogPage.hasMore,
     auditLogs: (auditLogs ?? []).map((row) => {
       const x = row as Record<string, unknown>;
       const connectorId = x.connector_id as string | undefined;

@@ -178,6 +178,28 @@ export function DocumentSection({
   );
 }
 
+/**
+ * A help centre that is switched on and has nothing in it.
+ *
+ * This is a real state, and it gets a real page. Until migration 0087 it could
+ * not be reached at all — no company had a handle, so every address 404'd and
+ * an empty help centre was indistinguishable from a broken one. A reader who
+ * arrives at an address a business gave them deserves to be told there is
+ * nothing here yet, in words, rather than to be told the business does not
+ * exist.
+ */
+export function EmptyHelpCenter({ brand }: { brand: HelpCenterBrand }) {
+  return (
+    <section className="rounded-lg border border-slate-200 bg-white px-6 py-12 text-center">
+      <h2 className="text-lg font-medium text-slate-900">Nothing published yet</h2>
+      <p className="mx-auto mt-2 max-w-md text-sm text-slate-600">
+        This help centre is up and running, but {brand.name} has not added any articles to it yet.
+        Do check back.
+      </p>
+    </section>
+  );
+}
+
 export function SearchResults({ hits, query }: { hits: HelpSearchHit[]; query: string }) {
   if (hits.length === 0) {
     return (

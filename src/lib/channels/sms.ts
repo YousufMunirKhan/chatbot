@@ -75,6 +75,77 @@ export function toE164(value: string | null | undefined): string {
   return `+${digits}`;
 }
 
+/**
+ * A country's calling code as "+" and 1-3 digits, or '' when the value cannot
+ * be one.
+ *
+ * Operators write the same code four ways — "+44", "44", "0044", "00 44" —
+ * because that is how it is printed on their own stationery. All four mean the
+ * same country, so all four are accepted and stored identically; a country
+ * calling code is never longer than three digits and never begins with a zero,
+ * which is what makes the junk cases ("07946322081" pasted into the wrong box)
+ * rejectable rather than silently truncated.
+ */
+export function normalizeDialCode(value: string | null | undefined): string {
+  const digits = String(value ?? '').replace(/\D/g, '');
+  // `00` is the international access prefix, not part of the code itself.
+  const code = digits.replace(/^00/, '').replace(/^0+/, '');
+  if (!code || code.length > 3) return '';
+  return `+${code}`;
+}
+
+/**
+ * The international form of a number that may have been written nationally.
+ *
+ * `toE164` cannot do this on its own: it sees digits, not a country, so it
+ * leaves "07946322081" exactly as it was typed rather than inventing
+ * "+07946322081", which is not a number at all. What it is missing is the one
+ * fact only the company knows — which country its customers dial from. Given
+ * that, a single leading zero is a national trunk prefix and is REPLACED by the
+ * code: "07946322081" with "+44" is "+447946322081", the form WhatsApp and
+ * every carrier outside the UK will accept.
+ *
+ * With no dial code the national form is returned untouched, deliberately. A
+ * guess would merge two different people who happen to share a national number
+ * in different countries, and a wrong person's history on the screen is a worse
+ * failure than a WhatsApp link that does not open.
+ *
+ * Kept beside `toE164` rather than folded into it because the four existing
+ * callers — this adapter's `parse` and `send`, the generic webhook route, and
+ * contact normalisation — have no company row to hand and must keep behaving
+ * exactly as they do today.
+ */
+export function toE164WithDialCode(
+  value: string | null | undefined,
+  dialCode: string | null | undefined,
+): string {
+  const e164 = toE164(value);
+  if (!e164) return '';
+
+  // `+0…` is not a number in any country — nothing after a `+` may start with a
+  // zero — but it is a shape that exists in the data: it is what
+  // `public.contact_normalize_phone` still writes for a nationally-written
+  // number, and migration 0083 only repaired the rows that already existed. The
+  // `+` is dropped and the digits are read as the national number they are,
+  // which is the same judgement 0083 made.
+  const invented = e164.startsWith('+0');
+  if (e164.startsWith('+') && !invented) return e164;
+
+  const national = invented ? e164.slice(1) : e164;
+  const code = normalizeDialCode(dialCode);
+  // No country known: the national form, honestly, and never a guess.
+  if (!code) return national;
+
+  const subscriber = national.replace(/^0+/, '');
+  if (!subscriber) return national;
+
+  // E.164 tops out at fifteen digits. A combination longer than that is not a
+  // phone number anywhere, so the honest national form is kept instead of a
+  // fabricated international one.
+  const combined = `${code}${subscriber}`;
+  return combined.length - 1 > 15 ? national : combined;
+}
+
 function mediaKind(contentType: string | undefined): InboundAttachment['kind'] {
   if (contentType?.startsWith('image/')) return 'image';
   if (contentType?.startsWith('video/')) return 'video';

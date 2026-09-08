@@ -19,16 +19,21 @@ import {
   getKnowledgeUsage,
   ingestKnowledge,
   knowledgeRoomError,
+  runQueuedDocument,
+  KNOWLEDGE_JOB_INGEST,
 } from '@/lib/knowledge/ingest-queue';
 import {
   MAX_COMPANY_KNOWLEDGE_CHARS,
   MAX_CRAWL_PAGES,
+  MAX_KNOWLEDGE_DOC_CHARS,
   MAX_PASTED_TEXT_CHARS,
   MIN_READABLE_PAGE_CHARS,
   SYNC_CRAWL_PAGES,
+  SYNC_INGEST_CHAR_BUDGET,
 } from '@/lib/knowledge/limits';
+import { detectLanguage } from '@/lib/ai/lang';
 import { getCompanyId } from './data';
-import { findDocumentReferences } from './knowledge-data';
+import { documentEditRefusal, findDocumentReferences } from './knowledge-data';
 
 /**
  * `notice` is the honesty channel. A limit that fires has to produce a sentence
@@ -482,6 +487,179 @@ export async function addFileSourceAction(_prev: ActionState, formData: FormData
   } catch (err) {
     return { error: err instanceof Error ? err.message : String(err) };
   }
+}
+
+// --- Editing a document -----------------------------------------------------
+
+/**
+ * The ceiling here is the per-DOCUMENT one, not the paste box's
+ * {@link MAX_PASTED_TEXT_CHARS}. A document extracted from a 250-page PDF is
+ * already allowed to hold {@link MAX_KNOWLEDGE_DOC_CHARS} characters, and
+ * validating an edit of it against the smaller paste limit would mean opening
+ * the form, changing one word and being told the content is too long — with no
+ * way to make it shorter that does not throw away most of the document.
+ */
+const updateDocumentSchema = z.object({
+  documentId: z.string().uuid(),
+  title: z.string().min(2, 'Title must be at least 2 characters'),
+  text: z
+    .string()
+    .min(20, 'Add at least 20 characters of content')
+    .max(
+      MAX_KNOWLEDGE_DOC_CHARS,
+      `Content is too long (${MAX_KNOWLEDGE_DOC_CHARS.toLocaleString()} characters max). Split it into two documents.`,
+    ),
+  botId: z.preprocess((x) => (x === '' || x == null ? undefined : x), z.string().optional()),
+});
+
+/**
+ * Change a document's wording in place.
+ *
+ * Before this the only way to fix a typo in a policy was to delete the document
+ * and add it again, which threw away its id, its created date and everything
+ * pointing at it, and paid to embed the whole thing from scratch.
+ *
+ * THE PART THAT MATTERS IS THE RE-INDEX. The assistant does not read
+ * `documents`; it searches `chunks`, which hold the embeddings built from the
+ * text stored in `document_sources`. Saving new text without rebuilding those
+ * would leave the admin looking at their correction while the assistant kept
+ * quoting the old wording — worse than refusing the edit, because it looks
+ * fixed. So this reuses the add path's machinery exactly:
+ *
+ *   1. the stale chunks go IMMEDIATELY, before anything is queued. A document
+ *      that is briefly unsearchable is honest; one that answers with wording
+ *      the owner has just deleted is not;
+ *   2. short content is re-embedded before this returns, via the same
+ *      `runQueuedDocument` the add path calls, so a corrected paragraph is live
+ *      the moment the form comes back;
+ *   3. anything past {@link SYNC_INGEST_CHAR_BUDGET} is left `pending` with a
+ *      `knowledge.ingest` job on `background_jobs` — the identical hand-off
+ *      `ingestKnowledge` makes — so the status panel above the table drains it
+ *      and shows real progress instead of holding the request open.
+ */
+export async function updateDocumentAction(_prev: ActionState, formData: FormData): Promise<ActionState> {
+  await requireRole([ROLES.COMPANY_ADMIN]);
+  const companyId = await getCompanyId();
+
+  const parsed = updateDocumentSchema.safeParse(Object.fromEntries(formData));
+  if (!parsed.success) return { error: parsed.error.issues[0]?.message ?? 'Invalid input' };
+  const v = parsed.data;
+
+  const sb = createSupabaseServiceClient();
+  // Scoped by company: a document belonging to another tenant reads as missing.
+  const { data: found } = await sb
+    .from('documents')
+    .select('id, source_type, char_count')
+    .eq('id', v.documentId)
+    .eq('company_id', companyId)
+    .maybeSingle();
+  if (!found) return { error: 'That document no longer exists.' };
+  const existing = found as { id: string; source_type: string; char_count: number | null };
+
+  // The same rule the page uses to decide whether to offer the form, applied
+  // again here: the form imports this action directly, so the page's decision
+  // is a convenience and this is the guard.
+  const reference = (await findDocumentReferences(companyId, [v.documentId])).get(v.documentId);
+  const refusal = documentEditRefusal({
+    sourceType: existing.source_type,
+    generatedFrom: reference ?? null,
+  });
+  if (refusal) return { error: refusal };
+
+  // Only the GROWTH has to fit. `knowledgeRoomError` is the wrong check here:
+  // it also refuses when the company is at its document ceiling, and an edit
+  // adds no document — a company holding the maximum 400 would otherwise be
+  // unable to correct a single typo in any of them.
+  const growth = v.text.length - (existing.char_count ?? 0);
+  if (growth > 0) {
+    const usage = await getKnowledgeUsage(companyId);
+    if (growth > usage.charsRemaining) {
+      return {
+        error:
+          `This edit adds ${growth.toLocaleString()} characters and only ${usage.charsRemaining.toLocaleString()} are left ` +
+          `before your ${MAX_COMPANY_KNOWLEDGE_CHARS.toLocaleString()}-character limit — shorten it, or delete a document you no longer need.`,
+      };
+    }
+  }
+
+  const botId = await verifiedBotId(companyId, v.botId);
+
+  const { error: documentError } = await sb
+    .from('documents')
+    .update({
+      title: v.title,
+      bot_id: botId,
+      // Re-detected rather than kept: an English policy rewritten in Arabic has
+      // to be retrieved as Arabic, and `embedDocument` trusts this column.
+      language: detectLanguage(`${v.title}\n${v.text}`),
+      char_count: v.text.length,
+      status: 'pending',
+      ingest_progress: 0,
+      ingest_stage: 'Waiting to be indexed',
+      // The stored text is now exactly what the admin typed, so a warning that
+      // we read the first 250 pages of their PDF no longer describes it. Left
+      // in place it would keep flying a "this was shortened" banner over
+      // content nothing shortened.
+      truncated: false,
+      truncation_reason: null,
+      page_count: null,
+      pages_ingested: null,
+    })
+    .eq('id', v.documentId)
+    .eq('company_id', companyId);
+  if (documentError) return { error: `Could not save this document: ${documentError.message}` };
+
+  // Step 1 above. Both statements carry the company id even though the document
+  // id is unique, because this client is service-role and bypasses RLS.
+  await sb.from('chunks').delete().eq('document_id', v.documentId).eq('company_id', companyId);
+  await sb.from('document_sources').delete().eq('document_id', v.documentId);
+  const { error: sourceError } = await sb.from('document_sources').insert({
+    document_id: v.documentId,
+    url: null,
+    raw_text: v.text,
+  });
+  if (sourceError) {
+    await sb
+      .from('documents')
+      .update({ status: 'failed', ingest_stage: 'The new text could not be saved.' })
+      .eq('id', v.documentId)
+      .eq('company_id', companyId);
+    return { error: `Could not save this document: ${sourceError.message}` };
+  }
+
+  revalidateKnowledge();
+  revalidatePath(`/company/business-data/documents/${v.documentId}`);
+
+  if (v.text.length <= SYNC_INGEST_CHAR_BUDGET) {
+    try {
+      await runQueuedDocument(companyId, v.documentId);
+    } catch (err) {
+      // `runQueuedDocument` has already written the failure onto the row, so
+      // the status panel says the same thing this does.
+      return { error: err instanceof Error ? err.message : String(err) };
+    }
+    return { ok: true, documentId: v.documentId };
+  }
+
+  // Mirrors the private `enqueueKnowledgeJob` in `ingest-queue.ts` — same type,
+  // same payload, same three attempts — rather than importing `@/lib/jobs`,
+  // which would drag the integration-sync and email graph into a knowledge
+  // action for the sake of one insert.
+  await sb.from('background_jobs').insert({
+    company_id: companyId,
+    type: KNOWLEDGE_JOB_INGEST,
+    payload_json: { companyId, documentId: v.documentId },
+    run_after: new Date().toISOString(),
+    max_attempts: 3,
+  });
+
+  return {
+    ok: true,
+    documentId: v.documentId,
+    queued: true,
+    notice:
+      'Saved. Re-indexing is queued — progress shows on the Knowledge tab, and your assistant switches to the new wording as soon as it finishes.',
+  };
 }
 
 // --- Delete -----------------------------------------------------------------

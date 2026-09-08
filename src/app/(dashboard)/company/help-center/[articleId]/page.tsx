@@ -1,3 +1,4 @@
+import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { requireRole } from '@/lib/auth';
 import { ROLES } from '@/lib/constants';
@@ -53,7 +54,7 @@ export default async function HelpArticleEditorPage({
             ) : (
               <Badge variant="secondary">Draft</Badge>
             )}
-            {article.status === 'published' && article.publicUrl ? (
+            {article.status === 'published' && article.publicUrl && article.helpCenterIsPublic ? (
               <Button asChild variant="outline" size="sm">
                 <a href={article.publicUrl} target="_blank" rel="noreferrer">
                   View live
@@ -88,9 +89,22 @@ export default async function HelpArticleEditorPage({
             <CardHeader>
               <CardTitle className="text-base">Publishing</CardTitle>
               <CardDescription>
-                {article.status === 'published'
-                  ? 'Customers can read this, and the assistant answers from it.'
-                  : 'Only your team can see this.'}
+                {article.status !== 'published' ? (
+                  'Only your team can see this.'
+                ) : article.helpCenterIsPublic ? (
+                  'Customers can read this, and the assistant answers from it.'
+                ) : (
+                  // Published, but nobody can reach it: two states that both
+                  // said "Customers can read this" before, one of them wrongly.
+                  <>
+                    The assistant answers from this, but your help centre is switched off, so the
+                    page itself is not reachable.{' '}
+                    <Link href="/company/help-center" className="underline underline-offset-2">
+                      Turn it back on
+                    </Link>
+                    .
+                  </>
+                )}
               </CardDescription>
             </CardHeader>
             <CardContent>

@@ -73,6 +73,13 @@ export function HelpCenterSettingsForm({
   const [state, action] = useFormState(saveHelpCenterSettingsAction, initial);
   const [handle, setHandle] = React.useState(slug ?? '');
 
+  // An empty address field means "pick one for me", and the server does. This
+  // form stays mounted across that save, so without resyncing it would go on
+  // showing the blank the writer left while the live address is something else.
+  React.useEffect(() => {
+    setHandle(slug ?? '');
+  }, [slug]);
+
   return (
     <form action={action} className="space-y-4">
       <FormField
@@ -80,8 +87,8 @@ export function HelpCenterSettingsForm({
         htmlFor="help-center-slug"
         hint={
           handle
-            ? `Your help centre will live at ${origin}/help/${handle}`
-            : 'Leave this blank and the long assistant id is used instead. A short address is easier to share and better for search engines.'
+            ? `Your help centre lives at ${origin}/help/${handle}. Changing this breaks links you have already shared.`
+            : 'Leave this blank and we will name it after your business. Your help centre always has an address — to take it off the web, use the switch below.'
         }
       >
         <Input

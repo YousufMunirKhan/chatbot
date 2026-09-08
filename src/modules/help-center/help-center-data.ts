@@ -48,18 +48,42 @@ export interface HelpCenterSettings {
   isPublished: boolean;
 }
 
+/**
+ * What a reader gets at the public address right now. Four states that the
+ * dashboard used to render as one line of text, and that need different words
+ * because they need different actions:
+ *
+ *  - `live`       the address works and there is something to read at it
+ *  - `empty`      the address works and the page says there is nothing on it —
+ *                 not a fault, but not what the operator thinks they shipped
+ *  - `off`        the owner switched the help centre off; every public URL,
+ *                 including the sitemap, answers 404 on purpose
+ *  - `no-address` no handle and no assistant to fall back on. Migration 0087
+ *                 gives every company a handle, so this only appears on a
+ *                 database that has not had it applied.
+ */
+export type HelpCenterPublicState = 'live' | 'empty' | 'off' | 'no-address';
+
 export interface HelpCenterOverview {
   settings: HelpCenterSettings;
   categories: HelpCategoryRow[];
   articles: HelpArticleRow[];
   publishedCount: number;
   draftCount: number;
+  /**
+   * Customer-facing knowledge documents — uploaded files and crawled pages.
+   * The public index lists these under the articles, so a help centre with no
+   * articles and forty documents is not empty and must not be told that it is.
+   */
+  knowledgeCount: number;
   /** Where a reader would land. Null when the company has no public bot yet. */
   publicUrl: string | null;
   /** The handle in that URL, so the page can say which one is in use. */
   publicHandle: string | null;
   /** True when the URL above is only a bot id because no handle is set. */
   usingBotId: boolean;
+  /** What that address actually serves right now. */
+  publicState: HelpCenterPublicState;
 }
 
 const DEFAULT_TITLE = 'Help Center';
@@ -103,14 +127,15 @@ const ARTICLE_COLUMNS =
   'id,title,slug,excerpt,body,status,position,category_id,published_at,updated_at,knowledge_document_id' as const;
 
 /**
- * The whole management screen in four round trips: settings, categories,
- * articles, and the bot that supplies the fallback public handle.
+ * The whole management screen in five round trips: settings, categories,
+ * articles, the count of knowledge documents the public page also lists, and
+ * the bot that supplies the fallback public handle.
  */
 export async function getHelpCenterOverview(): Promise<HelpCenterOverview> {
   const companyId = await getCompanyId();
   const sb = createSupabaseServiceClient();
 
-  const [settingsRes, categoriesRes, articlesRes, botRes] = await Promise.all([
+  const [settingsRes, categoriesRes, articlesRes, knowledgeRes, botRes] = await Promise.all([
     sb
       .from('help_center_settings')
       .select('slug,title,description,is_published')
@@ -128,6 +153,17 @@ export async function getHelpCenterOverview(): Promise<HelpCenterOverview> {
       .eq('company_id', companyId)
       .order('position', { ascending: true })
       .order('updated_at', { ascending: false }),
+    // A count, not the rows — the writing desk never lists these, it only needs
+    // to know whether the public page has something on it. The filters mirror
+    // `getHelpCenterIndex` exactly, including the marker that keeps a published
+    // article from being counted twice as its own indexed copy.
+    sb
+      .from('documents')
+      .select('id', { head: true, count: 'exact' })
+      .eq('company_id', companyId)
+      .in('audience', ['customer', 'both'])
+      .eq('status', 'ready')
+      .or('source_url.is.null,source_url.not.like.help-article:*'),
     // Only for the fallback URL. Oldest bot wins so the address a company sees
     // here does not move about when they add a second assistant.
     sb
@@ -182,16 +218,31 @@ export async function getHelpCenterOverview(): Promise<HelpCenterOverview> {
 
   const botHandle = (botRes.data as { public_bot_id?: string } | null)?.public_bot_id ?? null;
   const handle = settings.slug ?? botHandle;
+  const publishedCount = articles.filter((a) => a.status === 'published').length;
+  const knowledgeCount = knowledgeRes.count ?? 0;
+
+  // Order matters. "Switched off" is a decision somebody made and the only one
+  // of these with a switch to undo it, so it is reported ahead of the address
+  // being missing — which, after migration 0087, it no longer can be.
+  const publicState: HelpCenterPublicState = !settings.isPublished
+    ? 'off'
+    : !handle
+      ? 'no-address'
+      : publishedCount + knowledgeCount > 0
+        ? 'live'
+        : 'empty';
 
   return {
     settings,
     categories,
     articles,
-    publishedCount: articles.filter((a) => a.status === 'published').length,
+    publishedCount,
     draftCount: articles.filter((a) => a.status === 'draft').length,
+    knowledgeCount,
     publicUrl: handle ? helpCenterUrl(helpCenterPath(handle)) : null,
     publicHandle: handle,
     usingBotId: Boolean(handle) && !settings.slug,
+    publicState,
   };
 }
 
@@ -208,6 +259,13 @@ export interface HelpArticleEditor {
   publishedAt: string | null;
   updatedAt: string;
   indexed: boolean;
+  /**
+   * False when the whole help centre is switched off. A published article is
+   * then still a 404 for readers, and saying "View live" over a link to a
+   * not-found page is how a writer ends up doubting the editor instead of
+   * finding the switch.
+   */
+  helpCenterIsPublic: boolean;
   /** Null when the company has no public handle and no bot to fall back on. */
   publicUrl: string | null;
   /**
@@ -236,7 +294,11 @@ export async function getHelpArticleForEdit(articleId: string): Promise<HelpArti
       .eq('company_id', companyId)
       .order('position', { ascending: true })
       .order('name', { ascending: true }),
-    sb.from('help_center_settings').select('slug').eq('company_id', companyId).maybeSingle(),
+    sb
+      .from('help_center_settings')
+      .select('slug,is_published')
+      .eq('company_id', companyId)
+      .maybeSingle(),
     sb
       .from('bots')
       .select('public_bot_id')
@@ -249,10 +311,9 @@ export async function getHelpArticleForEdit(articleId: string): Promise<HelpArti
   if (!articleRes.data) return null;
   const raw = articleRes.data as RawArticle & { seo_title: string | null; seo_description: string | null };
 
+  const rawSettings = settingsRes.data as { slug?: string | null; is_published?: boolean } | null;
   const handle =
-    (settingsRes.data as { slug?: string | null } | null)?.slug ??
-    (botRes.data as { public_bot_id?: string } | null)?.public_bot_id ??
-    null;
+    rawSettings?.slug ?? (botRes.data as { public_bot_id?: string } | null)?.public_bot_id ?? null;
 
   return {
     id: raw.id,
@@ -267,6 +328,9 @@ export async function getHelpArticleForEdit(articleId: string): Promise<HelpArti
     publishedAt: raw.published_at,
     updatedAt: raw.updated_at,
     indexed: Boolean(raw.knowledge_document_id),
+    // No row is not "switched off": the public side treats a missing row as
+    // visible, so this half has to say the same thing.
+    helpCenterIsPublic: rawSettings ? rawSettings.is_published !== false : true,
     publicUrl: handle ? helpCenterUrl(`${helpCenterPath(handle)}/${encodeURIComponent(raw.slug)}`) : null,
     publicHandle: handle,
     categories: ((categoriesRes.data ?? []) as Array<Record<string, unknown>>).map((row) => ({

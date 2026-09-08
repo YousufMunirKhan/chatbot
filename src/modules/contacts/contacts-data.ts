@@ -1,7 +1,9 @@
+import { cache } from 'react';
+import { normalizeDialCode } from '@/lib/channels/sms';
 import { createSupabaseServiceClient } from '@/lib/db/server';
 import { humanizeStoredSubmission } from '@/lib/quick-actions-format';
 import { getCompanyId } from '@/modules/company/data';
-import { contactDisplayName } from './identity';
+import { contactDisplayName, displayPhone } from './identity';
 
 /**
  * Contacts — the read side of the person record (migration 0076).
@@ -18,7 +20,35 @@ import { contactDisplayName } from './identity';
  * returns all five totals, and one page of rows that carries its own exact
  * count. It is cheaper than the tab page it replaces, which spent four head
  * counts plus a page of rows.
+ *
+ * The company's dial code is a third request, and costs nothing: it is issued
+ * inside the same `Promise.all` as the rows, memoised for the rest of the
+ * request, and so waits in parallel rather than in turn.
  */
+
+/**
+ * The company's calling code, or '' when nobody has set one.
+ *
+ * Phones are stored the way they arrived. A WhatsApp webhook delivers
+ * "+447946322081"; the pre-chat form on the same company's site delivers
+ * "07946322081", and the database's own normaliser has no company to ask, so
+ * that is what it keeps. Reading the code here is what lets the pages show and
+ * link the international form of both.
+ *
+ * `cache` makes it one request per render even though the list, the counts and
+ * a detail page all ask. It reads the business profile rather than
+ * `companies.country`: that column holds an ISO country ('GB') that both
+ * company forms default to whether or not anyone chose it — see migration 0086.
+ */
+const getCompanyDialCode = cache(async (companyId: string): Promise<string> => {
+  const sb = createSupabaseServiceClient();
+  const { data } = await sb
+    .from('company_business_profiles')
+    .select('dial_code')
+    .eq('company_id', companyId)
+    .maybeSingle();
+  return normalizeDialCode((data as { dial_code?: string | null } | null)?.dial_code);
+});
 
 // ---------------------------------------------------------------------------
 // The list
@@ -64,9 +94,9 @@ export interface ListContactsOptions {
 
 const CONTACT_COLUMNS = 'id,display_name,emails,phones,tags,first_seen_at,last_seen_at';
 
-function toListRow(row: Record<string, unknown>): ContactListRow {
+function toListRow(row: Record<string, unknown>, dialCode: string): ContactListRow {
   const emails = (row.emails as string[]) ?? [];
-  const phones = (row.phones as string[]) ?? [];
+  const phones = ((row.phones as string[]) ?? []).map((phone) => displayPhone(phone, dialCode));
   return {
     id: row.id as string,
     name: contactDisplayName({
@@ -110,14 +140,17 @@ export async function listContacts(opts: ListContactsOptions = {}): Promise<Cont
     query = query.ilike('searchable', `%${safe}%`);
   }
 
-  const { data, error, count } = await query
-    .order('last_seen_at', { ascending: false })
-    .range(from, to);
+  const [{ data, error, count }, dialCode] = await Promise.all([
+    query.order('last_seen_at', { ascending: false }).range(from, to),
+    getCompanyDialCode(companyId),
+  ]);
   if (error) throw error;
 
   const total = count ?? 0;
   return {
-    rows: ((data ?? []) as unknown as Array<Record<string, unknown>>).map(toListRow),
+    rows: ((data ?? []) as unknown as Array<Record<string, unknown>>).map((row) =>
+      toListRow(row, dialCode),
+    ),
     total,
     page,
     pageSize,
@@ -264,9 +297,10 @@ function toAttributes(value: unknown): ContactAttribute[] {
 /**
  * Everything about one person.
  *
- * Two waves. The first asks for the contact and every event attached to it at
- * once; the second needs the conversation ids from the first before it can ask
- * for messages, and resolves the note authors' names at the same time. Returns
+ * Two waves. The first asks for the contact, every event attached to it and the
+ * company's dial code at once; the second needs the conversation ids from the
+ * first before it can ask for messages, and resolves the note authors' names at
+ * the same time. Returns
  * null when the id belongs to another company — the caller renders `notFound()`,
  * so a guessed id is indistinguishable from a deleted one.
  */
@@ -274,8 +308,16 @@ export async function getContactDetail(contactId: string): Promise<ContactDetail
   const companyId = await getCompanyId();
   const sb = createSupabaseServiceClient();
 
-  const [contactRes, leadRes, conversationRes, appointmentRes, chatOrderRes, storeOrderRes, noteRes] =
-    await Promise.all([
+  const [
+    contactRes,
+    leadRes,
+    conversationRes,
+    appointmentRes,
+    chatOrderRes,
+    storeOrderRes,
+    noteRes,
+    dialCode,
+  ] = await Promise.all([
       sb
         .from('contacts')
         .select('id,display_name,emails,phones,tags,attributes_json,first_seen_at,last_seen_at')
@@ -324,6 +366,9 @@ export async function getContactDetail(contactId: string): Promise<ContactDetail
         .eq('contact_id', contactId)
         .order('created_at', { ascending: false })
         .limit(RELATED_ROW_LIMIT),
+      // Not a query the page waits any longer for — it goes out with the other
+      // seven, and after the first contact page of a render it is memoised.
+      getCompanyDialCode(companyId),
     ]);
 
   const contactRow = contactRes.data as Record<string, unknown> | null;
@@ -409,7 +454,13 @@ export async function getContactDetail(contactId: string): Promise<ContactDetail
   }));
 
   const emails = (contactRow.emails as string[]) ?? [];
-  const phones = (contactRow.phones as string[]) ?? [];
+  // Shown and linked internationally where the company has said which country
+  // it dials from. The stored identity is left as it is — it is what the
+  // database matches on — so this is a presentation of the same number, not a
+  // second one.
+  const phones = ((contactRow.phones as string[]) ?? []).map((phone) =>
+    displayPhone(phone, dialCode),
+  );
 
   return {
     id: contactRow.id as string,

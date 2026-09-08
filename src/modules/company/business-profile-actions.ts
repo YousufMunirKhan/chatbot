@@ -4,6 +4,7 @@ import { revalidatePath } from 'next/cache';
 import { z } from 'zod';
 import { requireRole } from '@/lib/auth';
 import { ROLES } from '@/lib/constants';
+import { normalizeDialCode } from '@/lib/channels/sms';
 import { createSupabaseServiceClient } from '@/lib/db/server';
 import { ingestText } from '@/lib/ai/ingest';
 import { invalidateBusinessContextCache } from '@/lib/ai/business-context';
@@ -81,9 +82,28 @@ export async function updateBusinessMemoryAction(
   const v = parsed.data;
   const sb = createSupabaseServiceClient();
 
+  // The dial code is validated by the same helper the phone conversion uses, so
+  // "+44", "44" and "0044" all store as "+44" and a phone number pasted into the
+  // wrong box is refused here rather than being silently truncated to "+079".
+  const typedDialCode = String(formData.get('dialCode') ?? '').trim();
+  const dialCode = normalizeDialCode(typedDialCode);
+  if (typedDialCode && !dialCode) {
+    return { error: 'A dial code is the country code on its own, like +44 or +971.' };
+  }
+
+  // An EMPTY box only clears the stored code when the form was able to show
+  // that code in the first place, which it says with `dialCodeKnown`. Until the
+  // page's reader carries `dialCode` an empty box means "this form never asked"
+  // rather than "clear it", and clearing would break every WhatsApp link on the
+  // contacts pages the next time anybody saved an unrelated field here. A code
+  // the operator actually typed is always written.
+  const clearsDialCode = !typedDialCode && formData.get('dialCodeKnown') === '1';
+  const dialCodePatch = typedDialCode || clearsDialCode ? { dial_code: dialCode || null } : {};
+
   const { error } = await sb.from('company_business_profiles').upsert(
     {
       company_id: companyId,
+      ...dialCodePatch,
       short_description: v.shortDescription ?? null,
       industry: v.industry ?? null,
       target_customers: v.targetCustomers ?? null,
@@ -112,6 +132,10 @@ export async function updateBusinessMemoryAction(
   );
   if (error) return { error: error.message };
   await refresh(companyId);
+  // The dial code decides what the Call and WhatsApp buttons beside a contact
+  // point at, so the people pages are stale the moment it is saved.
+  revalidatePath('/company/customers');
+  revalidatePath('/company/customers/[id]', 'page');
   return { ok: true };
 }
 

@@ -9,7 +9,14 @@ import { createSupabaseServiceClient } from '@/lib/db/server';
 import { getCompanyId } from '@/modules/company/data';
 import { helpArticlePath, helpCenterPath } from './data';
 import { removeArticleFromKnowledge, syncArticleToKnowledge } from './knowledge-sync';
-import { isReservedHandle, SLUG_MAX, SLUG_PATTERN, slugify, uniqueSlug } from './slug';
+import {
+  defaultHandle,
+  isReservedHandle,
+  SLUG_MAX,
+  SLUG_PATTERN,
+  slugify,
+  uniqueSlug,
+} from './slug';
 
 /**
  * Writes for the help centre.
@@ -634,6 +641,41 @@ const settingsSchema = z.object({
   isPublished: z.string().optional(),
 });
 
+/**
+ * The address a company gets when the field is left empty.
+ *
+ * Derived from the company's own slug — the same derivation migration 0087
+ * performs in SQL for every company that already existed and for every company
+ * created from now on. Doing it here as well is what keeps an admin who clears
+ * the field from putting their help centre back behind a 404: blank means "pick
+ * one for me", not "take it off the web". Taking it off the web is the
+ * "Visible to the public" switch, which is reversible and says what it does.
+ */
+async function defaultHandleFor(
+  sb: ReturnType<typeof createSupabaseServiceClient>,
+  companyId: string,
+): Promise<string> {
+  const { data } = await sb.from('companies').select('slug,name').eq('id', companyId).maybeSingle();
+  const company = (data ?? {}) as { slug?: string | null; name?: string | null };
+  const base = defaultHandle(company.slug, company.name ?? '', companyId);
+
+  // Everything that could collide with the base or with its numbered variants,
+  // in one query instead of a lookup per attempt. PostgREST's `like` takes `*`
+  // rather than `%`, and a slug can only contain `[a-z0-9-]`, so nothing in
+  // `base` needs escaping.
+  const { data: taken } = await sb
+    .from('help_center_settings')
+    .select('slug')
+    .neq('company_id', companyId)
+    .like('slug', `${base}*`);
+
+  return uniqueSlug(
+    base,
+    ((taken ?? []) as Array<{ slug: string | null }>).map((row) => row.slug ?? ''),
+    'help',
+  );
+}
+
 export async function saveHelpCenterSettingsAction(
   _prev: ActionState,
   formData: FormData,
@@ -643,8 +685,9 @@ export async function saveHelpCenterSettingsAction(
   const parsed = settingsSchema.safeParse(Object.fromEntries(formData));
   if (!parsed.success) return fail(firstIssue(parsed.error));
 
+  const sb = createSupabaseServiceClient();
   const wanted = (parsed.data.slug ?? '').trim();
-  let slug: string | null = null;
+  let slug: string;
   if (wanted) {
     if (!SLUG_PATTERN.test(wanted)) {
       return fail('The web address can only use lowercase letters, numbers and hyphens.');
@@ -654,10 +697,7 @@ export async function saveHelpCenterSettingsAction(
     // centre at the same URL.
     if (isReservedHandle(wanted)) return fail('That web address is reserved. Pick another.');
     slug = wanted;
-  }
 
-  const sb = createSupabaseServiceClient();
-  if (slug) {
     const { data: clash } = await sb
       .from('help_center_settings')
       .select('company_id')
@@ -665,6 +705,8 @@ export async function saveHelpCenterSettingsAction(
       .neq('company_id', companyId)
       .maybeSingle();
     if (clash) return fail('Another business already uses that web address.');
+  } else {
+    slug = await defaultHandleFor(sb, companyId);
   }
 
   const { error } = await sb.from('help_center_settings').upsert(

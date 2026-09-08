@@ -4,13 +4,13 @@ import {
   getHelpCenterIndex,
   helpCenterPath,
   helpCenterUrl,
-  resolveHelpCenter,
   searchHelpCenter,
 } from '@/modules/help-center/data';
 import {
   ArticleCardList,
   CategorySection,
   DocumentSection,
+  EmptyHelpCenter,
   HelpFooter,
   HelpHeader,
   HelpSearchBox,
@@ -32,6 +32,13 @@ import {
  * The canonical URL always uses the company's own handle even when the reader
  * arrived through a bot id, so a business with three assistants has one address
  * in the index instead of three copies competing with each other.
+ *
+ * EMPTY IS NOT MISSING
+ * Every company has a handle (migration 0087), so this page answers for all of
+ * them. One with nothing published says so and asks a crawler not to index it —
+ * a thin page in the index is worse for the company than no page at all — while
+ * a company that has switched its help centre off still 404s, which is what
+ * switching it off means.
  */
 
 export const runtime = 'nodejs';
@@ -43,9 +50,13 @@ interface PageProps {
 }
 
 export async function generateMetadata({ params }: PageProps): Promise<Metadata> {
-  const brand = await resolveHelpCenter(params.handle);
-  if (!brand) return { title: 'Help Center', robots: { index: false, follow: false } };
+  // The index, not just the brand: whether anything is published decides
+  // whether this page asks to be indexed, and the read is cached per request so
+  // the page below pays nothing for it.
+  const index = await getHelpCenterIndex(params.handle);
+  if (!index) return { title: 'Help Center', robots: { index: false, follow: false } };
 
+  const { brand } = index;
   const canonical = helpCenterUrl(helpCenterPath(brand.handle));
   const description =
     brand.description || `Guides, answers and frequently asked questions from ${brand.name}.`;
@@ -56,7 +67,10 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
     alternates: { canonical },
     openGraph: { title: brand.title, description, url: canonical, type: 'website' },
     twitter: { card: 'summary', title: brand.title, description },
-    robots: { index: true, follow: true },
+    // An empty help centre is a page worth serving and not a page worth
+    // indexing. `follow` stays on so a crawler that lands here still walks out
+    // through the links in the footer.
+    robots: { index: index.articleCount + index.documents.length > 0, follow: true },
   };
 }
 
@@ -65,9 +79,12 @@ export default async function HelpCenterIndexPage({ params, searchParams }: Page
   if (!index) notFound();
   const { brand, categories, uncategorized, documents } = index;
 
-  const query = (searchParams.q ?? '').trim().slice(0, 200);
-  const hits = query ? await searchHelpCenter(brand, query) : [];
   const nothingWritten = categories.length === 0 && uncategorized.length === 0 && documents.length === 0;
+  const query = (searchParams.q ?? '').trim().slice(0, 200);
+  // Nothing to search means nothing to ask Postgres. A visitor who arrives with
+  // ?q= in the URL of an empty help centre gets the empty page, not an
+  // apologetic "no results" over the top of it.
+  const hits = query && !nothingWritten ? await searchHelpCenter(brand, query) : [];
 
   return (
     <main className="min-h-screen bg-slate-50">
@@ -78,11 +95,18 @@ export default async function HelpCenterIndexPage({ params, searchParams }: Page
           name: brand.title,
           url: helpCenterUrl(helpCenterPath(brand.handle)),
           publisher: { '@type': 'Organization', name: brand.name },
-          potentialAction: {
-            '@type': 'SearchAction',
-            target: `${helpCenterUrl(helpCenterPath(brand.handle))}?q={search_term_string}`,
-            'query-input': 'required name=search_term_string',
-          },
+          // Advertised only while there is something to find. A search box a
+          // crawler can offer in the results page, over a help centre with
+          // nothing in it, is a promise the site cannot keep.
+          ...(nothingWritten
+            ? {}
+            : {
+                potentialAction: {
+                  '@type': 'SearchAction',
+                  target: `${helpCenterUrl(helpCenterPath(brand.handle))}?q={search_term_string}`,
+                  'query-input': 'required name=search_term_string',
+                },
+              }),
         }}
       />
 
@@ -93,12 +117,13 @@ export default async function HelpCenterIndexPage({ params, searchParams }: Page
       />
 
       <div className="mx-auto max-w-3xl space-y-10 px-6 py-8">
-        <HelpSearchBox brand={brand} query={query} />
+        {/* A search box over nothing is a box that can only disappoint. */}
+        {nothingWritten ? null : <HelpSearchBox brand={brand} query={query} />}
 
-        {query ? <SearchResults hits={hits} query={query} /> : null}
+        {query && !nothingWritten ? <SearchResults hits={hits} query={query} /> : null}
 
         {nothingWritten ? (
-          <p className="text-center text-slate-600">No published help articles yet.</p>
+          <EmptyHelpCenter brand={brand} />
         ) : (
           <>
             {categories.map((category) => (

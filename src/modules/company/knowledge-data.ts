@@ -117,6 +117,55 @@ function toDocumentRow(
   };
 }
 
+/**
+ * Why a given document cannot be edited by hand, as the sentence to show the
+ * admin — or null when it can be.
+ *
+ * Editing is offered wherever this database holds the only copy of the text, so
+ * a saved edit is a promise the product can keep. Two kinds of document fail
+ * that test, and both fail it for the same reason: something else owns the
+ * words and will write over them.
+ *
+ *  - A page imported from a website is rewritten by the next crawl or refresh
+ *    of that site, which keys on `(company_id, source_url)` and replaces the
+ *    stored text wholesale. An edit here would survive until the owner pressed
+ *    "Refresh this site" and then vanish without a word.
+ *  - A document generated from a policy or an FAQ is rewritten every time that
+ *    policy or FAQ is saved, and `deleteDocumentAction` already refuses to
+ *    delete one for the same reason. The edit belongs on the record that owns
+ *    it, one tab away.
+ *
+ * Everything else — pasted text and the text extracted from an uploaded file —
+ * is editable: nothing re-derives it, so what the admin types is what stays.
+ *
+ * The refusal is shown ON the row rather than the control being hidden. A
+ * missing Edit button next to a present Delete button reads as an oversight,
+ * and the owner's next move is to delete the document and re-add it, which is
+ * exactly the loss of history and re-embedding this is meant to avoid.
+ */
+export function documentEditRefusal(doc: {
+  sourceType: string;
+  generatedFrom: DocumentReference | null;
+}): string | null {
+  if (doc.sourceType === 'url') {
+    return 'This page came from your website, and the next refresh of that site would overwrite anything typed here — change it on the site itself, then refresh the import.';
+  }
+  if (doc.generatedFrom) {
+    const owner = doc.generatedFrom.kind === 'policy' ? 'policy' : 'FAQ';
+    return `This is written from the ${owner} “${doc.generatedFrom.label}”, so edit it on the ${doc.generatedFrom.kind === 'policy' ? 'Policies' : 'FAQs'} tab and this updates itself.`;
+  }
+  return null;
+}
+
+/** One document plus the exact text currently indexed for it. */
+export interface EditableDocument extends DocumentRow {
+  /** The stored source text — what the chunks in `chunks` were built from. */
+  text: string;
+  botId: string | null;
+  /** Null when this document may be edited; otherwise why it may not be. */
+  editRefusal: string | null;
+}
+
 // One literal, not a concatenation: `@supabase/supabase-js` parses the select
 // string at the TYPE level, and a `string` (which is what `'a' + 'b'` widens to)
 // makes every row come back as `GenericStringError` instead of a record.
@@ -152,3 +201,48 @@ export const listDocuments = cache(async function listDocuments(): Promise<Docum
 
   return (data ?? []).map((d) => toDocumentRow(d as Record<string, unknown>, botNames, references));
 });
+
+/**
+ * One document for the edit screen, scoped to the session's company so an id
+ * belonging to another tenant is indistinguishable from one that never existed.
+ *
+ * The source text is deliberately NOT part of {@link listDocuments}: a company
+ * may hold 400 documents of up to 750,000 characters each, so folding it into
+ * the list would put megabytes of textarea into a page that exists to show
+ * titles. It is read one document at a time, on the screen that edits it.
+ */
+export async function getDocumentForEdit(documentId: string): Promise<EditableDocument | null> {
+  const companyId = await getCompanyId();
+  const sb = createSupabaseServiceClient();
+
+  const { data } = await sb
+    .from('documents')
+    .select(DOCUMENT_COLUMNS)
+    .eq('id', documentId)
+    .eq('company_id', companyId)
+    .maybeSingle();
+  if (!data) return null;
+
+  const raw = data as Record<string, unknown>;
+  const [bots, references, source] = await Promise.all([
+    listBots(),
+    findDocumentReferences(companyId, [documentId]),
+    // Newest first, matching `embedDocument` — that row is the one the chunks
+    // were built from, so it is the one the admin has to be shown.
+    sb
+      .from('document_sources')
+      .select('raw_text')
+      .eq('document_id', documentId)
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .maybeSingle(),
+  ]);
+
+  const row = toDocumentRow(raw, new Map(bots.map((b) => [b.id, b.name])), references);
+  return {
+    ...row,
+    botId: (raw.bot_id as string | null) ?? null,
+    text: ((source.data as { raw_text?: string | null } | null)?.raw_text ?? '').trim(),
+    editRefusal: documentEditRefusal(row),
+  };
+}
