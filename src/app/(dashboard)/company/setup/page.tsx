@@ -45,12 +45,14 @@ import { formatDate } from '@/lib/format';
  * from the wizard this page used to render underneath itself.
  */
 const STEP_GUIDANCE: Record<string, string> = {
+  website:
+    'Paste the address and we read the pages ourselves. If you have no website, say so and the list carries on without it.',
   purpose:
     'Choose who it talks to — the people on your website, or your own staff. You can have one of each.',
   capabilities:
     'Tick only what you want it doing today. You can turn more on any time, and nothing you leave off is lost.',
   'required-data':
-    'Import your website first if you have one, then fill the gaps: what you sell, when you are open, and the answers you find yourself repeating.',
+    'Fill the gaps your website could not cover: what you sell, when you are open, and the answers you find yourself repeating.',
   test: 'Ask it the questions your customers really ask — including one it cannot possibly know, to check it says so instead of making something up.',
   install:
     'Add your web address and paste one line of code into your site. Whoever built your website will know where it goes.',
@@ -58,6 +60,7 @@ const STEP_GUIDANCE: Record<string, string> = {
 
 /** The click, in the owner's voice. The step titles describe the job. */
 const STEP_CTA: Record<string, string> = {
+  website: 'Add my website',
   purpose: 'Create my assistant',
   capabilities: 'Pick the jobs',
   'required-data': 'Add my details',
@@ -136,10 +139,10 @@ function ChecklistRow({
 }
 
 /**
- * What to do once the five are done.
+ * What to do once the checklist is done.
  *
- * Deliberately not steps six to eight: none of it is required, and putting it in
- * the checklist would make a finished set-up look unfinished forever.
+ * Deliberately not more steps: none of it is required, and putting it in the
+ * checklist would make a finished set-up look unfinished forever.
  */
 const NEXT_MOVES: { href: string; title: string; body: string }[] = [
   {
@@ -165,7 +168,7 @@ export default async function CompanySetupPage() {
   const nextKey = setup.nextStep?.key;
   const allDone = setup.nextStep === null;
 
-  // The guided flow takes the same five steps one screen at a time. It is the
+  // The guided flow takes the same steps one screen at a time. It is the
   // front door for somebody who has just signed up; this page stays the map for
   // somebody coming back. Both read `getCompanySetupProgress()`, so they cannot
   // disagree about what is finished — and the "carry on" button below is built
@@ -190,7 +193,10 @@ export default async function CompanySetupPage() {
           description={
             allDone
               ? 'Everything on the list is done. Your assistant is answering customers — here is what you can add next.'
-              : 'Five things to do, in this order. Each one is saved as you finish it, so you can stop and come back whenever you like.'
+              : // Counted, not spelled out. The word "five" was written here, on
+                // the marketing pages and in three comments, and every one of
+                // them became a lie the moment a step was added.
+                `${setup.total} things to do, in this order. Each one is saved as you finish it, so you can stop and come back whenever you like.`
           }
         />
       </div>
@@ -255,11 +261,17 @@ export default async function CompanySetupPage() {
       {/* Once the import has happened this stops being an instruction and becomes
           a record of it. Asking for the website address again, on the same page
           that already says "Your website is connected", reads as a job still
-          outstanding — which is the one thing this page exists not to do. */}
-      <Card>
+          outstanding — which is the one thing this page exists not to do.
+
+          It used to be titled "the quick way to do step 3", which is how the
+          feature stayed invisible: a shortcut, halfway down a page, for a step
+          the reader had not reached. The website is the first row of the
+          checklist above now, and this is that row's work, done in place rather
+          than on another screen — the same job, not a second one. */}
+      <Card id="website-import" className="scroll-mt-6">
         <CardHeader>
           <CardTitle>
-            {setup.websiteImport ? 'Your website has been read' : 'The quick way to do step 3'}
+            {setup.websiteImport ? 'Your website has been read' : 'Start with your website'}
           </CardTitle>
           <p className="mt-1 text-sm text-muted-foreground">
             {setup.websiteImport ? (
@@ -270,9 +282,10 @@ export default async function CompanySetupPage() {
               </>
             ) : (
               <>
-                If you already have a website, give us the address and we will read your pages for
-                you — your services, your prices, your opening hours, your policies. Then you only
-                have to fill in what is missing.
+                Give us the address and we will read your pages for you — your services, your
+                prices, your opening hours, your policies. It fills in most of the steps below, so
+                you only have to check what is there and add what is missing. No website is fine
+                too; the list carries on without it.
               </>
             )}
           </p>
@@ -291,7 +304,7 @@ export default async function CompanySetupPage() {
               </Button>
             </div>
           ) : null}
-          <WebsiteOnboardingForm />
+          <WebsiteOnboardingForm defaultUrl={setup.websiteAddress} />
           <div className="grid gap-3 md:grid-cols-3">
             <div className="rounded-md border p-3 text-sm">
               <p className="font-medium">It takes a snapshot</p>
@@ -419,7 +432,7 @@ export default async function CompanySetupPage() {
         <CardHeader>
           <CardTitle>When you are ready for more</CardTitle>
           <p className="mt-1 text-sm text-muted-foreground">
-            None of this is required. Come back to it once the five above are done.
+            None of this is required. Come back to it once the list above is done.
           </p>
         </CardHeader>
         <CardContent className="grid gap-3 sm:grid-cols-3">

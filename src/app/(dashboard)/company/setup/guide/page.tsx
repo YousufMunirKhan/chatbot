@@ -25,14 +25,14 @@ import { SkipStepLink } from '@/modules/onboarding/components/guide-skip';
 import type { SetupStepKey } from '@/lib/constants';
 
 /**
- * Guided setup — the five steps, one screen at a time.
+ * Guided setup — the checklist, one screen at a time.
  *
  * WHAT THIS IS, AND WHAT IT LEAVES ALONE
  * --------------------------------------
- * `/company/setup` is the checklist: all five rows at once, which is the right
+ * `/company/setup` is the checklist: every row at once, which is the right
  * shape for "what have I still got left?" and the wrong shape for the first ten
- * minutes of a trial. This is the same five steps, in the same order, from the
- * same `getCompanySetupProgress()` — one decision per screen, with the position
+ * minutes of a trial. This is the same steps, in the same order, from the same
+ * `getCompanySetupProgress()` — one decision per screen, with the position
  * visible, a way back, and a way past.
  *
  * Nothing here computes whether a step is finished; it is told. There is no new
@@ -41,17 +41,16 @@ import type { SetupStepKey } from '@/lib/constants';
  *
  * WHERE THE WORK ACTUALLY HAPPENS
  * -------------------------------
- * Two of the five steps have to be done somewhere else — creating an assistant
- * and choosing its jobs both live on the assistant form, which this page does
- * not own and does not duplicate. Those screens explain the decision and hand
- * over.
+ * Two steps have to be done somewhere else — creating an assistant and choosing
+ * its jobs both live on the assistant form, which this page does not own and
+ * does not duplicate. Those screens explain the decision and hand over.
  *
- * The other three do their real work here, inline, because a component for each
- * already exists and sending somebody to a different page to paste one line of
- * code is how a trial goes cold:
- *   - step 3 imports a website (`WebsiteOnboardingForm`),
- *   - step 4 asks the assistant a live question (`TestAssistant`),
- *   - step 5 shows the actual `<script>` tag with a copy button.
+ * The rest do their real work here, inline, because a component for each already
+ * exists and sending somebody to a different page to paste one line of code is
+ * how a trial goes cold:
+ *   - step 1 imports a website (`WebsiteOnboardingForm`),
+ *   - the test step asks the assistant a live question (`TestAssistant`),
+ *   - the install step shows the actual `<script>` tag with a copy button.
  *
  * The finish screen ends on both of the two things that are worth ending on:
  * the install snippet, and a box the customer can type a question into and get
@@ -78,6 +77,11 @@ interface ScreenPlan {
    * going to the same place.
    */
   skippable: boolean;
+  /**
+   * Overrides "Skip for now" where the honest wording is a statement about the
+   * business rather than a deferral — see the website screen.
+   */
+  skipLabel?: string;
   /** Screen-specific body. */
   body: React.ReactNode;
 }
@@ -158,7 +162,8 @@ export default async function SetupGuidePage({
             <InstallCard embed={embed} bot={snippetBot} isCustomerBot={Boolean(customerBot)} />
           ) : (
             <Alert tone="warning" title="There is no assistant to install yet">
-              Step 1 makes one. It takes about two minutes, and everything else follows from it.
+              &ldquo;Choose what it does&rdquo; makes one. It takes about two minutes, and everything
+              else follows from it.
             </Alert>
           )}
 
@@ -189,7 +194,7 @@ export default async function SetupGuidePage({
   }
 
   /* ------------------------------------------------------------------ */
-  /* One of the five.                                                    */
+  /* One of the steps.                                                   */
   const screenKey = screen as SetupStepKey;
   const copy = GUIDE_COPY[screenKey];
   const current = step!;
@@ -212,6 +217,69 @@ export default async function SetupGuidePage({
     skippable: !current.complete,
     body: null,
   };
+
+  if (screenKey === 'website') {
+    // The import happens here, on this screen, so "next" is the only forward
+    // control — the same rule the test and install screens follow. The default
+    // `openFullPage` would have pointed this step's own href back at itself.
+    plan.primary = nextButton;
+    // The skip survives anyway, unlike on those two screens, because it says
+    // something different from "next". Moving on means "not yet"; this says
+    // "there is nothing of mine to read", which is a fact about the business
+    // rather than a failure to finish a step — and it is the one thing the
+    // guide cannot work out for itself.
+    plan.skippable = !current.complete;
+    plan.skipLabel = 'I do not have a website';
+    plan.body = (
+      <div className="space-y-4">
+        {/* Once it has happened this stops being an instruction and becomes a
+            record of it. Asking again under a green "Done" badge reads as a job
+            still outstanding, which is the one thing this flow must not do. */}
+        {setup.websiteImport ? (
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base">Your website has been read</CardTitle>
+              <p className="mt-1 text-sm text-muted-foreground">
+                We saved what we found as knowledge your assistant can use. Import it again whenever
+                the site changes — it updates what is there rather than adding a second copy.
+              </p>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="flex flex-wrap items-center justify-between gap-3 rounded-md border bg-muted/40 p-3">
+                <div className="min-w-0">
+                  <p className="text-sm font-medium">{setup.websiteImport.title}</p>
+                  <p className="text-xs text-muted-foreground">
+                    Read {formatDate(setup.websiteImport.importedAt)}
+                  </p>
+                </div>
+                <Button asChild size="sm" variant="outline">
+                  <Link href="/company/business-data?tab=knowledge">See what it found</Link>
+                </Button>
+              </div>
+              <WebsiteOnboardingForm defaultUrl={setup.websiteAddress} />
+            </CardContent>
+          </Card>
+        ) : (
+          <WebsiteOnboardingForm defaultUrl={setup.websiteAddress} />
+        )}
+
+        <div className="grid gap-3 lg:grid-cols-3">
+          <FactCard
+            title="It saves you the typing"
+            body="Services, opening hours, policies and contact details come across on their own, so the steps after this are mostly checking."
+          />
+          <FactCard
+            title="Prices and stock need a link"
+            body="For anything that changes daily, connect Shopify, WooCommerce or a spreadsheet, so it stays right by itself."
+          />
+          <FactCard
+            title="No website is fine"
+            body="Say so and we move on. You add the same facts by hand later, and nothing else in setup depends on this."
+          />
+        </div>
+      </div>
+    );
+  }
 
   if (screenKey === 'purpose') {
     plan.body = (
@@ -269,8 +337,8 @@ export default async function SetupGuidePage({
     const capabilities = setup.customerReadiness.capabilities;
     plan.body = bots.length === 0 ? (
       <Alert tone="info" title="Make the assistant first">
-        There is nothing to give jobs to yet. Step 1 takes about two minutes, and this screen will be
-        waiting.
+        There is nothing to give jobs to yet. &ldquo;Choose what it does&rdquo; takes about two
+        minutes, and this screen will be waiting.
       </Alert>
     ) : (
       <div className="space-y-4">
@@ -300,39 +368,45 @@ export default async function SetupGuidePage({
     plan.primary = current.complete ? nextButton : openFullPage;
     plan.body = (
       <div className="space-y-4">
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-base">
-              {setup.websiteImport ? 'Your website has been read' : 'The quick way to do this'}
-            </CardTitle>
-            <p className="mt-1 text-sm text-muted-foreground">
-              {setup.websiteImport
-                ? 'Import it again whenever the site changes — it updates what is there rather than adding a second copy.'
-                : 'If you already have a website, give us the address and we will read your pages: your services, your prices, your opening hours, your policies. Then you only fill in what is missing.'}
-            </p>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            {setup.websiteImport ? (
-              <div className="flex flex-wrap items-center justify-between gap-3 rounded-md border bg-muted/40 p-3">
-                <div className="min-w-0">
-                  <p className="text-sm font-medium">{setup.websiteImport.title}</p>
-                  <p className="text-xs text-muted-foreground">
-                    Read {formatDate(setup.websiteImport.importedAt)}
-                  </p>
-                </div>
-                <Button asChild size="sm" variant="outline">
-                  <Link href="/company/business-data?tab=knowledge">See what it found</Link>
-                </Button>
-              </div>
-            ) : null}
-            <WebsiteOnboardingForm />
-          </CardContent>
-        </Card>
+        {/* This screen used to carry the import form itself, back when the
+            website was not a step and this was the only place it was offered.
+            It is step 1 now, so a second copy of the same form here would be
+            asking a question that has already been asked and, for a business
+            with no website, one it has already answered. What is left is the
+            two things this screen can honestly say about it. */}
+        {setup.websiteImport ? (
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base">Your website is already in here</CardTitle>
+              <p className="mt-1 text-sm text-muted-foreground">
+                We read your pages on {formatDate(setup.websiteImport.importedAt)}. This step is for
+                what a website cannot tell us — prices you never published, the answers you give on
+                the phone, the rules only your staff know.
+              </p>
+            </CardHeader>
+            <CardContent>
+              <Button asChild size="sm" variant="outline">
+                <Link href="/company/business-data?tab=knowledge">See what it found</Link>
+              </Button>
+            </CardContent>
+          </Card>
+        ) : setup.websiteAddress ? (
+          // Only for a company whose address is on file and unread. A business
+          // that told us it has no website is not sent back to be asked again.
+          <Alert tone="info" title="There is a shortcut you have not used">
+            We have {setup.websiteAddress} on file but have not read it yet. Step 1 fetches those
+            pages and fills in most of this for you.{' '}
+            <Link href={guideHref('website')} className="underline underline-offset-4">
+              Go back and import it
+            </Link>
+            .
+          </Alert>
+        ) : null}
 
         <div className="grid gap-3 lg:grid-cols-3">
           <FactCard
-            title="It takes a snapshot"
-            body="Good for services, common questions, policies and contact details — the things that rarely change."
+            title="Start with the repeats"
+            body="The questions you answer every week — opening hours, delivery, refunds — are worth more here than anything else."
           />
           <FactCard
             title="Prices and stock need a link"
@@ -400,7 +474,8 @@ export default async function SetupGuidePage({
       <InstallCard embed={embed} bot={snippetBot} isCustomerBot={Boolean(customerBot)} />
     ) : (
       <Alert tone="info" title="There is no assistant to install yet">
-        Go back to step 1 and make one — the code on this screen is generated from it.
+        Go back to &ldquo;Choose what it does&rdquo; and make one — the code on this screen is
+        generated from it.
       </Alert>
     );
   }
@@ -437,7 +512,9 @@ export default async function SetupGuidePage({
                 companyId={setup.companyId}
                 stepKey={screenKey}
                 href={guideHref(nextScreen)}
-              />
+              >
+                {plan.skipLabel ?? 'Skip for now'}
+              </SkipStepLink>
             ) : null
           }
           primary={plan.primary}

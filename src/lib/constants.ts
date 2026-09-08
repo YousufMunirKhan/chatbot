@@ -475,14 +475,37 @@ export const LEAD_STATUS_LABELS: Record<string, string> = {
  * sentence explaining the step. Everything situational (`href`, `complete`,
  * `detail`) is computed per company by `getCompanySetupProgress()`.
  *
- * It is shared because it was being written twice: `setup-data.ts` had these
- * five, and the public `/customer-onboarding` page had its own retyped four,
- * which had already drifted — the marketing page merged "try it" and "install"
- * into one step and told visitors a different story from the product. A list
- * describing the same journey in two places will always end up describing two
- * journeys.
+ * It is shared because it was being written twice: `setup-data.ts` had these,
+ * and the public `/customer-onboarding` page had its own retyped four, which had
+ * already drifted — the marketing page merged "try it" and "install" into one
+ * step and told visitors a different story from the product. A list describing
+ * the same journey in two places will always end up describing two journeys.
+ *
+ * WHY THE WEBSITE COMES FIRST
+ * ---------------------------
+ * It used not to be on this list at all. The importer existed, worked, and was
+ * rendered halfway down `/company/setup` as "the quick way to do step 3" — a
+ * shortcut for a step nobody had reached yet, two navigations from where signup
+ * actually lands. Companies were being created having never once been asked for
+ * their web address, and then handed empty forms.
+ *
+ * One address does most of the work of the steps below it: services, prices,
+ * opening hours, policies. Asking for it first means the rest of setup is
+ * filling gaps rather than facing blank forms, and blank forms are where
+ * onboarding is abandoned. It is also the cheapest step on the list, which is
+ * the right thing to put first.
+ *
+ * Nobody is trapped by it: plenty of businesses have no website, and
+ * `getCompanySetupProgress()` marks the step done for a company that has no
+ * address on record and has supplied those facts itself. See the note there.
  */
 export const SETUP_STEPS = [
+  {
+    key: 'website',
+    title: 'Start with your website',
+    description:
+      'Give us your web address and we read your pages — what you sell, when you are open, what your policies say. Skip it if you have no website.',
+  },
   {
     key: 'purpose',
     title: 'Choose what it does',

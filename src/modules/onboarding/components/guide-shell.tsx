@@ -9,18 +9,18 @@ import { GUIDE_DONE, guideHref, type GuideScreen } from '../guide-content';
  *
  * WHY A FRAME AT ALL
  * ------------------
- * `/company/setup` is a checklist: five rows, five buttons, all visible at
- * once. That answers "what is left?" and it is the right page for coming back
- * to. It is the wrong shape for somebody's first ten minutes, where five things
- * on one screen is five decisions at once and the honest response is to close
- * the tab.
+ * `/company/setup` is a checklist: every row and every button visible at once.
+ * That answers "what is left?" and it is the right page for coming back to. It
+ * is the wrong shape for somebody's first ten minutes, where a whole list on one
+ * screen is a whole list of decisions at once and the honest response is to
+ * close the tab.
  *
- * So this is the same five steps, one at a time, with the three things a person
- * needs in order to keep going: where they are (the rail and the bar), a way
- * back (every earlier step is a link, and so is the checklist), and a way past
- * (skip, stated with its cost). Nothing here computes progress — it is handed
- * `steps` from `getCompanySetupProgress()`, so the guide and the checklist can
- * never disagree about what is finished.
+ * So this is the same steps, one at a time, with the three things a person needs
+ * in order to keep going: where they are (the rail and the bar), a way back
+ * (every earlier step is a link, and so is the checklist), and a way past (skip,
+ * stated with its cost). Nothing here computes progress — it is handed `steps`
+ * from `getCompanySetupProgress()`, so the guide and the checklist can never
+ * disagree about what is finished.
  *
  * LAYOUT
  * ------
@@ -84,7 +84,9 @@ export function GuideShell({ steps, current, complete, meta, children }: GuideSh
             <span className="dir-arrow" aria-hidden="true">
               ←
             </span>{' '}
-            All five steps
+            {/* Counted rather than spelled. This said "All five steps" and went
+                stale the moment the website step was added in front of them. */}
+            All {total} steps
           </Link>
           <p className="text-sm text-muted-foreground">
             {current === GUIDE_DONE ? (
@@ -145,10 +147,12 @@ export function GuideShell({ steps, current, complete, meta, children }: GuideSh
         </nav>
 
         <div className="min-w-0 space-y-5">
-          {/* The compact stepper. Numbers only, so five of them fit one row
-              at 375px inside the dashboard's own padding — no wrap, and no
-              horizontal scroll on the page body. Each is a link with a real
-              accessible name, so "step 3" is never a bare dot to guess at. */}
+          {/* The compact stepper. Numbers only, so the whole list fits one row
+              at 375px inside the dashboard's own padding — six 24px dots and
+              their gaps come to 184px of the ~343px available, so there is
+              still headroom for a seventh. No wrap, and no horizontal scroll on
+              the page body. Each is a link with a real accessible name, so
+              "step 3" is never a bare dot to guess at. */}
           <nav aria-label="Setup steps" className="xl:hidden">
             <ol className="flex items-center gap-2">
               {steps.map((step, index) => {

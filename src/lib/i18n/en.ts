@@ -179,6 +179,7 @@ export const en = {
   'home.feature.handover.body':
     'Anything it cannot answer lands in your inbox with the whole conversation.',
   'home.step.progress': 'Step {current} of {total}',
+  'home.cta.website': 'Add my website',
   'home.cta.purpose': 'Choose what it does',
   'home.cta.capabilities': 'Pick the jobs',
   'home.cta.required-data': 'Add my details',
@@ -229,6 +230,22 @@ export const en = {
   'home.csat.none': 'Nobody rated a chat this week.',
   'home.csat.off': 'Customers are not being asked to rate their chat.',
   'home.csat.off.link': 'Turn on the star rating',
+  // The home-page website prompt. It is the one place the product chases
+  // something rather than reporting it, so the copy says what they get and when
+  // it will stop, and never implies they have done something wrong.
+  'home.website.title': 'We have not read your website yet',
+  'home.website.body':
+    'Give us the address and we read your pages — what you sell, when you are open, what your policies say — and your assistant answers from them. It saves you typing all of it in by hand.',
+  'home.website.field': 'Your website address',
+  'home.website.hint': 'The home page, with https:// at the front.',
+  'home.website.on_file': 'This is the address we have on file. Change it if it is not the right one.',
+  'home.website.submit': 'Import website',
+  'home.website.submitting': 'Importing website…',
+  'home.website.dismiss': 'Not now',
+  'home.website.dismiss_note': 'We will ask again next week.',
+  'home.website.imported.one': 'We read 1 page from your website.',
+  'home.website.imported.many': 'We read {count} pages from your website.',
+  'home.website.imported_link': 'See what it found',
   'home.finish.one': '1 thing left to set up',
   'home.finish.many': '{count} things left to set up',
   'home.finish.body': 'Your assistant is already live. These are the parts still missing.',

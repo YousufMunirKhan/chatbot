@@ -49,7 +49,7 @@ import {
  * ---------------------------------------
  * Prices, allowances and the trial length come from `getPublicPricing()`, which
  * reads the billing catalogue Stripe actually charges from. The channel count
- * is `CHANNEL_KEYS.length` and the setup steps are `SETUP_STEPS`, the same list
+ * is `CHANNEL_KEYS.length`, the setup steps and their count are `SETUP_STEPS`, the same list
  * the product runs. See the doc comment in `./pricing/plan-catalogue` for why a
  * retyped price on a public page is worse than no price at all.
  *
@@ -504,8 +504,11 @@ export default async function HomePage() {
       <section className="scroll-mt-16 border-y bg-muted/30" aria-labelledby="how-setup-works">
         <div className="mx-auto max-w-6xl px-5 py-14 sm:px-8">
           <div className="max-w-2xl">
+            {/* Counted from the list below rather than typed. "Five steps" was
+                here until a sixth was added to `SETUP_STEPS`, at which point
+                the heading and the list under it disagreed. */}
             <h2 id="how-setup-works" className="text-2xl font-bold tracking-tight sm:text-3xl">
-              Five steps, and no developer
+              {SETUP_STEPS.length} steps, and no developer
             </h2>
             <p className="mt-3 text-muted-foreground">
               You never have to understand prompts or integrations. You say what you want the
@@ -514,7 +517,7 @@ export default async function HomePage() {
             </p>
           </div>
 
-          {/* The same five steps the product runs, read from `SETUP_STEPS`. A
+          {/* The same steps the product runs, read from `SETUP_STEPS`. A
               retyped copy on the old brochure page had already drifted to four. */}
           <ol className="mt-8 grid gap-4 md:grid-cols-2 xl:grid-cols-3">
             {SETUP_STEPS.map((step, index) => (

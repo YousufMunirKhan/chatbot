@@ -35,6 +35,14 @@ export interface GuideStepCopy {
 }
 
 export const GUIDE_COPY: Record<SetupStepKey, GuideStepCopy> = {
+  website: {
+    question: 'What is your website address?',
+    why: 'We read your pages and keep what is on them — your services, your prices, your opening hours, your policies — so the steps after this are mostly checking rather than typing.',
+    cta: 'Import my website',
+    skipCost:
+      'Nothing breaks. You type the same facts in yourself on "Add your business details", which takes rather longer than pasting one address.',
+    minutes: 'about 1 minute',
+  },
   purpose: {
     question: 'Who should your assistant talk to?',
     why: 'Everything after this follows from the answer — the jobs it can do, the facts it asks you for, and where it ends up living.',

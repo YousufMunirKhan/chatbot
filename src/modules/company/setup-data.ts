@@ -29,8 +29,20 @@ export interface CompanySetupProgress {
    * with "Your website is connected" ticked two inches above it — so it read as
    * a job still to do, on a page whose whole purpose is telling you what is
    * left.
+   *
+   * This is the ONLY definition of "we have read their site" in the product.
+   * `companies.website` is not a substitute and never was: an operator can type
+   * an address onto a company that has never been crawled, and the first live
+   * tenant is exactly that — a website recorded, zero documents. Anything that
+   * decides whether to ask for the address (the checklist step, the home-page
+   * prompt) reads this, so the two can never disagree.
    */
   websiteImport: { title: string; importedAt: string } | null;
+  /**
+   * The address on file, for prefilling the ask. Not evidence of an import —
+   * see above — only a sensible default so the owner confirms rather than types.
+   */
+  websiteAddress: string | null;
   stats: {
     bots: number;
     knowledgeDocs: number;
@@ -247,7 +259,49 @@ export async function getCompanySetupProgress(): Promise<CompanySetupProgress> {
     testScenarios,
   };
 
+  // `sourceType` is 'url' for anything the crawler brought in.
+  const imported = docs.filter((d) => d.sourceType === 'url');
+  const newestImport = imported.length
+    ? imported.reduce((a, b) => (a.createdAt > b.createdAt ? a : b))
+    : null;
+  const websiteOnRecord = (company.website ?? '').trim();
+
+  /**
+   * When the website step counts as finished.
+   *
+   * An import is the real answer. The second clause is what stops the step
+   * trapping the businesses that have no website — a hard gate there would leave
+   * them permanently one short of a finished checklist, and a checklist that can
+   * never go green is one nobody comes back to.
+   *
+   * It is deliberately narrow. A company with an address on file that we have
+   * never read is NOT let off: there is real material sitting there, and that is
+   * precisely the case the owner complained about. Only a company with no
+   * address at all, which has gone and supplied those same facts itself, is
+   * treated as having nothing left to import. It genuinely has not.
+   *
+   * Derived, so there is no "I have no website" flag to store, drift, or migrate.
+   * The one genuinely non-derivable thing — "I have seen this and not today" —
+   * stays where the guide already keeps that kind of intent, in the browser.
+   */
+  const websiteStepComplete = newestImport !== null || (!websiteOnRecord && hasRequiredData);
+
   const steps: SetupStep[] = [
+    {
+      key: 'website',
+      ...SETUP_STEP_COPY['website']!,
+      // The guided screen, because the import happens inline on it. There is no
+      // separate page that owns this job to send anybody to.
+      href: '/company/setup/guide?step=website',
+      complete: websiteStepComplete,
+      detail: newestImport
+        ? `${imported.length} page${imported.length === 1 ? '' : 's'} read from your website`
+        : websiteStepComplete
+          ? 'No website — you added your details yourself'
+          : websiteOnRecord
+            ? `We have ${websiteOnRecord} on file but have not read it yet`
+            : 'We have not read your website yet',
+    },
     {
       key: 'purpose',
       ...SETUP_STEP_COPY['purpose']!,
@@ -289,12 +343,6 @@ export async function getCompanySetupProgress(): Promise<CompanySetupProgress> {
     },
   ];
 
-  // `sourceType` is 'url' for anything the crawler brought in.
-  const imported = docs.filter((d) => d.sourceType === 'url');
-  const newestImport = imported.length
-    ? imported.reduce((a, b) => (a.createdAt > b.createdAt ? a : b))
-    : null;
-
   const complete = steps.filter((step) => step.complete).length;
   const total = steps.length;
 
@@ -309,6 +357,7 @@ export async function getCompanySetupProgress(): Promise<CompanySetupProgress> {
     websiteImport: newestImport
       ? { title: newestImport.title, importedAt: newestImport.createdAt }
       : null,
+    websiteAddress: websiteOnRecord || null,
     stats: {
       bots: bots.length,
       knowledgeDocs: docs.length,

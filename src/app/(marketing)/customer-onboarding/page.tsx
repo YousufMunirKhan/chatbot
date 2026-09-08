@@ -41,14 +41,15 @@ import {
  *    column now, sized for the box it is in rather than for the screen.
  *
  * Every number on the page is still read from the billing catalogue, never
- * typed, and the five steps are still `SETUP_STEPS` — the same list the product
- * runs and the setup page renders.
+ * typed, and the steps are still `SETUP_STEPS` — the same list the product runs
+ * and the setup page renders, counted rather than spelled out so the heading
+ * cannot go stale when one is added.
  */
 
 export const metadata: Metadata = {
   title: 'How setup works — Switch & Save AI Assistant',
   description:
-    'The five steps from signing up to a working assistant on your website: choose what it does, pick its jobs, add your business details, test it, and paste one line of code.',
+    'From signing up to a working assistant on your website: import your website, choose what it does, pick its jobs, add your business details, test it, and paste one line of code.',
 };
 
 export const runtime = 'nodejs';
@@ -60,7 +61,8 @@ export const dynamic = 'force-dynamic';
 // The journey shown here is the journey the product actually runs. It used to
 // be a retyped copy that had already drifted — four steps against the product's
 // five, with "try it" and "install" merged — so a visitor was promised one
-// thing and given another.
+// thing and given another. The website import joined the front of the list, and
+// this page picked it up without an edit, which is the point.
 const journey = SETUP_STEPS.map((step) => [step.title, step.description] as const);
 
 const integrations: Array<[string, string]> = [
@@ -255,10 +257,14 @@ export default async function CustomerOnboardingPage() {
       </section>
 
       {/* ------------------------------------------------------------------ */}
-      <section className="mx-auto max-w-6xl px-5 py-14 sm:px-8" aria-labelledby="the-five-steps">
+      <section className="mx-auto max-w-6xl px-5 py-14 sm:px-8" aria-labelledby="the-steps">
         <div className="max-w-2xl">
-          <h2 id="the-five-steps" className="text-2xl font-bold tracking-tight sm:text-3xl">
-            Five steps, in this order
+          {/* The count is read, not written. "Five steps" was typed here and in
+              the heading on the homepage, and both became wrong the day a step
+              was added to `SETUP_STEPS` — the same drift this page already fixed
+              once by reading the list itself. */}
+          <h2 id="the-steps" className="text-2xl font-bold tracking-tight sm:text-3xl">
+            {journey.length} steps, in this order
           </h2>
           <p className="mt-3 text-muted-foreground">
             You never have to understand prompts, retrieval or integrations. You say what you want

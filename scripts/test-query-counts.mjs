@@ -177,6 +177,7 @@ const stubs = {
     // setup-data.ts reads its step titles from here, so the stub has to carry
     // the same keys — the real list lives in src/lib/constants.ts.
     export const SETUP_STEPS = [
+      { key: 'website', title: '', description: '' },
       { key: 'purpose', title: '', description: '' },
       { key: 'capabilities', title: '', description: '' },
       { key: 'required-data', title: '', description: '' },
@@ -485,7 +486,9 @@ async function main() {
     openChats: summary.openChats,
   });
   check(`dashboard week-over-week trend is populated`, summary.conversations7d.current === 10, summary.conversations7d);
-  check(`setup progress still resolves`, progress.total === 5, progress.total);
+  // Six since the website import became the first step. The number is asserted
+  // rather than derived so that adding a step is a deliberate edit here too.
+  check(`setup progress still resolves`, progress.total === 6, progress.total);
   check(
     `dashboard page costs <= ${BUDGET.dashboard} round trips (measured ${measured.dashboard})`,
     measured.dashboard <= BUDGET.dashboard,

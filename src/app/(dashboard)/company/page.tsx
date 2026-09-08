@@ -10,6 +10,10 @@ import {
   type MetricTrend,
 } from '@/modules/company/dashboard-data';
 import { getCompanySetupProgress, type CompanySetupProgress } from '@/modules/company/setup-data';
+import {
+  WebsitePrompt,
+  type WebsitePromptLabels,
+} from '@/modules/company/components/website-prompt';
 import { formatNumber } from '@/lib/format';
 import { t, tOr, type Dictionary } from '@/lib/i18n';
 import { getRequestDictionary } from '@/lib/i18n/server';
@@ -68,6 +72,32 @@ function stepCta(dict: Dictionary, key: string): string {
   return translated === `home.cta.${key}` ? t(dict, 'common.continue') : translated;
 }
 
+/**
+ * The website prompt's copy, resolved here and handed over.
+ *
+ * `WebsitePrompt` is a client component — it owns the import form's state and a
+ * "not now" that lives in the browser — and the dictionary is resolved on the
+ * server from the company's `default_language`. So the strings are looked up on
+ * this side and passed down, exactly as the shell passes `ShellLabels` to the
+ * navigation rather than teaching it about `t()`.
+ */
+function websitePromptLabels(dict: Dictionary): WebsitePromptLabels {
+  return {
+    title: t(dict, 'home.website.title'),
+    body: t(dict, 'home.website.body'),
+    fieldLabel: t(dict, 'home.website.field'),
+    fieldHint: t(dict, 'home.website.hint'),
+    onFile: t(dict, 'home.website.on_file'),
+    submit: t(dict, 'home.website.submit'),
+    submitPending: t(dict, 'home.website.submitting'),
+    dismiss: t(dict, 'home.website.dismiss'),
+    dismissNote: t(dict, 'home.website.dismiss_note'),
+    importedOne: t(dict, 'home.website.imported.one'),
+    importedMany: t(dict, 'home.website.imported.many'),
+    importedLink: t(dict, 'home.website.imported_link'),
+  };
+}
+
 function trendLabel(dict: Dictionary, trend: MetricTrend): string {
   if (trend.change === 0) return t(dict, 'home.trend.same');
   return t(dict, 'home.trend.change', {
@@ -86,7 +116,7 @@ function FeatureTile({ title, body }: { title: string; body: string }) {
   );
 }
 
-/** A five-dot rail. Progress only — no percentage, and nothing here is a link. */
+/** A dot per setup step. Progress only — no percentage, and nothing is a link. */
 function StepRail({ setup }: { setup: CompanySetupProgress }) {
   const currentKey = setup.nextStep?.key;
   return (
@@ -337,13 +367,45 @@ export default async function CompanyOverview() {
     getRequestDictionary(),
   ]);
 
-  const hasAssistant = setup.steps.find((step) => step.key === 'purpose')?.complete ?? false;
+  const purposeStep = setup.steps.find((step) => step.key === 'purpose');
+  const hasAssistant = purposeStep?.complete ?? false;
   const isLive = setup.steps.find((step) => step.key === 'install')?.complete ?? false;
   const nextStep = setup.nextStep;
   const stepNumber = nextStep ? setup.steps.findIndex((step) => step.key === nextStep.key) + 1 : 0;
   const isBusy = isLive && summary.conversations7d.current > 0;
   const [firstQueue, ...otherQueues] = summary.attention;
   const setupIncomplete = setup.complete < setup.total;
+  /**
+   * The website is the first step of setup, so whenever it is outstanding it is
+   * also `nextStep` — and then the generic "here is your next step" cards would
+   * be describing the very thing the prompt below is already asking, with a link
+   * to a page instead of a box to type in. One ask, not two: where the next step
+   * IS the website, the prompt replaces those cards rather than joining them.
+   */
+  const nextStepIsWebsite = nextStep?.key === 'website';
+  const showFinishSetup = setupIncomplete && !nextStepIsWebsite;
+  /**
+   * Rendered in every state, and rendered unconditionally, which looks wasteful
+   * until you follow what happens after somebody uses it: the action calls
+   * `revalidatePath('/company')`, this page rebuilds, and every server-side
+   * reason to show the card is gone. If the mount depended on any of those
+   * reasons the card would vanish mid-import and the owner would never learn
+   * whether it worked. So the card decides for itself — it renders nothing once
+   * the step is done, EXCEPT on the render right after its own submission,
+   * where it reports what it read. See the note in `website-prompt.tsx`.
+   */
+  const websitePrompt = (
+    <WebsitePrompt
+      companyId={setup.companyId}
+      done={setup.steps.find((step) => step.key === 'website')?.complete ?? true}
+      defaultUrl={setup.websiteAddress}
+      // The one place it carries the page's solid button is state B, where
+      // finishing setup is the only thing on the screen. Anywhere a customer is
+      // waiting, or there is no assistant yet, that outranks a missing website.
+      solid={hasAssistant && !isLive}
+      labels={websitePromptLabels(dict)}
+    />
+  );
   /**
    * The board also runs for a live tenant with no chats *this week* but
    * something still queued — an enquiry from three weeks ago that nobody rang
@@ -368,6 +430,12 @@ export default async function CompanyOverview() {
         description={tOr(dict, 'home.description', 'Your assistant, and whatever needs you today.')}
       />
 
+      {/* In the quiet states the website question comes first: there is nothing
+          more useful this screen can do than turn one address into the answers
+          the rest of setup would otherwise ask them to type. On the board it is
+          the other way round and it goes at the bottom — see below. */}
+      {!showBoard ? websitePrompt : null}
+
       {/* ------------------------------------------------------------------ */}
       {/* State A — no assistant yet. No stats: zeroes are demoralising.      */}
       {/* ------------------------------------------------------------------ */}
@@ -378,8 +446,14 @@ export default async function CompanyOverview() {
               <h2 className="text-lg font-semibold">{t(dict, 'home.setup.title')}</h2>
               <p className="max-w-xl text-sm text-muted-foreground">{t(dict, 'home.setup.body')}</p>
               <div className="flex flex-wrap items-center gap-4">
+                {/* The assistant step, not `nextStep`. This used to follow the
+                    checklist's first unfinished row, which was the assistant
+                    until the website was put in front of it — and a button
+                    labelled "Set up my assistant" that opens the website
+                    importer is a button that lies. The website ask is the card
+                    above; this one is still about making the thing. */}
                 <Button asChild size="lg">
-                  <Link href={nextStep?.href ?? '/company/bots/new'}>
+                  <Link href={purposeStep?.href ?? '/company/bots/new'}>
                     {t(dict, 'home.setup.cta')}
                   </Link>
                 </Button>
@@ -411,25 +485,29 @@ export default async function CompanyOverview() {
       {/* ------------------------------------------------------------------ */}
       {hasAssistant && !isLive && nextStep ? (
         <div className="space-y-4">
-          <Card>
-            <CardContent className="space-y-4 p-6">
-              <p className="text-xs uppercase tracking-wider text-muted-foreground">
-                {t(dict, 'home.step.progress', { current: stepNumber, total: setup.total })}
-              </p>
-              <h2 className="text-lg font-semibold">{nextStep.title}</h2>
-              <p className="max-w-xl text-sm text-muted-foreground">{nextStep.description}</p>
-              <div className="flex flex-wrap items-center gap-4">
-                <Button asChild size="lg">
-                  <Link href={nextStep.href}>{stepCta(dict, nextStep.key)}</Link>
-                </Button>
-                {/* The rail below shows the shape of the list but nothing in it
-                    is clickable; this is how you reach the list itself. */}
-                <Link href="/company/setup" className="text-sm underline underline-offset-4">
-                  {tOr(dict, 'home.step.see_list', 'See the whole checklist')}
-                </Link>
-              </div>
-            </CardContent>
-          </Card>
+          {/* Suppressed while the website is the outstanding step: the prompt
+              above is that step, asked properly, with somewhere to answer. */}
+          {nextStepIsWebsite ? null : (
+            <Card>
+              <CardContent className="space-y-4 p-6">
+                <p className="text-xs uppercase tracking-wider text-muted-foreground">
+                  {t(dict, 'home.step.progress', { current: stepNumber, total: setup.total })}
+                </p>
+                <h2 className="text-lg font-semibold">{nextStep.title}</h2>
+                <p className="max-w-xl text-sm text-muted-foreground">{nextStep.description}</p>
+                <div className="flex flex-wrap items-center gap-4">
+                  <Button asChild size="lg">
+                    <Link href={nextStep.href}>{stepCta(dict, nextStep.key)}</Link>
+                  </Button>
+                  {/* The rail below shows the shape of the list but nothing in
+                      it is clickable; this is how you reach the list itself. */}
+                  <Link href="/company/setup" className="text-sm underline underline-offset-4">
+                    {tOr(dict, 'home.step.see_list', 'See the whole checklist')}
+                  </Link>
+                </div>
+              </CardContent>
+            </Card>
+          )}
           <StepRail setup={setup} />
         </div>
       ) : null}
@@ -493,8 +571,8 @@ export default async function CompanyOverview() {
               the children because a grid child defaults to `min-width:auto`,
               and one long unanswered question would otherwise stretch its
               column and push the whole page past the viewport. */}
-          <div className={`grid gap-6 [&>*]:min-w-0 ${setupIncomplete ? 'lg:grid-cols-3' : ''}`}>
-            <div className={`space-y-6 ${setupIncomplete ? 'lg:col-span-2' : ''}`}>
+          <div className={`grid gap-6 [&>*]:min-w-0 ${showFinishSetup ? 'lg:grid-cols-3' : ''}`}>
+            <div className={`space-y-6 ${showFinishSetup ? 'lg:col-span-2' : ''}`}>
               {/* Only worth showing once there is a week to describe. A live
                   tenant reading this because of an old uncontacted enquiry
                   would otherwise get four honest zeroes. */}
@@ -503,12 +581,18 @@ export default async function CompanyOverview() {
                 <UnansweredQuestions summary={summary} dict={dict} />
               ) : null}
             </div>
-            {setupIncomplete ? (
+            {showFinishSetup ? (
               <div className="lg:sticky lg:top-6 lg:self-start">
                 <FinishSetup setup={setup} dict={dict} />
               </div>
             ) : null}
           </div>
+
+          {/* Last on the board, and deliberately so. Everything above it is
+              either a customer waiting or a number about this week; a missing
+              website import is neither, and putting it over the queue would be
+              the product interrupting the owner's morning to ask for a favour. */}
+          {websitePrompt}
         </div>
       ) : null}
     </div>

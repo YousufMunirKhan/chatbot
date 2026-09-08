@@ -10,7 +10,20 @@ import { importWebsiteOnboardingAction, type WebsiteImportState } from '../knowl
 
 const initial: WebsiteImportState = {};
 
-export function WebsiteOnboardingForm() {
+export interface WebsiteOnboardingFormProps {
+  /**
+   * The address already on `companies.website`, if there is one.
+   *
+   * An address on file is NOT evidence that anything was crawled — an operator
+   * can type one onto a company that has never been read, and the first live
+   * tenant is exactly that. So it is a starting value for the box and nothing
+   * more: the owner confirms an address instead of retyping it, and the import
+   * itself still has to happen.
+   */
+  defaultUrl?: string | null;
+}
+
+export function WebsiteOnboardingForm({ defaultUrl }: WebsiteOnboardingFormProps = {}) {
   const [state, action] = useFormState(importWebsiteOnboardingAction, initial);
 
   return (
@@ -31,6 +44,7 @@ export function WebsiteOnboardingForm() {
             type="url"
             inputMode="url"
             placeholder="https://example.com"
+            defaultValue={defaultUrl ?? undefined}
             required
           />
         </FormField>
