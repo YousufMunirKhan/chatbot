@@ -709,8 +709,21 @@ export function WidgetDesignStudio({
                 and the hint states that reading direction does not move it.
                 The submitted field name stays `position` with values right/left.
               */}
+              {/*
+                The label says "left or right" out loud. It used to be "Launcher
+                corner" alone, which is more precise and which nobody could find:
+                an owner looking for this setting searches the page for the words
+                left and right, and a heading that avoids both reads as a
+                different setting entirely.
+
+                It does not reintroduce the RTL ambiguity the comment above is
+                about, because the two options still name the visitor's screen
+                explicitly and the hint still says reading direction does not
+                move it. The words are in the label to be findable; the meaning
+                is still carried by the options.
+              */}
               <FormField
-                label="Launcher corner"
+                label="Launcher corner — left or right"
                 htmlFor="position"
                 hint="The fixed corner of the visitor's browser window. Arabic (right-to-left) chats still open in this same corner."
               >
