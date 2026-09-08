@@ -137,6 +137,17 @@ run npm install --no-audit --no-fund >/dev/null 2>&1
 BUILD_DIR=.next-build
 run rm -rf "$BUILD_DIR"
 
+# Drop the previous build's generated route types before compiling.
+#
+# `tsconfig.json` includes both `.next/types` and `.next-build/types`, so a
+# build reads the route declarations of the build that is still serving. When a
+# route is renamed or removed, those stale declarations point at files that no
+# longer exist and the compile fails on the old build's types rather than the
+# new build's code — which is exactly what happened the first time a route was
+# renamed. They are build-time declarations only; the running server does not
+# read them, so removing them cannot disturb what is being served.
+run rm -rf .next/types
+
 if ! NEXT_DIST_DIR="$BUILD_DIR" run npm run build; then
   say ""
   say "BUILD FAILED — nothing was swapped or restarted, the old build is still serving."
