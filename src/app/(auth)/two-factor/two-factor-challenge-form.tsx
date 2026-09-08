@@ -50,17 +50,23 @@ export function TwoFactorChallengeForm() {
           placeholder={usingRecovery ? 'ABCDE-FGHIJ' : '123456'}
           maxLength={usingRecovery ? 13 : 7}
           required
+          // A code is read off a screen a character at a time, so it is set
+          // in tabular figures with the letters spaced — the same treatment
+          // the authenticator app itself uses.
+          className="text-center font-mono text-base tracking-[0.3em] tabular-nums"
         />
       </FormField>
 
       <FormMessage state={state} okText="" />
-      <SubmitButton className="w-full" pendingLabel="Checking…">
+      <SubmitButton size="lg" className="w-full" pendingLabel="Checking…">
         Continue
       </SubmitButton>
 
       <button
         type="button"
-        className="w-full text-sm text-muted-foreground underline underline-offset-4"
+        // Was `w-full` with no focus ring and no hit padding: a keyboard user
+        // tabbed onto an invisible target the width of the card.
+        className="mx-auto block rounded-sm px-2 py-1 text-sm text-muted-foreground underline underline-offset-4 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
         onClick={() => setUsingRecovery((value) => !value)}
       >
         {usingRecovery ? 'Use my authenticator app instead' : 'I do not have my phone'}

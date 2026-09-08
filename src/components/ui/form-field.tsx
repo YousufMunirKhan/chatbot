@@ -40,6 +40,23 @@ export interface FormFieldProps {
  *
  * Layout matches the two local `Field`s exactly (`space-y-1.5`, `text-xs`
  * muted hint), so migrating a call site is a rename, not a redesign.
+ *
+ * ## Two constraints worth knowing before you reach for it
+ *
+ * **It wires exactly ONE element child.** A fragment, a string, or two controls
+ * side by side are rendered untouched — no `id`, no `aria-describedby`, no
+ * `aria-invalid` — so the field silently loses its wiring rather than throwing.
+ * If you need a compound control (two selects making a date range, a radio set),
+ * do not fake it with a wrapper `<div>`: a `<label htmlFor>` pointing at a `div`
+ * labels nothing. Use a `<fieldset>` with a `<legend>`, which is what
+ * `widget-design-studio.tsx` and `intents-panel.tsx` already worked out.
+ *
+ * **The error is what makes the control look wrong.** Passing `error` sets
+ * `aria-invalid` on the child, and `Input`/`Textarea`/`Select` paint a red
+ * border and a red focus ring off that attribute. Before Module 24 the variant
+ * did not exist in the Tailwind config, so `error` announced the failure to a
+ * screen reader and showed a sighted user nothing but a line of small red text
+ * under a field that still looked perfectly fine.
  */
 export function FormField({
   label,
@@ -57,16 +74,30 @@ export function FormField({
   // Only a single element child can be wired up. Anything else (a fragment, a
   // string, several controls) is rendered untouched so the component degrades
   // to plain layout instead of throwing.
-  const control = React.isValidElement(children)
-    ? React.cloneElement(children as React.ReactElement<Record<string, unknown>>, {
-        id: (children.props as { id?: string }).id ?? htmlFor,
-        'aria-invalid': error ? true : (children.props as Record<string, unknown>)['aria-invalid'],
-        'aria-describedby':
-          [(children.props as Record<string, string | undefined>)['aria-describedby'], describedBy]
-            .filter(Boolean)
-            .join(' ') || undefined,
-      })
-    : children;
+  const childProps = React.isValidElement(children)
+    ? (children.props as Record<string, unknown>)
+    : null;
+
+  const control =
+    React.isValidElement(children) && childProps
+      ? React.cloneElement(children as React.ReactElement<Record<string, unknown>>, {
+          id: (childProps.id as string | undefined) ?? htmlFor,
+          'aria-invalid': error ? true : childProps['aria-invalid'],
+          // `required` marks the label with an asterisk, which a screen reader
+          // is told to ignore (it is `aria-hidden` — "star" is not a word anyone
+          // needs). So the asterisk alone announced nothing at all. Mirroring it
+          // onto the control is what makes "required" reach both audiences from
+          // the single prop. A child that already states its own wins, so a form
+          // using native `required` is unaffected.
+          'aria-required':
+            childProps['aria-required'] ??
+            (Boolean(childProps['required']) || required ? true : undefined),
+          'aria-describedby':
+            [childProps['aria-describedby'] as string | undefined, describedBy]
+              .filter(Boolean)
+              .join(' ') || undefined,
+        })
+      : children;
 
   return (
     <div className={cn('space-y-1.5', className)}>

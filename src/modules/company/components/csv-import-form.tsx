@@ -20,7 +20,14 @@ export function CsvImportForm() {
 
   return (
     <form action={action} className="space-y-4">
-      <FormField label="Import into" htmlFor="entity">
+      {/* This select decides which columns the paste below is read as, so it is
+          not an afterthought — and it had no hint at all, on a form whose only
+          other field is a wall of text. */}
+      <FormField
+        label="Import into"
+        htmlFor="entity"
+        hint="Pick this first — it decides which column names are looked for in what you paste."
+      >
         <Select name="entity" defaultValue="products">
           <option value="products">Products</option>
           <option value="orders">Orders</option>
@@ -33,6 +40,7 @@ export function CsvImportForm() {
         label="CSV data"
         htmlFor="csv"
         hint="Paste a header row followed by your data. Columns are matched by name."
+        required
       >
         <Textarea name="csv" rows={10} className="font-mono" placeholder={PLACEHOLDER} required />
       </FormField>

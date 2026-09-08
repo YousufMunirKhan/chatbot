@@ -55,7 +55,7 @@ export function StockUpdateForm({
             The new number goes to your shop straight away, and we record who changed it.
           </p>
         </div>
-        <SubmitButton size="sm" pendingLabel="Updating...">
+        <SubmitButton size="sm" pendingLabel="Updating…">
           Update stock
         </SubmitButton>
       </div>

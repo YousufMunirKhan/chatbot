@@ -16,6 +16,7 @@ import {
 } from '../billing-auto-topup-actions';
 import { runAutoTopUpNowAction, type ActionState as RunState } from '../auto-topup-actions';
 import { AddPaymentMethodButton } from './billing-portal-button';
+import { CHECKBOX, CHOICE_CARD, FIELD_GRID_NARROW } from './form-layout';
 
 /**
  * Automatic top-up, with the card picked instead of typed.
@@ -125,17 +126,48 @@ export function BillingAutoTopUpForm({
       ) : null}
 
       <form action={saveAction} className="space-y-4">
-        <label className="flex items-center gap-2 text-sm">
+        {/* The master switch, as a bordered target rather than a bare tick box:
+            it is the one control on this card that decides whether any of the
+            others do anything, and at 375px a 16px box beside a wrapping
+            sentence is both hard to see and hard to hit. */}
+        {/* This was `CHOICE_CARD`'s exact class string written out by hand,
+            minus the `[&>input]:mt-0.5` that puts the box on the cap-height of
+            the first line of a two-line label — so the one tick box on this
+            card sat 2px high against its own text while every other choice card
+            in the product sat right. Same treatment, taken from the constant. */}
+        <label className={CHOICE_CARD}>
           <input
             type="checkbox"
             name="isEnabled"
             defaultChecked={config?.isEnabled ?? false}
-            className="h-4 w-4 rounded border-input"
+            className={CHECKBOX}
           />
-          Top up automatically when my credit runs low
+          <span>
+            <span className="block font-medium">
+              Top up automatically when my credit runs low
+            </span>
+            <span className="block text-xs text-muted-foreground">
+              Off, your assistant simply stops replying once the credit runs out.
+            </span>
+          </span>
         </label>
 
-        <div className="grid gap-4 sm:grid-cols-3">
+        {/*
+          WHY THESE ARE NOT ONE ROW OF THREE
+          ----------------------------------
+          They were `sm:grid-cols-3`, so from 640px upward the card picker got a
+          third of the card's width and rendered options like
+          "Visa •••• 4242 · default · EXPIRED" into roughly 180px. A `<select>`
+          cannot wrap, so it clipped its own text — and the one word that
+          mattered, EXPIRED, was the end of the string and therefore the part
+          that disappeared.
+
+          Two numbers with an obvious relationship ("below X, add Y") belong
+          together on one line; the card is a different kind of answer and gets
+          its own full-width row. `FIELD_GRID_NARROW` still collapses both
+          numbers to one column on a phone.
+        */}
+        <div className={FIELD_GRID_NARROW}>
           <FormField
             label="Top up below (credits)"
             htmlFor="thresholdCredits"
@@ -147,12 +179,13 @@ export function BillingAutoTopUpForm({
               type="number"
               min={0}
               step={1}
+              inputMode="numeric"
               defaultValue={config?.thresholdCredits ?? 5}
             />
           </FormField>
 
           <FormField
-            label="Amount (£)"
+            label="Amount to add (£)"
             htmlFor="topupAmountDisplay"
             hint="Charged each time. Minimum £1."
           >
@@ -164,34 +197,35 @@ export function BillingAutoTopUpForm({
               type="number"
               min={1}
               step="0.01"
+              inputMode="decimal"
               value={amount}
               onChange={(event) => setAmount(event.currentTarget.value)}
             />
           </FormField>
-
-          <FormField
-            label="Card to charge"
-            htmlFor="stripePaymentMethodId"
-            hint={
-              options.length === 0
-                ? 'No card saved yet — add one to switch this on.'
-                : 'Saved on Stripe. This app never sees the card number.'
-            }
-          >
-            <Select
-              id="stripePaymentMethodId"
-              name="stripePaymentMethodId"
-              defaultValue={savedCardId ?? ''}
-            >
-              <option value="">No card — do not top up automatically</option>
-              {options.map((option) => (
-                <option key={option.id} value={option.id}>
-                  {option.label}
-                </option>
-              ))}
-            </Select>
-          </FormField>
         </div>
+
+        <FormField
+          label="Card to charge"
+          htmlFor="stripePaymentMethodId"
+          hint={
+            options.length === 0
+              ? 'No card saved yet — add one below to switch this on.'
+              : 'Saved on Stripe. This app never sees the card number.'
+          }
+        >
+          <Select
+            id="stripePaymentMethodId"
+            name="stripePaymentMethodId"
+            defaultValue={savedCardId ?? ''}
+          >
+            <option value="">No card — do not top up automatically</option>
+            {options.map((option) => (
+              <option key={option.id} value={option.id}>
+                {option.label}
+              </option>
+            ))}
+          </Select>
+        </FormField>
 
         <input type="hidden" name="topupAmountCents" value={toPence(amount)} readOnly />
 

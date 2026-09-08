@@ -5,6 +5,7 @@ import Image from 'next/image';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { cn } from '@/lib/utils';
+import { buttonVariants } from '@/components/ui/button';
 import {
   Sheet,
   SheetClose,
@@ -240,7 +241,29 @@ export function DesktopSidebar({
   const showAsImpersonating = Boolean(impersonating) && !onPlatform;
   const l = withDefaults(labels);
   return (
-    <aside className="hidden w-64 shrink-0 bg-brand-sidebar p-4 text-sidebar-fg shadow-xl md:block">
+    /*
+      Module 24: the sidebar is pinned and scrolls itself.
+
+      It used to be an ordinary flex item in `flex min-h-screen`, so it stretched
+      to the height of the PAGE. On the long screens — the inbox, reports, a
+      settings form — scrolling down to a control left the entire menu above the
+      top of the window, and getting back to it meant scrolling a thousand pixels
+      up. The company menu is eleven items in four groups; on a 700px laptop
+      viewport the last group was already below the fold before anyone scrolled
+      at all, with no way to reach it except by moving the whole page.
+
+      `md:h-screen` is what makes `sticky` work here: a flex item defaults to
+      `align-items: stretch`, and a stretched item has no free space to travel
+      inside, so `sticky` on its own would do nothing at all. An explicit height
+      opts it out of the stretch. `overflow-y-auto` then gives the menu its own
+      scrollbar for the case where the menu itself is taller than the window,
+      and `overscroll-contain` stops reaching the bottom of the menu from
+      handing the scroll on to the page behind it.
+
+      Mobile is untouched — this whole element is `hidden` below `md`, where the
+      drawer is the navigation.
+    */
+    <aside className="hidden w-64 shrink-0 bg-brand-sidebar p-4 text-sidebar-fg shadow-xl md:sticky md:top-0 md:block md:h-screen md:overflow-y-auto md:overscroll-contain">
       <div className="mb-6">
         <BrandMark brand={brand} href={brandHref} logoUrl={logoUrl} className="shadow-lg" />
         <WorkspaceIdentity brand={brand} impersonating={showAsImpersonating} labels={l} />
@@ -315,7 +338,12 @@ export function MobileNav({
           <button
             type="button"
             aria-label={l.openMenu}
-            className="inline-flex h-9 w-9 items-center justify-center rounded-md border hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+            // Module 24: was a hand-rolled `inline-flex h-9 w-9 … rounded-md
+            // border`, built by hand only because `Button`'s single square size
+            // was 40px. `icon-sm` is that size in the shared scale now, so the
+            // hamburger is the same object as every other 36px icon button —
+            // same border token, same radius, same focus ring.
+            className={buttonVariants({ variant: 'outline', size: 'icon-sm' })}
           >
             <svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
               <line x1="3" y1="6" x2="21" y2="6" />

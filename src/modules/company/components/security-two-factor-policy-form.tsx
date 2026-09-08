@@ -6,6 +6,7 @@ import { Alert } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { FormField } from '@/components/ui/form-field';
+import { CHECKBOX, CHOICE_CARD } from './form-layout';
 import { FormMessage } from '@/components/ui/form-message';
 import { Input } from '@/components/ui/input';
 import { SubmitButton } from '@/components/ui/submit-button';
@@ -56,7 +57,13 @@ export function SecurityTwoFactorPolicyForm({
 
   return (
     <Card>
-      <CardHeader className="flex flex-row items-center justify-between gap-3">
+      {/* `flex flex-row` without `space-y-0` left `CardHeader`'s own
+          `space-y-1.5` in place, which in a row is a 6px top margin on the
+          badge — visibly off the centre line `items-center` had just set. Every
+          header of this shape in the product had the same 6px error.
+          `flex-wrap`: at 375px the title here is a whole sentence, and an
+          unwrapped badge beside it was squeezed to two characters wide. */}
+      <CardHeader className="flex-row flex-wrap items-start justify-between gap-3 space-y-0">
         <CardTitle>Require two-step sign-in for everyone at {companyName}</CardTitle>
         <Badge variant={policy.required ? 'success' : 'secondary'}>
           {policy.required ? 'Required' : 'Not required'}
@@ -71,11 +78,11 @@ export function SecurityTwoFactorPolicyForm({
         </p>
 
         <form action={action} className="space-y-4">
-          <label className="flex items-start gap-3 rounded-md border p-3 text-sm">
+          <label className={CHOICE_CARD}>
             <input
               type="checkbox"
               name="required"
-              className="mt-0.5 h-4 w-4"
+              className={CHECKBOX}
               defaultChecked={policy.required}
               onChange={(event) => setRequired(event.currentTarget.checked)}
             />

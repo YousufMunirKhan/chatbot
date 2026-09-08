@@ -850,3 +850,368 @@ Every row below was verified against the reader, not just the writer.
 saved setting nothing read. The hedged hint that section 11 describes has been
 replaced with one that states what the choice does. The rest of section 11
 stands.
+
+---
+
+# Part four — the primitives (Module 24)
+
+Parts one to three moved pages around. This part is about the 29 things in
+`src/components/ui/` that every page is built out of, on the theory that a defect
+in a primitive is 70 defects on screens, and a primitive that is easy to misuse
+produces the same bug over and over in files nobody thinks are related.
+
+Nothing here is a new design system. The tokens, the type scale, the elevation
+rules and the radius scale from Module 22 are unchanged; this fixes things that
+were wrong inside them, and closes the gaps that were forcing pages to hand-roll.
+
+## 17. The one rule that keeps being broken
+
+**`sm:` `md:` `lg:` `xl:` measure the VIEWPORT. They tell you the width of the
+window. They tell you nothing about the box your component is in.**
+
+The proof is in the repo. A form was laid out `lg:grid-cols-4` inside a column
+about 500px wide. On a full-width screen `lg:` fired, each field got about 110px,
+and a `<select>` clipped its own text mid-word. Every viewport breakpoint said
+"plenty of room". There was none.
+
+This is not a rare mistake. About a third of the dashboard is two-column —
+`lg:grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)]` appears in a dozen pages — so
+about a third of the product has a narrow column that every `lg:` inside it will
+lie about.
+
+### What to use instead
+
+| Situation | Use |
+| --- | --- |
+| A grid of form fields, anywhere | `FieldGrid` |
+| A term/value list | `DescriptionList` — its `rows` variant wraps on the container |
+| Two halves that should stack when cramped | `flex flex-wrap` with a `basis-*` on each half |
+| A page-level shell: sidebar or no sidebar | `md:` — genuinely a viewport question |
+
+`FieldGrid` is `repeat(auto-fit, minmax(min(100%, 16rem), 1fr))`. The
+`min(100%, …)` clause is the part people leave out and the part that matters: it
+stops a 16rem floor from producing a 256px column inside a 200px parent and
+giving the page a horizontal scrollbar.
+
+`flex-wrap` + `basis` is the same idea without a grid. Flexbox wraps when the
+items no longer fit **their parent**, which is the actual question.
+
+### When a viewport breakpoint IS right
+
+When the thing you are asking about really is the window: whether the sidebar is
+on screen (`md:`), whether a drawer or a permanent nav is in play, whether the
+page has room for a second column at all. `PageHeader` uses `sm:` to decide
+whether its actions get their own line — correct, because it spans the page.
+
+There is now an `xs:` breakpoint at 400px, for the real gap between one phone
+column and 640px. It is defined in `theme.screens` rather than `theme.extend`
+because extending appends instead of sorting, which would emit the `xs:` media
+query after `2xl:` and let `xs:` quietly beat `sm:` at every width above 400px.
+
+## 18. The size scale
+
+Two heights. Every control has both, and they come from one file —
+`src/components/ui/control-styles.ts` — so they cannot drift.
+
+| Size | Height | `Button` | `Input` | `Select` | Use |
+| --- | ---: | :---: | :---: | :---: | --- |
+| `default` | 40px | yes | yes | yes | Forms |
+| `sm` | 36px | yes | yes | yes | Toolbars, filter bars |
+| `lg` | 44px | yes | — | — | Page-level call to action |
+
+Square icon buttons follow the same rhythm: `icon` 40px, `icon-sm` 36px,
+`icon-xs` 32px. All three clear the 24px WCAG 2.5.8 target minimum. **An
+icon-only button has no accessible name — always pass `aria-label`.**
+
+Before this, `Input` had exactly one height and no variant, so a 36px filter bar
+could not use it. `list-controls.tsx` carries a hand-written `inputCls` whose own
+comment reads "the one control that could not adopt its primitive", and
+`reports/page.tsx` hand-rolls two more at `h-9`. Those three can be deleted now
+in favour of `<Input size="sm">`; they live in files this pass does not own, so
+they are listed in section 22.
+
+`Textarea` deliberately has no size variant: the scale exists to line a control
+up with the button beside it in a row, and a multi-line box is never in that row.
+
+## 19. Composition traps, and what was done about each
+
+A primitive that bakes in a box — a height, a radius, a border, a padding — is
+fine on its own and dangerous the moment you put it inside another box. Every one
+of these is a bug that shipped.
+
+**`Input` inside a bordered wrapper gives two radii.** The password field was an
+input and a button inside a bordered `rounded-xl` flex row. `Input` carries its
+own `rounded-md`, so the control had one corner radius inside another. It looked
+fine empty and broke the instant a browser autofilled it, because autofill paints
+the `<input>` and not the wrapper. *Fixed by `PasswordInput`, which is the pattern
+to copy: a `relative` wrapper with no box of its own, the trailing control
+`absolute inset-y-px end-px` inside the input's own border, and room reserved with
+`pe-*` rather than by shrinking the input.*
+
+**`rounded-e-[inherit]` inherits from the wrong element.** `border-radius:
+inherit` takes the PARENT's computed radius, and `PasswordInput`'s parent is that
+bare `relative` wrapper, which deliberately has none — so it resolved to `0` and
+the reveal button's focus ring drew a square corner over the input's rounded one.
+*Fixed: `rounded-e-md`, stated rather than inherited.*
+
+**`CardContent` bakes `pt-0`,** which is right under a `CardHeader` and wrong
+without one. 88 call sites use `<Card><CardContent>` and 85 pass their own
+padding — the workaround wearing a hat. *Documented rather than changed, because
+changing the default silently re-spaces 88 screens mid-flight. A new card with no
+header wants `<CardContent className="pt-6">`.*
+
+**`Card` inside `Card` gives two borders and two radii,** and on a `bg-card` page
+the inner surface is invisible, so all that shows is the doubled edge.
+*Documented in the file. For a panel inside a card use `rounded-md border
+bg-muted/30`, the same treatment `TAB_HELPER` uses.*
+
+**`leading-none` collides the moment text wraps.** It was on `Label`,
+`CardTitle`, `DialogTitle` and `AlertDialogTitle` — all four of which wrap
+constantly, in a 360px sidebar, a three-up grid, or any screen at 375px. A line
+box exactly the height of the font puts one line's descenders into the next
+line's ascenders. *Fixed: `leading-tight` on all four.*
+
+**`Table`'s wrapper is what stops the page scrolling sideways.** A `<table>` will
+not shrink below its widest word, so a six-column table with a webhook URL in it
+is wider than a phone. Never remove the wrapper, and never put a table in a grid
+track without `min-w-0` — the track widens to the table instead, and then the
+page scrolls.
+
+## 20. What was actually broken
+
+Ordered by how badly it failed, not by how big the diff is.
+
+1. **`aria-invalid` was invisible.** `FormField` sets it on every control it
+   wraps that has an `error`. But `aria-invalid` is **not** one of Tailwind's
+   nine built-in `aria-*` variants (busy, checked, disabled, expanded, hidden,
+   pressed, readonly, required, selected), so `aria-invalid:border-danger`
+   compiled to nothing at all. Every failed field in the product announced its
+   error to a screen reader and showed a sighted user a line of small red text
+   under a field that still looked perfectly normal. *Registered the variant in
+   `tailwind.config.ts`; `Input`, `Select` and `Textarea` carry a red border and
+   a red focus ring off it now, with no opt-in at the call site.*
+
+2. **Browser autofill had no dark mode.** Chrome, Edge and Safari paint an
+   autofilled field with their own pale yellow, from a UA style on a pseudo-class
+   that beats every class on the element. In dark mode that is a near-white field
+   in the middle of a dark form — and because the UA overrides the background but
+   not the text colour, the value can come out white-on-white. This is the same
+   class of bug as the password field: correct while empty, wrong the moment a
+   real browser touches it. *Fixed globally in `globals.css` with the
+   inset-box-shadow technique plus `-webkit-text-fill-color`, both from tokens,
+   so it resolves per theme.*
+
+3. **A linked `StatTile` had no focus indicator at all.** The ring lives on
+   `Card`'s children, not on the `<Link>` wrapping it, so tabbing through a stat
+   grid looked like the page doing nothing. *Fixed.*
+
+4. **The `Sheet`'s close button scrolled away.** The panel was the scroll
+   container and the close control was `absolute` inside it — and an absolutely
+   positioned child of a scroll container is placed in that container's
+   *unscrolled* coordinates, so it travels with the content. Open the mobile menu
+   on a phone, scroll to the bottom, and the visible way out is above the top of
+   the drawer. Escape and the scrim still worked, which is exactly why it
+   survived. *Fixed: the panel is `overflow-hidden` and an inner wrapper scrolls,
+   so the close control stays pinned to the panel.*
+
+5. **The password reveal was unreachable from the keyboard.** `tabIndex={-1}` is
+   the usual shortcut for keeping Tab going straight from the password to the
+   submit button, but revealing a password is functionality, and functionality a
+   mouse can reach and a keyboard cannot is a WCAG 2.1.1 failure — on the one
+   control a user who has just mistyped their password most needs. *Removed;
+   `aria-pressed` already reported its state.*
+
+6. **`PageHeader`'s actions overflowed at 375px.** `Button` is
+   `whitespace-nowrap`, so a row of them has a max-content width it cannot go
+   below; the container was `shrink-0`, so it kept that width, wrapped onto its
+   own line, and then ran off the edge of that line — a wrapped flex item is
+   sized by its content, not by the line it landed on. *Fixed: it may shrink, and
+   below `sm` it takes a full-width line deliberately.*
+
+7. **The desktop sidebar scrolled off the top of the page.** It was a plain flex
+   item inside `flex min-h-screen`, so it stretched to the height of the whole
+   page. On the inbox, or reports, or a long settings form, scrolling to a control
+   left the entire menu above the viewport. The company menu is eleven items in
+   four groups, so on a 700px laptop the last group was below the fold before
+   anyone scrolled at all. *Fixed: `md:sticky md:top-0 md:h-screen
+   md:overflow-y-auto`. The explicit height is load-bearing — a stretched flex
+   item has no free space to travel in, so `sticky` on its own does nothing.*
+
+8. **`InfoHint`'s panel ran off the screen.** 256px hung from the leading edge of
+   a trigger near the trailing edge of the page put its text past the viewport,
+   with no collision handling at all. *Fixed: it measures once on open and flips
+   to the other edge, correctly in both writing directions.*
+
+9. **A failed clipboard copy looked exactly like a success.** `CopyButton`
+   catches the rejection and does nothing with it. `navigator.clipboard` is
+   `undefined` outside a secure context — which throws *synchronously* rather
+   than rejecting, so the existing catch would not even have run — and rejects
+   outright when the document is not focused or permission is denied. The user
+   pressed Copy, saw "Copy", and pasted whatever they had copied an hour ago.
+   *`CopyField` says so, selects the text so Ctrl+C still works, and announces
+   both outcomes in a live region.*
+
+10. **`Textarea` could be resized into a horizontal scrollbar.** The default is
+    resizable on both axes, and the user's drag lands as an inline pixel `width`
+    that beats every class on the element, permanently. Widen one inside a card
+    and the card overflows its grid column and the page scrolls sideways for
+    good. *Fixed: `resize-y`. Vertical is the part people actually want.*
+
+11. **The tab underline stopped after the last tab.** `min-w-max` sizes the rail
+    to its content, so on a two-tab screen the rule looked cut off rather than
+    like a rail the tabs sit on — and it was a different length on every screen.
+    *Fixed: `w-max min-w-full`. Both are needed: `w-max` alone collapses to
+    content, `min-w-full` alone lets a long rail wrap onto two lines.*
+
+12. **`animate-pulse` ignored `prefers-reduced-motion`.** It is an infinite
+    animation, so the existing reduced-motion block — which only shortens
+    animations that end — never touched it. A user who asked for less motion sat
+    in front of a page of boxes breathing at them for the whole load. *Fixed in
+    `globals.css`, along with the colour and width transitions.*
+
+13. **`Progress` used `transition-all`,** which also animates
+    `background-color`: a bar crossing a threshold faded between two colours over
+    150ms, and every bar on the page rippled on a theme switch. A sub-1% fill
+    also rounded to a sub-pixel width, so "two of five hundred done" and "none
+    done" rendered identically. *Fixed: `transition-[width]`, and a 2px floor on
+    any non-zero value.*
+
+14. **`InfoHint`'s panel was transparent.** It painted itself with `bg-popover
+    text-popover-foreground` — two class names from the stock shadcn token set
+    that this product deliberately never adopted. `--popover` appears nowhere in
+    `globals.css` and `popover` appears nowhere in `tailwind.config.ts`, so both
+    utilities compiled to **nothing at all**, and the panel has been a bordered,
+    shadowed rectangle with the page showing straight through it and its own
+    text overlapping whatever sat behind. *Fixed: `bg-card text-card-foreground`,
+    which is the surface `Popover` and `Dialog` already use and is defined in
+    both themes.*
+
+    A sweep for the same failure across all of `src/` — every colour utility used
+    anywhere, checked against the compiled stylesheet — found these two and
+    nothing else. The rule that catches it: **a colour name that is not in
+    `tailwind.config.ts` fails silently.** There is no error, no warning and no
+    type. It is worth re-running that check after any token change.
+
+Smaller, same pass: `Badge` gained `align-middle` (it rode 3px low inside a
+sentence) and `max-w-full break-words` (it could not shrink inside a narrow table
+cell); `StatTile` values gained `break-words tabular-nums` (a formatted count has
+no break opportunity in it and widened its own track) and `h-full` (a linked tile
+stopped stretching to match its neighbours); `Table`'s wrapper moved from
+`overflow-auto` to `overflow-x-auto`; the tab scroller gained
+`overscroll-x-contain`, so flicking to the end of a rail no longer hands the
+gesture to the browser as a Back navigation.
+
+## 21. The five things pages were hand-rolling
+
+Built because they are genuinely repeated three or more times — counted out of
+`src/`, not imagined.
+
+| New | Replaces | Count |
+| --- | --- | ---: |
+| `SectionHeader` | a hand-styled `<h2>`/`<h3>` plus a description | 38 |
+| `FieldGrid` | `grid gap-4 md:grid-cols-2 lg:grid-cols-4` inside a card | 52 `lg:grid-cols-*` |
+| `CopyField` | `<code>` + `CopyButton` in a flex row | 8 |
+| `DescriptionList` | a hand-written `<dl>` | 8 |
+| `Stepper` | `StepRail`, `ChecklistRow`, and the marketing journey | 3 |
+
+`SectionHeader` takes `size` and `level` separately on purpose: how big a heading
+looks and where it sits in the document outline are different questions, and
+conflating them is why several `<h2>`s currently sit inside a card whose
+`CardTitle` is already an `<h2>` — two peers in the outline where there is
+visibly one section inside another. `size="eyebrow"` is small, quiet, and still a
+real `<h3>`. The 38 hand-written ones use four different type treatments for one
+job, and their descriptions are sometimes `text-sm` and sometimes `text-xs`.
+
+`Stepper` is the one the onboarding work should build on. Two variants — `rail`
+(compact progress) and `list` (the checklist, with a control per row) — from one
+set of statuses, so the two screens describing the same five steps stop
+describing them differently. It enforces the rule all three existing copies only
+half-kept: **colour is never the only signal.** A completed step is green AND
+ticked AND says "Done"; the current one is emphasised AND carries
+`aria-current="step"` AND says "Do this next". The number is `aria-hidden`,
+because the list already announces "3 of 5".
+
+`CopyField` is a client component; everything else in this group is a server
+component and works inside `<form action={serverAction}>` with no JavaScript.
+
+## 22. Left for the owners of those files
+
+Every item below is a call site, not a primitive, and lives in a file this pass
+does not own.
+
+- `src/modules/company/components/list-controls.tsx` — delete `inputCls` (lines
+  15–18) and use `<Input size="sm" type="text" name="q" … className="w-56" />`.
+  The comment above it explaining why it could not use the primitive is now out
+  of date.
+- `src/app/(dashboard)/company/reports/page.tsx:1390` and `:1404` — two
+  hand-rolled `h-9 rounded-md border border-input …` inputs; same fix.
+- `src/components/copy-button.tsx` — the silent-failure copy button. Either move
+  its call sites to `CopyField`, or port the failure branch into it. Eight files
+  import it.
+- `src/app/(marketing)/customer-onboarding/page.tsx:254` — step markers, now on
+  `bg-primary` after a parallel pass fixed the raw `bg-emerald-100` /
+  `bg-blue-100` they used to carry. The colour is right and the measurements are
+  a fourth set; `Stepper variant="rail"` is this shape.
+- `src/modules/company/components/flow-builder.tsx:803,816` and
+  `flow-inspector.tsx:132,143,154` — `size="sm" className="h-7 w-7 p-0"`. Now
+  `size="icon-xs"`, and each needs an `aria-label`.
+- `src/app/(dashboard)/company/help-desk/page.tsx:895` and
+  `helpdesk-chat-preview.tsx` — hardcoded `bg-violet-50` / `text-[#5b3ff4]` /
+  `text-slate-*`, which have no dark-mode value. They need tokens; if the helpdesk
+  really does want a colour the system does not have, that is a new token and
+  should be argued for rather than inlined.
+- **Wide tables are not keyboard-scrollable.** A scroll container with no
+  focusable child cannot be scrolled by keyboard (WCAG 2.1.1). The fix is
+  `tabIndex={0}` plus a real `aria-label` on the wrapper — but only on the few
+  tables that genuinely overflow, not on all 35, because each of the others would
+  become an unnamed tab stop. Needs deciding per table.
+- **`InfoHint` inside a `<TableHead>` will be clipped.** `Table`'s scroller is a
+  clipping context on both axes: setting `overflow-x` alone does not help,
+  because CSS computes the other axis from `visible` to `auto` whenever its
+  partner is not `visible`. No call site does this today — `reports/page.tsx`
+  uses it on card headings, which is correct. If one is ever needed, `Popover` is
+  already in the system and already portals.
+
+## 23. Two passes reached the same conclusion — converge them
+
+While this pass was running, another produced
+`src/modules/company/components/form-layout.ts`, which is the same idea as
+`FieldGrid` arrived at independently from the same evidence: viewport
+breakpoints lie about containers, and `repeat(auto-fit, minmax(<floor>, 1fr))`
+is the honest version. Its file comment reaches the identical diagnosis, down to
+naming the clipped `<select>`. That agreement is worth more than either
+implementation, and it is also a fork: two ways to lay out a form row is exactly
+the "same job, two grammars" problem this whole document exists to close.
+
+**They are not equivalent, and the difference is a live bug.**
+
+`form-layout.ts` uses `minmax(16rem, 1fr)`. A grid track with a fixed `16rem`
+floor does not shrink below 256px, so inside a container narrower than that the
+grid overflows its parent and the page scrolls sideways. `FIELD_GRID` (16rem) is
+usually safe by luck — a 375px phone leaves about 295px of content inside a
+card — but `FIELD_GRID_WIDE` (20rem = 320px) is wider than that content box, so
+any form using it overflows at 375px. It is live:
+`src/modules/company/components/connect-integration-form.tsx:247` uses it for
+the two fields holding a URL and a bearer token. `CHOICE_GRID` (17rem = 272px)
+is within about 20px of doing the same inside a nested panel, and it has nine
+call sites.
+
+`FieldGrid` uses `minmax(min(100%, 16rem), 1fr)`. The `min(100%, …)` clause caps
+the floor at the container's own width, so the grid drops to one column instead
+of overflowing. It is the whole difference between "responsive" and "responsive
+until it isn't".
+
+Suggested convergence, in order of preference:
+
+1. Point `form-layout.ts`'s four constants at `FieldGrid`'s `min` values and
+   have call sites use the component, which also carries the `gap` rhythm.
+2. Failing that, add the clause in place — `minmax(min(100%,16rem),1fr)`, and the
+   same for 20rem, 11rem and 17rem. This is a one-line change per constant and
+   removes the overflow whatever else is decided.
+
+`FORM_SECTION_TITLE` / `FORM_SECTION_HINT` in the same file overlap with
+`SectionHeader` the same way, and reached the same answer (`text-base
+font-semibold`, the majority style). `SectionHeader` additionally renders a real
+`<h2>`/`<h3>` with the level stated separately from the size, which a class
+constant cannot do — and a missing heading level is invisible until someone
+navigates by headings. Prefer the component.

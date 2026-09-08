@@ -11,6 +11,11 @@ export interface ProgressProps extends Omit<React.HTMLAttributes<HTMLDivElement>
   /**
    * What the bar is measuring, for assistive tech. Required unless the bar is
    * already labelled by a visible element via `aria-labelledby`.
+   *
+   * Without one, a screen reader announces "progress bar, 62 percent" with no
+   * statement of 62 percent of WHAT — which is the same as announcing nothing.
+   * There is no lint rule for this; `aria-labelledby` pointing at the visible
+   * caption you have almost certainly already written is the better of the two.
    */
   label?: string;
 }
@@ -53,8 +58,23 @@ const Progress = React.forwardRef<HTMLDivElement, ProgressProps>(
         className={cn('h-2 w-full overflow-hidden rounded-full bg-muted', className)}
         {...props}
       >
+        {/*
+          `transition-[width]`, not `transition-all` (Module 24). `all` also
+          animates `background-color`, so a bar that crosses a threshold and
+          changes tone fades between two colours over 150ms — which reads as the
+          bar being unsure. It also animates on the theme switch, where every
+          token changes at once and the whole page ripples.
+
+          `min-w-[2px]` when there is anything at all to show: a 0.4% fill
+          rounded to a sub-pixel width renders as nothing, so "one of two hundred
+          done" and "none done" looked identical.
+        */}
         <div
-          className={cn('h-full rounded-full transition-all', TONES[tone])}
+          className={cn(
+            'h-full rounded-full transition-[width] duration-300',
+            percent > 0 && 'min-w-[2px]',
+            TONES[tone],
+          )}
           style={{ width: `${percent}%` }}
         />
       </div>

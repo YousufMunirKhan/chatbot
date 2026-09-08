@@ -67,14 +67,26 @@ export default async function WidgetPage() {
           const embed = `<script src="${env.NEXT_PUBLIC_WIDGET_URL}" data-bot-id="${bot.publicBotId}"></script>`;
           return (
             <Card key={bot.id}>
-              <CardHeader className="flex-row items-center justify-between">
+              {/* `CardHeader` is `flex flex-col space-y-1.5`; overriding only
+                  `flex-row` left the `space-y-1.5` behind, so the link pair got
+                  a 6px top margin and sat off the centre line `items-center`
+                  had just put them on. `space-y-0` removes it, and `flex-wrap`
+                  stops a long assistant name crushing both links at 375px. */}
+              <CardHeader className="flex-row flex-wrap items-center justify-between gap-x-4 gap-y-2 space-y-0">
                 <CardTitle className="text-base">{bot.name}</CardTitle>
-                <div className="flex items-center gap-4 text-sm">
-                  <Link href="/company/business-data?tab=knowledge" className="text-primary hover:underline">
+                <div className="flex flex-wrap items-center gap-4 text-sm">
+                  <Link
+                    href="/company/business-data?tab=knowledge"
+                    className="text-primary hover:underline"
+                  >
                     Add data
                   </Link>
-                  <Link href={`/company/bots/${bot.id}/settings`} className="text-primary hover:underline">
+                  <Link
+                    href={`/company/bots/${bot.id}/settings`}
+                    className="text-primary hover:underline"
+                  >
                     Full settings
+                    <span className="sr-only"> for {bot.name}</span>
                   </Link>
                 </div>
               </CardHeader>

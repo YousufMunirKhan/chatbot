@@ -7,6 +7,7 @@ import { FormMessage } from '@/components/ui/form-message';
 import { Input } from '@/components/ui/input';
 import { Select } from '@/components/ui/select';
 import { SubmitButton } from '@/components/ui/submit-button';
+import { FIELD_GRID } from './form-layout';
 import { Textarea } from '@/components/ui/textarea';
 import { saveReportScheduleAction, type ActionState } from '@/modules/company/reports-actions';
 
@@ -93,7 +94,7 @@ export function ReportScheduleForm({
         />
       </FormField>
 
-      <div className="grid gap-4 sm:grid-cols-2">
+      <div className={FIELD_GRID}>
         <FormField
           label="Which section"
           htmlFor="schedule-tab"
@@ -123,7 +124,7 @@ export function ReportScheduleForm({
         </FormField>
       </div>
 
-      <div className="grid gap-4 sm:grid-cols-3">
+      <div className={FIELD_GRID}>
         <FormField label="How often" htmlFor="schedule-frequency">
           <Select
             id="schedule-frequency"

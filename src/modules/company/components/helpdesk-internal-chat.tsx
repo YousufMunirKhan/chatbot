@@ -347,7 +347,7 @@ export function HelpdeskInternalChat({
   }
 
   return (
-    <div className="rounded-lg border bg-white shadow-sm">
+    <div className="rounded-lg border bg-card shadow-sm">
       <div className="flex flex-col gap-3 border-b p-4 md:flex-row md:items-center md:justify-between">
         <div>
           <h2 className="font-semibold">Ask the Help Desk</h2>
@@ -386,7 +386,11 @@ export function HelpdeskInternalChat({
       <div className="grid gap-4 p-4 lg:grid-cols-[minmax(0,1fr)_320px] [&>*]:min-w-0">
         <div className="space-y-4">
           {connectorHealthAlerts.length ? (
-            <div className="rounded-md border border-amber-200 bg-amber-50 p-3 text-sm text-amber-950">
+            // `border-amber-200 bg-amber-50 text-amber-950` is the warning tone
+            // written out in raw palette values, none of which are defined in
+            // dark mode — this panel stayed pale yellow with near-black text on
+            // a dark help desk. The triplet is the same look, in both themes.
+            <div className="rounded-md border border-warning-border bg-warning-bg p-3 text-sm text-warning-fg">
               <div className="flex items-center gap-2 font-semibold">
                 <AlertTriangle className="h-4 w-4" />
                 Trouble reaching your shop system
@@ -395,22 +399,25 @@ export function HelpdeskInternalChat({
                 {connectorHealthAlerts.slice(0, 3).map((alert) => (
                   <div
                     key={alert.id}
-                    className="rounded-md border border-amber-200 bg-white/60 p-2"
+                    // `bg-white/60` over a tinted surface: white is not a token
+                    // and in dark mode this was a translucent white plate.
+                    // `bg-background/60` is the page's own ground in either.
+                    className="rounded-md border border-warning-border bg-background/60 p-2"
                   >
                     <p className="font-medium">
                       {alert.name}: {alert.message}
                     </p>
-                    <p className="text-xs text-amber-900">
+                    <p className="text-xs opacity-90">
                       {companyLabel('connectionState', alert.state)}. Anything your team asks for
                       may sit waiting until this is back online.
                     </p>
                     {alert.lastError ? (
-                      <p className="mt-1 text-xs text-destructive">{alert.lastError}</p>
+                      <p className="mt-1 text-xs text-danger-fg">{alert.lastError}</p>
                     ) : null}
                   </div>
                 ))}
                 {connectorHealthAlerts.length > 3 ? (
-                  <p className="text-xs text-amber-900">
+                  <p className="text-xs opacity-90">
                     {connectorHealthAlerts.length - 3} more connector warning(s) hidden.
                   </p>
                 ) : null}
@@ -422,7 +429,10 @@ export function HelpdeskInternalChat({
             targeting empty to allow all staff screens, then block only screens like login or
             checkout.
           </div>
-          <div className="h-[420px] overflow-y-auto rounded-md border bg-slate-50 p-3">
+          {/* `bg-slate-50` is a light-mode-only grey. `bg-muted/40` is the
+              inset surface the rest of the product uses for a scroll region,
+              and it exists in dark mode. */}
+          <div className="h-[420px] overflow-y-auto rounded-md border bg-muted/40 p-3">
             <div className="space-y-3">
               {messages.map((message, index) => (
                 <div
@@ -434,14 +444,18 @@ export function HelpdeskInternalChat({
                   className={
                     message.role === 'staff'
                       ? 'ms-auto max-w-[82%] rounded-md bg-primary p-3 text-sm text-primary-foreground'
-                      : 'me-auto max-w-[88%] rounded-md bg-white p-3 text-sm leading-6 shadow-sm'
+                      // `bg-white` on a message bubble sitting inside a
+                      // `bg-muted/40` scroll region: in dark mode the bubble
+                      // stayed white and its own dark text with it. `bg-card`
+                      // is the raised surface in both themes.
+                      : 'me-auto max-w-[88%] rounded-md bg-card p-3 text-sm leading-6 shadow-sm'
                   }
                 >
                   {message.text}
                 </div>
               ))}
               {loading ? (
-                <div className="me-auto inline-flex items-center gap-2 rounded-md bg-white p-3 text-sm text-muted-foreground shadow-sm">
+                <div className="me-auto inline-flex items-center gap-2 rounded-md bg-card p-3 text-sm text-muted-foreground shadow-sm">
                   <Loader2 className="h-4 w-4 animate-spin" />
                   Looking it up
                 </div>
@@ -455,7 +469,10 @@ export function HelpdeskInternalChat({
                 type="button"
                 onClick={createTicket}
                 disabled={ticketLoading}
-                className="inline-flex items-center gap-1 rounded-full border border-amber-300 bg-amber-50 px-3 py-1.5 text-xs font-semibold text-amber-950 hover:bg-amber-100 disabled:opacity-60"
+                // Raw amber → the warning triplet. This is a real action, so it
+                // also needed the focus ring every other control in the product
+                // has; it had none at all.
+                className="inline-flex items-center gap-1 rounded-full border border-warning-border bg-warning-bg px-3 py-1.5 text-xs font-semibold text-warning-fg hover:brightness-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:opacity-60"
               >
                 {ticketLoading ? (
                   <Loader2 className="h-3.5 w-3.5 animate-spin" />
@@ -468,7 +485,7 @@ export function HelpdeskInternalChat({
             {ticketHref ? (
               <a
                 href={ticketHref}
-                className="inline-flex items-center gap-1 rounded-full border bg-emerald-50 px-3 py-1.5 text-xs font-semibold text-emerald-900 hover:bg-emerald-100"
+                className="inline-flex items-center gap-1 rounded-full border border-success-border bg-success-bg px-3 py-1.5 text-xs font-semibold text-success-fg hover:brightness-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
               >
                 <LifeBuoy className="h-3.5 w-3.5" />
                 Open ticket
@@ -484,7 +501,7 @@ export function HelpdeskInternalChat({
                 key={pill.id}
                 type="button"
                 onClick={() => ask(pill.message)}
-                className="inline-flex items-center gap-1 rounded-full border bg-white px-3 py-1.5 text-xs font-medium hover:bg-muted"
+                className="inline-flex items-center gap-1 rounded-full border bg-card px-3 py-1.5 text-xs font-medium hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
               >
                 <Sparkles className="h-3.5 w-3.5 text-primary" />
                 {pill.label}
@@ -601,7 +618,11 @@ export function HelpdeskInternalChat({
                 ))}
               </div>
               {activeAction.needsConfirmation ? (
-                <label className="mt-3 flex items-start gap-2 rounded-md border border-amber-200 bg-amber-50 p-2 text-xs text-amber-950">
+                // This tick box is the last thing between a member of staff and
+                // a real write to the shop's live system, so it stays a warning
+                // surface — on the tokens, which is what makes it visible in
+                // dark mode too.
+                <label className="mt-3 flex items-start gap-2 rounded-md border border-warning-border bg-warning-bg p-2 text-xs text-warning-fg">
                   <input
                     type="checkbox"
                     checked={actionConfirmed}

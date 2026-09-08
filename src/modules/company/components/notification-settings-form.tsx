@@ -2,8 +2,10 @@
 
 import Link from 'next/link';
 import { useState } from 'react';
-import { useFormState, useFormStatus } from 'react-dom';
-import { Button } from '@/components/ui/button';
+import { useFormState } from 'react-dom';
+import { Alert } from '@/components/ui/alert';
+import { FormMessage } from '@/components/ui/form-message';
+import { SubmitButton } from '@/components/ui/submit-button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import {
@@ -14,17 +16,10 @@ import { type CompanyNotificationSettingsView } from '../notification-settings';
 import { DELIVERY_CHANNELS, NOTIFICATION_EVENTS } from '../notification-options';
 import { FormField } from '@/components/ui/form-field';
 import { Select } from '@/components/ui/select';
+import { cn } from '@/lib/utils';
+import { CHECKBOX, CHOICE_CARD, FIELD_GRID, FORM_SECTION_TITLE, FULL_ROW } from './form-layout';
 
 const initial: NotificationSettingsActionState = {};
-
-function SubmitButton() {
-  const { pending } = useFormStatus();
-  return (
-    <Button type="submit" disabled={pending}>
-      {pending ? 'Saving...' : 'Save notification settings'}
-    </Button>
-  );
-}
 
 export function NotificationSettingsForm({
   settings,
@@ -39,30 +34,40 @@ export function NotificationSettingsForm({
 
   return (
     <form action={formAction} className="space-y-8">
-      <label className="flex items-center gap-2 rounded-md border p-3 text-sm">
+      {/* The master switch for everything below it, previously a bare tick box
+          with a 13-word sentence beside it and no visual weight at all — it read
+          as the first of many settings rather than as the one that turns the
+          rest on. */}
+      <label className={cn(CHOICE_CARD, 'items-start')}>
         <input
           type="checkbox"
           name="notificationsEnabled"
           defaultChecked={settings.notificationsEnabled}
-          className="h-4 w-4"
+          className={CHECKBOX}
         />
-        Enable outbound notifications for new leads, bookings, orders, and handoff requests
+        <span>
+          <span className="block font-medium">Send me alerts</span>
+          <span className="block text-xs text-muted-foreground">
+            New enquiries, bookings, orders, and any chat the assistant hands to a person. Off,
+            nothing below is sent at all.
+          </span>
+        </span>
       </label>
 
       <section className="space-y-4">
         <div>
-          <h2 className="text-base font-semibold">Email</h2>
+          <h2 className={FORM_SECTION_TITLE}>Email</h2>
           <p className="text-sm text-muted-foreground">
             Use the platform sender, or let this company send from its own SMTP account.
           </p>
         </div>
-        <div className="grid gap-4 sm:grid-cols-2">
-          <label className="flex items-center gap-2 rounded-md border p-3 text-sm">
+        <div className={FIELD_GRID}>
+          <label className={CHOICE_CARD}>
             <input
               type="checkbox"
               name="emailEnabled"
               defaultChecked={settings.emailEnabled}
-              className="h-4 w-4"
+              className={CHECKBOX}
             />
             Send email notifications
           </label>
@@ -97,7 +102,7 @@ export function NotificationSettingsForm({
         </div>
         <details className="rounded-md border p-4">
           <summary className="cursor-pointer text-sm font-medium">Company SMTP details</summary>
-          <div className="mt-4 grid gap-4 sm:grid-cols-2">
+          <div className={cn(FIELD_GRID, 'mt-4')}>
             <FormField label="From email" htmlFor="smtpFromEmail">
               <Input name="smtpFromEmail" type="email" defaultValue={settings.smtpFromEmail} />
             </FormField>
@@ -120,12 +125,12 @@ export function NotificationSettingsForm({
                 placeholder={settings.hasSmtpPassword ? 'Saved. Leave blank to keep.' : ''}
               />
             </FormField>
-            <label className="flex items-center gap-2 rounded-md border p-3 text-sm">
+            <label className={CHOICE_CARD}>
               <input
                 type="checkbox"
                 name="smtpSecure"
                 defaultChecked={settings.smtpSecure}
-                className="h-4 w-4"
+                className={CHECKBOX}
               />
               Use secure SMTP connection
             </label>
@@ -135,19 +140,19 @@ export function NotificationSettingsForm({
 
       <section className="space-y-4">
         <div>
-          <h2 className="text-base font-semibold">WhatsApp</h2>
+          <h2 className={FORM_SECTION_TITLE}>WhatsApp</h2>
           <p className="text-sm text-muted-foreground">
             Connect your company Meta or Twilio WhatsApp account. Your company owns the sender
             account and provider charges unless support has explicitly enabled a managed sender.
           </p>
         </div>
-        <div className="grid gap-4 sm:grid-cols-2">
-          <label className="flex items-center gap-2 rounded-md border p-3 text-sm">
+        <div className={FIELD_GRID}>
+          <label className={CHOICE_CARD}>
             <input
               type="checkbox"
               name="whatsappEnabled"
               defaultChecked={settings.whatsappEnabled}
-              className="h-4 w-4"
+              className={CHECKBOX}
             />
             Send WhatsApp notifications
           </label>
@@ -178,7 +183,7 @@ export function NotificationSettingsForm({
           <FormField
             label="WhatsApp recipient numbers"
             htmlFor="whatsappRecipients"
-            className="sm:col-span-2"
+            className={FULL_ROW}
             hint="One number per line, with the country code."
           >
             <Textarea
@@ -194,12 +199,12 @@ export function NotificationSettingsForm({
               to render at once, so a company on Twilio was still asked for Meta
               details and could not tell which set actually mattered. */}
           {provider === 'meta_cloud' ? (
-            <div className="rounded-md border p-4 sm:col-span-2">
+            <div className={cn('rounded-md border p-4', FULL_ROW)}>
               <h3 className="text-sm font-semibold">Meta Cloud API details</h3>
               <p className="mt-1 text-sm text-muted-foreground">
                 From Meta Business → WhatsApp → API Setup.
               </p>
-              <div className="mt-4 grid gap-4 sm:grid-cols-2">
+              <div className={cn(FIELD_GRID, 'mt-4')}>
                 <FormField
                   label="Phone number ID"
                   htmlFor="metaPhoneNumberId"
@@ -255,12 +260,12 @@ export function NotificationSettingsForm({
           ) : null}
 
           {provider === 'twilio' ? (
-            <div className="rounded-md border p-4 sm:col-span-2">
+            <div className={cn('rounded-md border p-4', FULL_ROW)}>
               <h3 className="text-sm font-semibold">Twilio details</h3>
               <p className="mt-1 text-sm text-muted-foreground">
                 From your Twilio console dashboard.
               </p>
-              <div className="mt-4 grid gap-4 sm:grid-cols-2">
+              <div className={cn(FIELD_GRID, 'mt-4')}>
                 <FormField label="Account SID" htmlFor="twilioAccountSid" hint="Starts with AC.">
                   <Input
                     id="twilioAccountSid"
@@ -297,7 +302,7 @@ export function NotificationSettingsForm({
 
       <section className="space-y-4">
         <div>
-          <h2 className="text-base font-semibold">Slack and Webhook (moving to Webhooks)</h2>
+          <h2 className={FORM_SECTION_TITLE}>Slack and Webhook (moving to Webhooks)</h2>
           <p className="text-sm text-muted-foreground">
             Optional team alerts and system-to-system delivery for automation tools.
           </p>
@@ -309,9 +314,11 @@ export function NotificationSettingsForm({
           delivers it and the channels below stay quiet, so nothing is ever sent
           twice. Email and WhatsApp above are unaffected.
         */}
-        <div className="rounded-md border border-amber-500/40 bg-amber-500/10 p-3 text-sm">
-          <p className="font-medium">Set these up on the Webhooks page instead.</p>
-          <p className="mt-1 text-muted-foreground">
+        {/* `border-amber-500/40 bg-amber-500/10` is the warning tone written out
+            by hand, at an opacity nobody checked against either background.
+            `Alert tone="warning"` is the same notice on the tokens. */}
+        <Alert tone="warning" title="Set these up on the Webhooks page instead.">
+          <p>
             <Link href="/company/webhooks" className="font-medium underline underline-offset-4">
               Webhooks
             </Link>{' '}
@@ -320,14 +327,14 @@ export function NotificationSettingsForm({
             from the fields below, so you will not get duplicate alerts. These fields will be
             removed in a future release.
           </p>
-        </div>
-        <div className="grid gap-4 sm:grid-cols-2">
-          <label className="flex items-center gap-2 rounded-md border p-3 text-sm">
+        </Alert>
+        <div className={FIELD_GRID}>
+          <label className={CHOICE_CARD}>
             <input
               type="checkbox"
               name="slackEnabled"
               defaultChecked={settings.slackEnabled}
-              className="h-4 w-4"
+              className={CHECKBOX}
             />
             Send Slack notifications (legacy)
           </label>
@@ -342,12 +349,12 @@ export function NotificationSettingsForm({
               }
             />
           </FormField>
-          <label className="flex items-center gap-2 rounded-md border p-3 text-sm">
+          <label className={CHOICE_CARD}>
             <input
               type="checkbox"
               name="webhookEnabled"
               defaultChecked={settings.webhookEnabled}
-              className="h-4 w-4"
+              className={CHECKBOX}
             />
             Send generic webhook (legacy)
           </label>
@@ -365,7 +372,7 @@ export function NotificationSettingsForm({
           <FormField
             label="Webhook signing secret"
             htmlFor="genericWebhookSecret"
-            className="sm:col-span-2"
+            className={FULL_ROW}
           >
             <Input
               name="genericWebhookSecret"
@@ -380,7 +387,7 @@ export function NotificationSettingsForm({
 
       <section className="space-y-4">
         <div>
-          <h2 className="text-base font-semibold">Event rules</h2>
+          <h2 className={FORM_SECTION_TITLE}>Event rules</h2>
           <p className="text-sm text-muted-foreground">Choose which events go to each channel.</p>
         </div>
         <div className="overflow-x-auto rounded-md border">
@@ -405,7 +412,7 @@ export function NotificationSettingsForm({
                         type="checkbox"
                         name={`${event.key}.${channel.key}`}
                         defaultChecked={settings.eventRules[event.key]?.[channel.key] !== false}
-                        className="h-4 w-4"
+                        className={CHECKBOX}
                         aria-label={`${event.label} ${channel.label}`}
                       />
                     </td>
@@ -417,9 +424,8 @@ export function NotificationSettingsForm({
         </div>
       </section>
 
-      {state.error ? <p className="text-sm text-destructive">{state.error}</p> : null}
-      {state.ok ? <p className="text-sm text-emerald-600">Notification settings saved.</p> : null}
-      <SubmitButton />
+      <FormMessage state={state} okText="Notification settings saved." />
+      <SubmitButton pendingLabel="Saving…">Save notification settings</SubmitButton>
     </form>
   );
 }

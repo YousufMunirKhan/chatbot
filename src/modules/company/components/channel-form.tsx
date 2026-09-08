@@ -5,6 +5,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { useFormState } from 'react-dom';
 import { CopyButton } from '@/components/copy-button';
 import { Input } from '@/components/ui/input';
+import { PasswordInput } from '@/components/ui/password-input';
 import { Select } from '@/components/ui/select';
 import { FormField } from '@/components/ui/form-field';
 import { FormMessage } from '@/components/ui/form-message';
@@ -134,14 +135,23 @@ export function ChannelForm({
         <Input name="displayName" maxLength={120} />
       </FormField>
 
+      {/*
+        `PasswordInput`, not `<Input type="password" />`. These two are not
+        passwords anybody remembers — they are 200-character tokens pasted out
+        of Meta's or LINE's console, and the hint directly below says we never
+        show them again after saving. A field you cannot read back, cannot
+        check, and get exactly one attempt at is the worst possible place to
+        hide the characters with no way to reveal them. The reveal control is
+        in the tab order, so a keyboard user can check the paste too.
+      */}
       {showSecret ? (
         <FormField
           label={descriptor.secretLabel}
           htmlFor="secret"
-          hint="Kept locked away, and only ever used to send your replies. We never show it again after you save."
+          hint="Kept locked away, and only ever used to send your replies. We never show it again after you save, so check it before you do."
           required
         >
-          <Input name="secret" type="password" autoComplete="off" />
+          <PasswordInput name="secret" autoComplete="off" revealLabel="Show this token" />
         </FormField>
       ) : null}
 
@@ -152,7 +162,7 @@ export function ChannelForm({
           hint="LINE signs inbound webhooks with the channel secret above, but replies are sent with this long-lived access token."
           required
         >
-          <Input name="accessToken" type="password" autoComplete="off" />
+          <PasswordInput name="accessToken" autoComplete="off" revealLabel="Show this token" />
         </FormField>
       ) : null}
 

@@ -1,9 +1,8 @@
 'use client';
 
 import { useEffect, useRef } from 'react';
-import { useFormState, useFormStatus } from 'react-dom';
+import { useFormState } from 'react-dom';
 import { useRouter } from 'next/navigation';
-import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { FormField } from '@/components/ui/form-field';
 import { FormMessage } from '@/components/ui/form-message';
@@ -65,11 +64,10 @@ export function NewFlowForm() {
  * shrink with its card instead of spilling out of it, whatever the layout does.
  */
 function TemplateButton() {
-  const { pending } = useFormStatus();
   return (
-    <Button type="submit" size="sm" variant="outline" disabled={pending} className="w-full">
-      {pending ? 'Building…' : 'Use this template'}
-    </Button>
+    <SubmitButton size="sm" variant="outline" className="w-full" pendingLabel="Building…">
+      Use this template
+    </SubmitButton>
   );
 }
 

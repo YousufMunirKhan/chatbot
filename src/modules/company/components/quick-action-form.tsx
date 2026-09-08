@@ -1,7 +1,7 @@
 'use client';
 
 import { useMemo, useState, type ComponentType } from 'react';
-import { useFormState, useFormStatus } from 'react-dom';
+import { useFormState } from 'react-dom';
 import {
   Bot,
   CalendarDays,
@@ -17,6 +17,7 @@ import {
 import { Button } from '@/components/ui/button';
 import { FormField } from '@/components/ui/form-field';
 import { FormMessage } from '@/components/ui/form-message';
+import { SubmitButton } from '@/components/ui/submit-button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import {
@@ -32,6 +33,7 @@ import type { BotRow } from '../data';
 import { saveQuickActionAction, type QuickActionState } from '../quick-actions-actions';
 import type { QuickActionRow } from '../quick-actions-data';
 import { Select } from '@/components/ui/select';
+import { CHECKBOX, CHOICE_CARD, CHOICE_GRID, FIELD_GRID } from './form-layout';
 
 const initial: QuickActionState = {};
 
@@ -128,15 +130,6 @@ type FieldRow = {
   type: string;
   required: boolean;
 };
-
-function SubmitButton({ label }: { label: string }) {
-  const { pending } = useFormStatus();
-  return (
-    <Button type="submit" disabled={pending} className="min-w-40">
-      {pending ? 'Saving…' : label}
-    </Button>
-  );
-}
 
 function cfgValue(action: QuickActionRow | undefined, key: string): string {
   const v = action?.config?.[key];
@@ -289,14 +282,14 @@ export function QuickActionForm({
 
       <div className={cn('grid gap-6', compact ? '' : 'xl:grid-cols-[minmax(0,1fr)_360px]')}>
         <div className="space-y-6">
-          <section className="rounded-lg border bg-white p-4">
+          <section className="rounded-lg border bg-card p-4">
             <div className="mb-4">
               <h3 className="font-semibold">1. What should this button do?</h3>
               <p className="text-sm text-muted-foreground">
                 Pick what happens the moment a customer taps it.
               </p>
             </div>
-            <div className="grid gap-3 md:grid-cols-2">
+            <div className={CHOICE_GRID}>
               {ACTION_OPTIONS.map((option) => {
                 const Icon = option.icon;
                 const active = actionType === option.value;
@@ -307,15 +300,23 @@ export function QuickActionForm({
                     onClick={() => setActionType(option.value)}
                     aria-pressed={active}
                     className={cn(
-                      'rounded-lg border p-3 text-start transition hover:border-primary/50 hover:bg-blue-50/40',
-                      active ? 'border-primary bg-blue-50 shadow-sm' : 'bg-white',
+                      // `bg-blue-50` for "selected" and `bg-white` for "not"
+                      // are both undefined in dark mode — the whole picker was
+                      // a grid of white cards on a dark page. `primary/10` is
+                      // the same brand blue at the same weight, from the token,
+                      // and it is the tint `CHOICE_CARD` uses everywhere else.
+                      'rounded-lg border p-3 text-start transition-colors',
+                      'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2',
+                      active
+                        ? 'border-primary bg-primary/10 shadow-sm'
+                        : 'bg-card hover:border-primary/50 hover:bg-primary/5',
                     )}
                   >
                     <div className="flex items-start gap-3">
                       <span
                         className={cn(
                           'rounded-md p-2',
-                          active ? 'bg-primary text-white' : 'bg-muted text-muted-foreground',
+                          active ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground',
                         )}
                       >
                         <Icon className="h-4 w-4" aria-hidden="true" />
@@ -335,14 +336,14 @@ export function QuickActionForm({
             </div>
           </section>
 
-          <section className="rounded-lg border bg-white p-4">
+          <section className="rounded-lg border bg-card p-4">
             <div className="mb-4">
               <h3 className="font-semibold">2. What should visitors see?</h3>
               <p className="text-sm text-muted-foreground">
                 The words on the button, and the content sitting behind it.
               </p>
             </div>
-            <div className="grid gap-4 md:grid-cols-2">
+            <div className={FIELD_GRID}>
               <FormField label="Words on the button" htmlFor={fid('label')} required>
                 <Input
                   id={fid('label')}
@@ -508,7 +509,7 @@ export function QuickActionForm({
           </section>
 
           {needsForm ? (
-            <section className="rounded-lg border bg-white p-4">
+            <section className="rounded-lg border bg-card p-4">
               <div className="mb-4 flex items-start justify-between gap-3">
                 <div>
                   <h3 className="font-semibold">3. What should it ask them?</h3>
@@ -583,30 +584,31 @@ export function QuickActionForm({
             </section>
           ) : null}
 
-          <section className="rounded-lg border bg-white p-4">
+          <section className="rounded-lg border bg-card p-4">
             <div className="mb-4">
               <h3 className="font-semibold">{needsForm ? '4' : '3'}. When should it appear?</h3>
               <p className="text-sm text-muted-foreground">
                 Tick every moment this button makes sense. Everything below that is optional.
               </p>
             </div>
-            <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+            {/* `sm:grid-cols-2 lg:grid-cols-3` inside a card that itself sits in
+                the 1fr side of an `xl:` split — so on a 1280px screen this was
+                three columns of about 110px holding phrases like "After the
+                first reply". `CHOICE_GRID` measures the card. */}
+            <div className={CHOICE_GRID}>
               {CONTEXT_VALUES.map((value) => (
-                <label
-                  key={value}
-                  className="flex items-center gap-2 rounded-md border p-3 text-sm"
-                >
+                <label key={value} className={CHOICE_CARD}>
                   <input
                     type="checkbox"
                     checked={contexts.includes(value)}
                     onChange={() => toggleContext(value)}
-                    className="h-4 w-4"
+                    className={CHECKBOX}
                   />
-                  {labelFor(QUICK_ACTION_MOMENT_LABELS, value)}
+                  <span>{labelFor(QUICK_ACTION_MOMENT_LABELS, value)}</span>
                 </label>
               ))}
             </div>
-            <div className="mt-4 grid gap-4 md:grid-cols-2">
+            <div className={cn(FIELD_GRID, 'mt-4')}>
               <FormField
                 label="Words that bring it up"
                 htmlFor={fid('keywordTriggers')}
@@ -673,6 +675,12 @@ export function QuickActionForm({
 
         {compact ? null : (
           <aside className="space-y-4">
+            {/* DELIBERATELY FIXED-LIGHT, like the sidebar gradient: everything
+                from here to the end of this panel is a PICTURE of the widget as
+                a visitor sees it on the shop's own website, not dashboard
+                chrome. It must not follow the dashboard's dark theme, because
+                the thing it depicts does not. The panel's own frame and border
+                are token-backed; only the mock inside is fixed. */}
             <div className="rounded-xl border bg-slate-950 p-4 text-white shadow-xl">
               <div className="mb-4 flex items-center gap-2">
                 <Bot className="h-5 w-5 text-emerald-300" aria-hidden="true" />
@@ -696,8 +704,12 @@ export function QuickActionForm({
               </div>
             </div>
 
-            <div className="rounded-xl border bg-blue-50 p-4">
-              <div className="mb-2 text-sm font-semibold text-blue-950">An example</div>
+            {/* `bg-blue-50` + `text-blue-950` is the informational tone written
+                out by hand, and it collided with the brand blue that means
+                "selected" three sections above it. `--info` is deliberately
+                cyan for exactly this reason (see the UI README). */}
+            <div className="rounded-lg border border-info-border bg-info-bg p-4 text-info-fg">
+              <div className="mb-2 text-sm font-semibold">An example</div>
               <button
                 type="button"
                 disabled
@@ -706,12 +718,12 @@ export function QuickActionForm({
                 <CalendarDays className="h-4 w-4" aria-hidden="true" />
                 Book a free demo
               </button>
-              <p className="mt-3 text-xs text-blue-900/70">
+              <p className="mt-3 text-xs opacity-80">
                 This one does nothing — it is here to show you the shape a real chat button takes.
               </p>
             </div>
 
-            <div className="rounded-xl border bg-white p-4 text-sm">
+            <div className="rounded-lg border bg-card p-4 text-sm">
               <div className="font-semibold">What you have set so far</div>
               <div className="mt-3 space-y-2 text-muted-foreground">
                 <div>
@@ -742,7 +754,9 @@ export function QuickActionForm({
           save result is actually announced instead of silently appearing. */}
       <FormMessage state={state} okText="Saved." />
       <div className="flex justify-end">
-        <SubmitButton label={action ? 'Save this chat button' : 'Create this chat button'} />
+        <SubmitButton className="min-w-40" pendingLabel="Saving…">
+          {action ? 'Save this chat button' : 'Create this chat button'}
+        </SubmitButton>
       </div>
     </form>
   );

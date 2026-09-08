@@ -120,7 +120,11 @@ export function CopilotBar({
         </div>
       ) : null}
 
-      {error ? <p className="text-sm text-destructive">{error}</p> : null}
+      {error ? (
+        <p role="alert" className="text-sm text-danger-fg">
+          {error}
+        </p>
+      ) : null}
 
       {note && !error ? <p className="text-xs text-muted-foreground">{note}</p> : null}
     </div>

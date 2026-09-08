@@ -7,6 +7,7 @@ import { Select } from '@/components/ui/select';
 import { FormField } from '@/components/ui/form-field';
 import { FormMessage } from '@/components/ui/form-message';
 import { SubmitButton } from '@/components/ui/submit-button';
+import { FIELD_GRID } from './form-layout';
 import { WEBHOOK_EVENTS } from '@/lib/webhook-events';
 import { createWebhookAction, type ActionState } from '../webhooks-actions';
 
@@ -18,7 +19,7 @@ export function WebhookForm({ atLimit }: { atLimit?: boolean }) {
 
   return (
     <form action={action} className="space-y-4">
-      <div className="grid gap-4 sm:grid-cols-2">
+      <div className={FIELD_GRID}>
         <FormField label="Where is it going" htmlFor="kind">
           {/* One of the three 36px selects — `size="sm"` keeps the height
               rather than silently promoting it to 40px. */}

@@ -5,6 +5,7 @@ import { Input } from '@/components/ui/input';
 import { FormField } from '@/components/ui/form-field';
 import { FormMessage } from '@/components/ui/form-message';
 import { SubmitButton } from '@/components/ui/submit-button';
+import { FIELD_GRID } from './form-layout';
 import type { AutoTopUpConfig } from '@/lib/billing/auto-topup';
 import {
   runAutoTopUpNowAction,
@@ -57,7 +58,7 @@ export function AutoTopUpForm({ config, balance }: AutoTopUpFormProps) {
           Top up automatically when my credit runs low
         </label>
 
-        <div className="grid gap-4 sm:grid-cols-3">
+        <div className={FIELD_GRID}>
           <FormField
             label="Top up below (credits)"
             htmlFor="thresholdCredits"

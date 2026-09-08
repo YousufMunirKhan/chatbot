@@ -8,6 +8,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select } from '@/components/ui/select';
 import { deleteFlowTriggerAction, saveFlowTriggerAction } from '../flows-actions';
+import { ConfirmButton } from './confirm-button';
 import { describeTrigger, TRIGGER_TYPE_LABELS, type TriggerLike } from '../flow-graph';
 import type { FlowTriggerRow, MatchMode, TriggerType } from '../flows-data';
 
@@ -152,16 +153,17 @@ export function FlowTriggersPanel({
                   >
                     Edit
                   </Button>
-                  <Button
-                    type="button"
-                    size="sm"
-                    variant="ghost"
-                    className="h-7 px-2 text-xs text-danger-fg"
+                  {/* Was a one-tap `Remove` that went straight to
+                      `deleteFlowTriggerAction` — no confirmation, no undo, and
+                      sitting 8px from an `Edit` button of identical size. Every
+                      other destructive action in the product arms first. */}
+                  <ConfirmButton
+                    label="Remove"
+                    confirmLabel="Yes, remove it"
+                    question="This flow stops starting on its own from this trigger."
                     disabled={pending}
-                    onClick={() => remove(t.id)}
-                  >
-                    Remove
-                  </Button>
+                    onConfirm={() => remove(t.id)}
+                  />
                 </div>
               </div>
               <p className="text-xs text-muted-foreground">{describeTrigger(t)}</p>

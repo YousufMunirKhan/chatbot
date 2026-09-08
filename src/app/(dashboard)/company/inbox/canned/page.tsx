@@ -39,16 +39,28 @@ export default async function CannedResponsesPage() {
               ) : (
                 <ul className="divide-y">
                   {canned.map((c) => (
-                    <li key={c.id} className="flex items-start justify-between gap-4 p-4">
-                      <div className="min-w-0">
-                        <p className="font-medium">{c.title}</p>
-                        <p className="mt-0.5 whitespace-pre-wrap text-sm text-muted-foreground">
+                    <li
+                      key={c.id}
+                      className="flex flex-wrap items-start justify-between gap-x-4 gap-y-2 p-4"
+                    >
+                      <div className="min-w-0 flex-1">
+                        {/* `text-sm`: the body default. A bare `font-medium`
+                            rendered this at 16px, the only 16px text in any
+                            list in the company panel. */}
+                        <p className="text-sm font-medium">{c.title}</p>
+                        <p className="mt-0.5 whitespace-pre-wrap break-words text-sm text-muted-foreground">
                           {c.body}
                         </p>
                       </div>
                       <form action={handleDelete}>
                         <input type="hidden" name="id" value={c.id} />
-                        <ConfirmSubmit label="Delete" question="This cannot be undone." />
+                        {/* Named, like every other destructive button in the
+                            product: "Delete" alone does not say what goes, and
+                            the question says what your team loses. */}
+                        <ConfirmSubmit
+                          label="Delete this reply"
+                          question={`“${c.title}” disappears from the composer for everyone on your team. This cannot be undone.`}
+                        />
                       </form>
                     </li>
                   ))}

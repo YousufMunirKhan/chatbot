@@ -2,12 +2,14 @@
 
 import { useRouter } from 'next/navigation';
 import { useState, useTransition } from 'react';
-import { useFormState, useFormStatus } from 'react-dom';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Textarea } from '@/components/ui/textarea';
+import { useFormState } from 'react-dom';
 import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
 import { FormField } from '@/components/ui/form-field';
+import { FormMessage } from '@/components/ui/form-message';
+import { Input } from '@/components/ui/input';
+import { SubmitButton } from '@/components/ui/submit-button';
+import { Textarea } from '@/components/ui/textarea';
 import { PRIORITY_LABELS, labelFor } from '@/lib/constants';
 import {
   addInternalNoteAction,
@@ -51,20 +53,18 @@ const RESOLUTION_TEMPLATES = [
 ] as const;
 
 function NoteSubmit() {
-  const { pending } = useFormStatus();
   return (
-    <Button type="submit" size="sm" disabled={pending}>
-      {pending ? 'Saving…' : 'Add note'}
-    </Button>
+    <SubmitButton size="sm" pendingLabel="Saving…">
+      Add note
+    </SubmitButton>
   );
 }
 
 function ResolveSubmit() {
-  const { pending } = useFormStatus();
   return (
-    <Button type="submit" size="sm" disabled={pending}>
-      {pending ? 'Saving…' : 'Mark as sorted'}
-    </Button>
+    <SubmitButton size="sm" pendingLabel="Saving…">
+      Mark as sorted
+    </SubmitButton>
   );
 }
 
@@ -173,7 +173,14 @@ export function TicketPanel({
         <p className="mb-1.5 text-xs font-medium uppercase tracking-wider text-muted-foreground">
           How it was sorted
         </p>
-        <form action={resolveAction} className="space-y-2 rounded-md border bg-emerald-50/50 p-3">
+        {/* `bg-emerald-50/50` — a raw palette green at 50% over whatever is
+            behind it, undefined in dark mode. `--success-bg` is the tinted
+            surface for exactly this, defined in both themes and paired with a
+            border that is contrast-checked against it. */}
+        <form
+          action={resolveAction}
+          className="space-y-2 rounded-md border border-success-border bg-success-bg p-3"
+        >
           <input type="hidden" name="conversationId" value={conversationId} />
           <div className="flex flex-wrap gap-1.5">
             {RESOLUTION_TEMPLATES.map((template) => (
@@ -204,12 +211,7 @@ export function TicketPanel({
               placeholder="We looked into this and…"
             />
           </FormField>
-          {resolveState.error ? (
-            <p className="text-sm text-destructive">{resolveState.error}</p>
-          ) : null}
-          {resolveState.ok ? (
-            <p className="text-sm text-emerald-700">Sorted. Anyone following this has been told.</p>
-          ) : null}
+          <FormMessage state={resolveState} okText="Sorted. Anyone following this has been told." />
           <ResolveSubmit />
         </form>
       </div>
@@ -224,7 +226,10 @@ export function TicketPanel({
         {notes.length > 0 ? (
           <ul className="mb-3 space-y-2">
             {notes.map((n) => (
-              <li key={n.id} className="rounded-md border bg-amber-50/60 p-2 text-sm">
+              // `bg-amber-50/60` read as a warning and was not one — an internal
+              // note is a note. `bg-muted` is the neutral inset surface, and it
+              // exists in dark mode.
+              <li key={n.id} className="rounded-md border bg-muted p-2 text-sm">
                 <p className="whitespace-pre-wrap">{n.note}</p>
                 <p className="mt-1 text-xs text-muted-foreground">{n.author}</p>
               </li>
@@ -247,7 +252,11 @@ export function TicketPanel({
               placeholder="What you tried, or who you called…"
             />
           </FormField>
-          {noteState.error ? <p className="text-sm text-destructive">{noteState.error}</p> : null}
+          {/* `text-destructive` is the SOLID red meant for a filled button's
+              background pair, not for body text on a card — `--danger-fg` is
+              the one contrast-checked for reading. And this needed the live
+              region: it is the result of pressing Add note. */}
+          <FormMessage state={noteState} okText="Note added." />
           <NoteSubmit />
         </form>
       </div>

@@ -2,8 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { useFormState, useFormStatus } from 'react-dom';
-import { Button } from '@/components/ui/button';
+import { useFormState } from 'react-dom';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { BOT_TYPES } from '@/lib/constants';
@@ -11,7 +10,11 @@ import { companyLabel } from '@/lib/labels';
 import type { ActionState } from '../actions';
 import type { BotRow } from '../data';
 import { FormField } from '@/components/ui/form-field';
+import { FormMessage } from '@/components/ui/form-message';
+import { cn } from '@/lib/utils';
 import { Select } from '@/components/ui/select';
+import { SubmitButton } from '@/components/ui/submit-button';
+import { CHECKBOX, CHOICE_CARD, CHOICE_GRID, FIELD_GRID, FORM_SECTION_TITLE } from './form-layout';
 
 const initial: ActionState = {};
 
@@ -117,15 +120,6 @@ const DEFAULT_CUSTOMER_CAPABILITIES = new Set(['help_desk']);
 
 type ActionFn = (prev: ActionState, formData: FormData) => Promise<ActionState>;
 
-function SubmitButton({ label }: { label: string }) {
-  const { pending } = useFormStatus();
-  return (
-    <Button type="submit" disabled={pending}>
-      {pending ? 'Saving…' : label}
-    </Button>
-  );
-}
-
 export function BotForm({
   action,
   bot,
@@ -176,18 +170,18 @@ export function BotForm({
 
       <section className="space-y-4">
         <div className="space-y-3">
-          <h2 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground">
+          <h2 className={FORM_SECTION_TITLE}>
             Who is it for
           </h2>
-          <div className="grid gap-3 sm:grid-cols-2">
-            <label className="flex cursor-pointer gap-3 rounded-md border p-4 text-sm">
+          <div className={CHOICE_GRID}>
+            <label className={cn(CHOICE_CARD, 'cursor-pointer p-4')}>
               <input
                 type="radio"
                 name="assistantAudience"
                 value="customer"
                 checked={assistantAudience === 'customer'}
                 onChange={() => setAssistantAudience('customer')}
-                className="mt-1 h-4 w-4"
+                className={CHECKBOX}
               />
               <span>
                 <span className="block font-medium">Your customers</span>
@@ -197,14 +191,14 @@ export function BotForm({
                 </span>
               </span>
             </label>
-            <label className="flex cursor-pointer gap-3 rounded-md border p-4 text-sm">
+            <label className={cn(CHOICE_CARD, 'cursor-pointer p-4')}>
               <input
                 type="radio"
                 name="assistantAudience"
                 value="internal"
                 checked={assistantAudience === 'internal'}
                 onChange={() => setAssistantAudience('internal')}
-                className="mt-1 h-4 w-4"
+                className={CHECKBOX}
               />
               <span>
                 <span className="block font-medium">Your team</span>
@@ -217,7 +211,7 @@ export function BotForm({
           </div>
         </div>
 
-        <div className="grid gap-4 sm:grid-cols-2">
+        <div className={FIELD_GRID}>
           {/* The asterisk was doing the job `FormField`'s `required` prop
               already does — and doing it only visually, so a screen reader
               heard "Assistant name star". */}
@@ -287,7 +281,7 @@ export function BotForm({
       </section>
 
       <section className="space-y-3">
-        <h2 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground">
+        <h2 className={FORM_SECTION_TITLE}>
           What it can help with
         </h2>
         {isNewCustomerBot ? (
@@ -297,9 +291,9 @@ export function BotForm({
             for a few business details first.
           </p>
         ) : null}
-        <div className="grid gap-2 sm:grid-cols-2">
+        <div className={CHOICE_GRID}>
           {capabilityOptions.map((cap) => (
-            <label key={cap.key} className="flex items-start gap-2 rounded-md border p-2.5 text-sm">
+            <label key={cap.key} className={CHOICE_CARD}>
               <input
                 type="checkbox"
                 name="capabilities"
@@ -309,7 +303,7 @@ export function BotForm({
                     ? bot.capabilityFlags?.includes(cap.key)
                     : assistantAudience === 'customer' && DEFAULT_CUSTOMER_CAPABILITIES.has(cap.key)
                 }
-                className="mt-0.5 h-4 w-4"
+                className={CHECKBOX}
               />
               <span>
                 <span className="block font-medium">{cap.label}</span>
@@ -330,20 +324,20 @@ export function BotForm({
       </section>
 
       <section className="space-y-3">
-        <h2 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground">
+        <h2 className={FORM_SECTION_TITLE}>
           Suggested questions
         </h2>
         <p className="text-sm text-muted-foreground">
           The one-tap buttons people see in the chat, so they do not have to think of what to ask.
         </p>
-        <div className="grid gap-2 sm:grid-cols-3">
-          <label className="flex items-start gap-2 rounded-md border p-3 text-sm">
+        <div className={CHOICE_GRID}>
+          <label className={CHOICE_CARD}>
             <input type="hidden" name="enableDefaultPills" value="off" />
             <input
               type="checkbox"
               name="enableDefaultPills"
               defaultChecked={enableDefaultPills}
-              className="mt-0.5 h-4 w-4"
+              className={CHECKBOX}
             />
             <span>
               <span className="block font-medium">Starter questions</span>
@@ -352,13 +346,13 @@ export function BotForm({
               </span>
             </span>
           </label>
-          <label className="flex items-start gap-2 rounded-md border p-3 text-sm">
+          <label className={CHOICE_CARD}>
             <input type="hidden" name="enableContextualPills" value="off" />
             <input
               type="checkbox"
               name="enableContextualPills"
               defaultChecked={enableContextualPills}
-              className="mt-0.5 h-4 w-4"
+              className={CHECKBOX}
             />
             <span>
               <span className="block font-medium">Follow-up questions</span>
@@ -374,13 +368,13 @@ export function BotForm({
               "off" is what the action already stored for it in that case, so
               nothing about the saved value changes. */}
           {assistantAudience === 'internal' ? (
-            <label className="flex items-start gap-2 rounded-md border p-3 text-sm">
+            <label className={CHOICE_CARD}>
               <input type="hidden" name="enableConnectorGeneratedPills" value="off" />
               <input
                 type="checkbox"
                 name="enableConnectorGeneratedPills"
                 defaultChecked={enableConnectorGeneratedPills}
-                className="mt-0.5 h-4 w-4"
+                className={CHECKBOX}
               />
               <span>
                 <span className="block font-medium">Questions from your shop system</span>
@@ -398,7 +392,7 @@ export function BotForm({
       {assistantAudience === 'internal' ? (
         <section className="space-y-4">
           <input type="hidden" name="domainAllowlist" value="" />
-          <h2 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground">
+          <h2 className={FORM_SECTION_TITLE}>
             The link to your shop system
           </h2>
           <div className="rounded-md border bg-muted/30 p-3 text-sm text-muted-foreground">
@@ -421,7 +415,7 @@ export function BotForm({
         </section>
       ) : (
         <section className="space-y-4">
-          <h2 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground">
+          <h2 className={FORM_SECTION_TITLE}>
             Your website
           </h2>
           {/* Second `FormField` here with two children — the textarea got no
@@ -464,21 +458,41 @@ export function BotForm({
         </section>
       )}
 
+      {/* The single most consequential switch on this form — it decides whether
+          customers get answered by a machine or wait for a person — and it was
+          a bare 16px tick box with a six-word label, floating between a section
+          of grouped fields and the Save button with no heading of its own and
+          nothing saying what "off" means. */}
       {bot ? (
-        <label className="flex items-center gap-2 text-sm">
-          <input
-            type="checkbox"
-            name="aiEnabled"
-            defaultChecked={bot.aiEnabled}
-            className="h-4 w-4"
-          />
-          Let this assistant reply on its own
-        </label>
+        <section className="space-y-3">
+          <h2 className={FORM_SECTION_TITLE}>
+            Replying
+          </h2>
+          <label className={CHOICE_CARD}>
+            <input
+              type="checkbox"
+              name="aiEnabled"
+              defaultChecked={bot.aiEnabled}
+              className={CHECKBOX}
+            />
+            <span>
+              <span className="block font-medium">Let this assistant reply on its own</span>
+              <span className="block text-xs text-muted-foreground">
+                Off, it still reads every message and files it in your inbox — it just waits for
+                one of your team to write the reply.
+              </span>
+            </span>
+          </label>
+        </section>
       ) : null}
 
-      {state.error ? <p className="text-sm text-destructive">{state.error}</p> : null}
-      {state.ok ? <p className="text-sm text-emerald-600">Saved.</p> : null}
-      <SubmitButton label={submitLabel} />
+      {/* Two hand-rolled paragraphs, one of them `text-emerald-600` — a colour
+          that fails AA on white and does not exist in dark mode — and neither
+          of them a live region, so a screen-reader user pressed Save and was
+          told nothing at all. `FormMessage` is both, and it is the same
+          announcement every other form in the product makes. */}
+      <FormMessage state={state} />
+      <SubmitButton pendingLabel="Saving…">{submitLabel}</SubmitButton>
     </form>
   );
 }

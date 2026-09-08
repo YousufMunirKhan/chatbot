@@ -7,6 +7,10 @@ import { Alert } from '@/components/ui/alert';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { PageHeader } from '@/components/ui/page-header';
 import { getCompanySetupProgress, type CompanySetupProgress, type SetupStep } from '@/modules/company/setup-data';
+import {
+  ClearSkipsButton,
+  ResumeGuideLink,
+} from '@/modules/onboarding/components/guide-skip';
 import { TestAssistant } from '@/modules/company/components/test-assistant';
 import { WebsiteOnboardingForm } from '@/modules/company/components/website-onboarding-form';
 import { formatDate } from '@/lib/format';
@@ -161,6 +165,20 @@ export default async function CompanySetupPage() {
   const nextKey = setup.nextStep?.key;
   const allDone = setup.nextStep === null;
 
+  // The guided flow takes the same five steps one screen at a time. It is the
+  // front door for somebody who has just signed up; this page stays the map for
+  // somebody coming back. Both read `getCompanySetupProgress()`, so they cannot
+  // disagree about what is finished — and the "carry on" button below is built
+  // from `nextStep`, which is recomputed from the company's real data on every
+  // render. That is what makes it resumable a week later with nothing stored.
+  const remaining = setup.steps.filter((step) => !step.complete);
+  const guideHrefByKey = Object.fromEntries(
+    setup.steps.map((step) => [step.key, `/company/setup/guide?step=${step.key}`]),
+  );
+  const guideFallbackHref = setup.nextStep
+    ? `/company/setup/guide?step=${setup.nextStep.key}`
+    : '/company/setup/guide?step=done';
+
   return (
     <div className="mx-auto max-w-4xl space-y-6">
       {/* The company name is an eyebrow above the page title; `PageHeader` has no
@@ -176,6 +194,40 @@ export default async function CompanySetupPage() {
           }
         />
       </div>
+
+      {/* One screen at a time, for anybody who would rather be walked through
+          it than handed a list. The list is still right below, because "what
+          did I already set up?" is the second question people ask. */}
+      <Card>
+        <CardContent className="flex flex-col gap-4 pt-6 sm:flex-row sm:items-center sm:justify-between">
+          <div className="min-w-0">
+            <p className="font-medium">
+              {allDone ? 'Walk back through the setup' : 'Take me through it one step at a time'}
+            </p>
+            <p className="mt-1 text-sm text-muted-foreground">
+              {allDone
+                ? 'Every step, with your install code and a box to ask your assistant a question.'
+                : `${setup.complete} of ${setup.total} done. It picks up exactly where you left off, and you can skip anything you are not ready for.`}
+            </p>
+          </div>
+          <div className="flex shrink-0 flex-wrap items-center gap-2">
+            <ClearSkipsButton companyId={setup.companyId} />
+            <ResumeGuideLink
+              companyId={setup.companyId}
+              remainingKeys={remaining.map((step) => step.key)}
+              hrefByKey={guideHrefByKey}
+              fallbackHref={guideFallbackHref}
+              label={
+                allDone
+                  ? 'Open the guide'
+                  : setup.complete === 0
+                    ? 'Start setup'
+                    : 'Carry on where I left off'
+              }
+            />
+          </div>
+        </CardContent>
+      </Card>
 
       <Card>
         <CardHeader className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">

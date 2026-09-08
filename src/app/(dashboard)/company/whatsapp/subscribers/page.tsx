@@ -69,22 +69,40 @@ export default async function WhatsAppSubscribersPage({
       </Card>
 
       <Card>
-        <CardHeader className="flex flex-row flex-wrap items-center justify-between gap-3">
-          <div>
+        {/* `CardHeader` is `flex flex-col space-y-1.5`. Overriding only
+            `flex-row` leaves the `space-y-1.5` behind, which in a row becomes a
+            6px margin-TOP on the search form — so it sat 6px below the centre
+            line `items-center` had just aligned it to. `space-y-0` removes it. */}
+        <CardHeader className="flex flex-row flex-wrap items-center justify-between gap-3 space-y-0">
+          <div className="min-w-0">
             <CardTitle>
               {subscribers.length} contact{subscribers.length === 1 ? '' : 's'}
             </CardTitle>
-            <CardDescription>{optedOut} opted out.</CardDescription>
+            <CardDescription>
+              {optedOut === 0
+                ? 'Nobody has opted out.'
+                : `${optedOut} of them ${optedOut === 1 ? 'has' : 'have'} opted out and will be skipped.`}
+            </CardDescription>
           </div>
           {/* GET form: the search term lives in the URL, so the page stays a
-              server component and the result is shareable/bookmarkable. */}
-          <form method="get" className="flex items-end gap-2">
-            <FormField label="Find a contact" htmlFor="q">
+              server component and the result is shareable/bookmarkable.
+
+              `w-56` was a fixed 224px. At 375px this card has about 295px of
+              content, and 224px + gap + a "Search" button is wider than that —
+              the button was pushed off the card's trailing edge. `min-w-0
+              flex-1` with a `sm:w-56` ceiling lets the box give up width when
+              there is none and hold its comfortable size when there is.
+              `size="sm"` rather than a hand-written `h-9`: that is the same
+              36px, taken from the scale, so it cannot drift away from the
+              button beside it. */}
+          <form method="get" className="flex min-w-0 flex-1 items-end gap-2 sm:flex-none">
+            <FormField label="Find a contact" htmlFor="q" className="min-w-0 flex-1 sm:w-56">
               <Input
+                size="sm"
                 name="q"
+                type="search"
                 defaultValue={search}
                 placeholder="07700 900123, or name@example.com"
-                className="h-9 w-56"
               />
             </FormField>
             <Button type="submit" size="sm" variant="outline">
@@ -111,7 +129,13 @@ export default async function WhatsAppSubscribersPage({
                   <TableHead>State</TableHead>
                   <TableHead>Source</TableHead>
                   <TableHead>Updated</TableHead>
-                  <TableHead />
+                  {/* A self-closing `<TableHead />` is a column with no name,
+                      and a screen reader reads a cell's column header before
+                      the cell — so every button in this column was announced as
+                      "blank, Opt out". */}
+                  <TableHead>
+                    <span className="sr-only">Actions</span>
+                  </TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -142,8 +166,12 @@ export default async function WhatsAppSubscribersPage({
                       <form action={setSubscription}>
                         <input type="hidden" name="id" value={s.id} />
                         <input type="hidden" name="optedIn" value={(!s.optedIn).toString()} />
+                        {/* A page of forty contacts otherwise offers a
+                            screen-reader user forty buttons all called "Opt
+                            out". The contact names its own row. */}
                         <Button type="submit" size="sm" variant="outline">
                           {s.optedIn ? 'Opt out' : 'Opt back in'}
+                          <span className="sr-only">: {s.contactIdentifier}</span>
                         </Button>
                       </form>
                     </TableCell>

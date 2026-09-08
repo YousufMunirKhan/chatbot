@@ -98,7 +98,15 @@ export function ConversationAiToggle({
             ? 'Turn this off to take over yourself.'
             : 'You are handling this chat.'}
       </p>
-      {error ? <p className="text-sm text-destructive">{error}</p> : null}
+      {/* `--destructive` is the solid fill behind white button text; reading
+          body copy in it is unverified. `--danger-fg` is the token measured for
+          text, and `role="alert"` is what makes a failure that appears after a
+          click actually reach a screen reader. */}
+      {error ? (
+        <p role="alert" className="text-sm text-danger-fg">
+          {error}
+        </p>
+      ) : null}
     </div>
   );
 }

@@ -1,6 +1,7 @@
 'use client';
 
-import { useFormState, useFormStatus } from 'react-dom';
+import { useFormState } from 'react-dom';
+import { SubmitButton } from '@/components/ui/submit-button';
 import { Alert } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -54,11 +55,10 @@ function describeDevice(userAgent: string | null): string {
 }
 
 function TestButton() {
-  const { pending } = useFormStatus();
   return (
-    <Button type="submit" variant="outline" size="sm" disabled={pending}>
-      {pending ? 'Sending…' : 'Send test notification'}
-    </Button>
+    <SubmitButton variant="outline" size="sm" pendingLabel="Sending…">
+      Send a test notification
+    </SubmitButton>
   );
 }
 

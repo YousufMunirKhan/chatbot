@@ -8,6 +8,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { FormField } from '@/components/ui/form-field';
 import { FormMessage } from '@/components/ui/form-message';
 import { SubmitButton } from '@/components/ui/submit-button';
+import { FIELD_GRID } from './form-layout';
 import {
   AUTOMATION_EVENTS,
   EVENT_LABELS,
@@ -88,7 +89,7 @@ export function AutomationForm({ rule }: { rule?: AutomationFormValues }) {
         />
       </FormField>
 
-      <div className="grid gap-4 sm:grid-cols-2">
+      <div className={FIELD_GRID}>
         <FormField label="When this happens" htmlFor="triggerEvent">
           <Select
             name="triggerEvent"
@@ -119,7 +120,7 @@ export function AutomationForm({ rule }: { rule?: AutomationFormValues }) {
         </FormField>
       </div>
 
-      <div className="grid gap-4 sm:grid-cols-2">
+      <div className={FIELD_GRID}>
         <FormField
           label="Wait before sending (minutes)"
           htmlFor="delayMinutes"

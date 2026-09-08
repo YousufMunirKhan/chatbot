@@ -236,8 +236,12 @@ export default async function ContactPage({ params }: { params: { id: string } }
                   <form action={removeContactAttributeAction}>
                     <input type="hidden" name="contactId" value={contact.id} />
                     <input type="hidden" name="key" value={attribute.key} />
+                    {/* One "Remove" per row, so the accessible name has to say
+                        which — a screen reader hearing "Remove" six times down
+                        a list cannot tell them apart. */}
                     <button
                       type="submit"
+                      aria-label={`Remove the detail ${attribute.key}`}
                       className="text-xs text-muted-foreground underline underline-offset-4 hover:text-foreground"
                     >
                       Remove
@@ -310,8 +314,14 @@ export default async function ContactPage({ params }: { params: { id: string } }
       </Section>
 
       <Section title="What they asked for" description="Their enquiries, newest first.">
+        {/* `EmptyState` in every section, not a bare sentence in three of them:
+            two sections on this page already used it and three did not, so the
+            same "nothing here" fact was drawn two different ways on one screen. */}
         {contact.enquiries.length === 0 ? (
-          <p className="text-sm text-muted-foreground">No enquiries recorded.</p>
+          <EmptyState
+            title="No enquiries yet"
+            body="Whenever this person leaves their details asking for something — a call back, a price, a service — it is listed here."
+          />
         ) : (
           <ul className="divide-y rounded-md border">
             {contact.enquiries.map((enquiry) => (
@@ -320,7 +330,9 @@ export default async function ContactPage({ params }: { params: { id: string } }
                   <p className="text-sm font-medium">
                     {enquiry.enquiryType || 'Enquiry'}
                     {enquiry.source ? (
-                      <span className="ml-2 text-xs font-normal text-muted-foreground">
+                      // `ms-`, not `ml-`: physical utilities do not flip under
+                      // the shell's dir="rtl" for Arabic companies.
+                      <span className="ms-2 text-xs font-normal text-muted-foreground">
                         via {enquiry.source.replace(/[._-]+/g, ' ')}
                       </span>
                     ) : null}
@@ -367,7 +379,10 @@ export default async function ContactPage({ params }: { params: { id: string } }
 
       <Section title="What they bought" description="Orders placed in chat and orders from your shop.">
         {contact.orders.length === 0 ? (
-          <p className="text-sm text-muted-foreground">No orders recorded.</p>
+          <EmptyState
+            title="Nothing bought yet"
+            body="Orders taken in chat and orders copied across from your connected shop both appear here, newest first."
+          />
         ) : (
           <ul className="divide-y rounded-md border">
             {contact.orders.map((order) => (
@@ -378,7 +393,7 @@ export default async function ContactPage({ params }: { params: { id: string } }
                 <div>
                   <p className="text-sm font-medium">
                     {order.reference ? `#${order.reference}` : 'Order'}
-                    <span className="ml-2 text-xs font-normal text-muted-foreground">
+                    <span className="ms-2 text-xs font-normal text-muted-foreground">
                       {order.origin === 'chat' ? 'Chat' : 'Your shop'}
                     </span>
                   </p>
@@ -401,7 +416,10 @@ export default async function ContactPage({ params }: { params: { id: string } }
       <Section title="Notes" description="What your team knows that no record holds.">
         <ContactNoteForm contactId={contact.id} />
         {contact.notes.length === 0 ? (
-          <p className="text-sm text-muted-foreground">No notes yet.</p>
+          <EmptyState
+            title="No notes yet"
+            body="Write down what the next person picking this up would want to know — what they asked last time, what you promised, what to avoid."
+          />
         ) : (
           <ul className="space-y-2">
             {contact.notes.map((note) => (

@@ -3,6 +3,8 @@
 import * as React from 'react';
 import { FormField } from '@/components/ui/form-field';
 import { Select } from '@/components/ui/select';
+import { cn } from '@/lib/utils';
+import { CHECKBOX, CHOICE_CARD, CHOICE_GRID } from './form-layout';
 
 /**
  * The role picker and the permission tick list, shared by the invite form and
@@ -114,7 +116,7 @@ export function AgentAccessFields({
         </Select>
       </FormField>
 
-      <fieldset className="space-y-3">
+      <fieldset className="space-y-4">
         <legend className="text-sm font-medium">What they can do</legend>
         <p className="text-xs text-muted-foreground">
           The role above sets these for you. Change any of them to make this person an
@@ -126,15 +128,28 @@ export function AgentAccessFields({
             <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
               {group.group}
             </p>
-            <div className="grid gap-2 sm:grid-cols-2">
+            {/*
+              `CHOICE_GRID`, not `sm:grid-cols-2`. This list renders in two very
+              different containers and the viewport prefix was wrong in both.
+              On the Team page it is inside the 1fr side of a 1.7fr/1fr split on
+              a `max-w-7xl` page — about 400px wide, at a viewport where `sm:`
+              is long since on, so each tick box got ~190px to hold a label AND
+              a sentence of description. It is ALSO rendered inside a table cell
+              by `AgentAccessForm`, which is narrower still. `auto-fit` gives one
+              column in both of those and two only where two genuinely fit.
+            */}
+            <div className={CHOICE_GRID}>
               {group.permissions.map((permission) => {
                 const allowed = held.has(permission.key);
                 return (
                   <label
                     key={permission.key}
-                    className={`flex items-start gap-2 rounded-md border p-2.5 text-sm ${
-                      allowed ? '' : 'opacity-60'
-                    }`}
+                    className={cn(
+                      CHOICE_CARD,
+                      // A permission you cannot hand out is not a choice, so it
+                      // does not get the checked tint or the pointer.
+                      !allowed && 'cursor-not-allowed bg-muted/40 text-muted-foreground',
+                    )}
                   >
                     <input
                       type="checkbox"
@@ -143,9 +158,9 @@ export function AgentAccessFields({
                       checked={granted.has(permission.key)}
                       disabled={!allowed}
                       onChange={(event) => toggle(permission.key, event.target.checked)}
-                      className="mt-0.5 h-4 w-4"
+                      className={CHECKBOX}
                     />
-                    <span>
+                    <span className="min-w-0">
                       <span className="block font-medium">{permission.label}</span>
                       <span className="block text-xs text-muted-foreground">
                         {allowed

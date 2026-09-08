@@ -1,8 +1,11 @@
 'use client';
 
 import { useMemo, useState } from 'react';
+import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { cn } from '@/lib/utils';
 import type { BillingPlan } from '@/modules/super-admin/billing-data';
+import { CHOICE_GRID } from './form-layout';
 
 function gbp(value: number) {
   return new Intl.NumberFormat('en-GB', {
@@ -53,34 +56,85 @@ export function BillingUpgrade({
     }
   }
 
+  const chosen = availablePlans.find((item) => item.key === plan);
+
   return (
-    <div className="space-y-3">
-      <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
-        {availablePlans.map((item) => (
-          <button
-            key={item.key}
-            type="button"
-            onClick={() => setPlan(item.key)}
-            disabled={item.key === currentPlan}
-            className={`rounded-md border p-3 text-start text-sm disabled:cursor-not-allowed disabled:opacity-60 ${
-              plan === item.key ? 'border-primary bg-primary/5' : ''
-            }`}
-          >
-            <span className="block font-medium">{item.label}</span>
-            <span className="text-muted-foreground">{gbp(item.priceMonthlyGbp)}/mo</span>
-            <span className="mt-2 block text-xs text-muted-foreground">
-              {lim(item.messageLimit)} messages/month
-            </span>
-            {item.key === currentPlan ? (
-              <span className="mt-2 block text-xs font-medium text-emerald-700">Current plan</span>
-            ) : null}
-          </button>
-        ))}
+    <div className="space-y-4">
+      {/*
+        A RADIO GROUP THAT SAYS SO
+        --------------------------
+        These are one choice out of several, but they were plain buttons: no
+        `role`, no `aria-checked`, no group name. A keyboard user tabbed through
+        every package one at a time and a screen reader announced five unrelated
+        buttons with no indication that picking one deselected the others, or
+        which one was picked. `radiogroup` + `radio` is what the control has
+        always been; this is only saying it out loud.
+
+        `CHOICE_GRID` instead of `sm:grid-cols-2 lg:grid-cols-3`: the packages
+        card is full width on `/company/billing`, but this component is a plain
+        export and the next screen to show it will not be. `auto-fit` is right
+        in both places.
+      */}
+      <div role="radiogroup" aria-label="Choose a package" className={CHOICE_GRID}>
+        {availablePlans.map((item) => {
+          const isCurrent = item.key === currentPlan;
+          const isChosen = plan === item.key;
+          return (
+            <button
+              key={item.key}
+              type="button"
+              role="radio"
+              aria-checked={isChosen}
+              onClick={() => setPlan(item.key)}
+              disabled={isCurrent}
+              className={cn(
+                'rounded-md border p-3 text-start text-sm transition-colors',
+                'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2',
+                'disabled:cursor-not-allowed disabled:opacity-60',
+                isChosen ? 'border-primary bg-primary/5' : 'hover:border-primary/50',
+              )}
+            >
+              <span className="block font-medium">{item.label}</span>
+              <span className="block text-muted-foreground">
+                {gbp(item.priceMonthlyGbp)}/mo
+              </span>
+              <span className="mt-2 block text-xs text-muted-foreground">
+                {lim(item.messageLimit)} messages/month
+              </span>
+              {isCurrent ? (
+                // Was `text-emerald-700`: a raw palette green that is not
+                // defined in dark mode at all. `Badge variant="success"` is the
+                // token-backed version, and it also stops this one line being
+                // the only status in the product that is not a badge.
+                <Badge variant="success" className="mt-2">
+                  Your package now
+                </Badge>
+              ) : null}
+            </button>
+          );
+        })}
       </div>
-      {error ? <p className="text-sm text-destructive">{error}</p> : null}
-      <Button type="button" onClick={startCheckout} disabled={loading || !plan}>
-        {loading ? 'Starting...' : 'Upgrade / start checkout'}
-      </Button>
+
+      {/* `role="alert"`: this is the result of pressing the button below, so it
+          appears after the user acts and has to be announced. It was a silent
+          paragraph. */}
+      {error ? (
+        <p role="alert" className="text-sm text-danger-fg">
+          {error}
+        </p>
+      ) : null}
+
+      {/* "Upgrade / start checkout" was two labels with a slash between them,
+          and it was not always an upgrade. The button now names the package it
+          is about to take you to pay for, and says where it is taking you. */}
+      <div className="flex flex-wrap items-center gap-3">
+        <Button type="button" onClick={startCheckout} disabled={loading || !plan} aria-busy={loading}>
+          {loading ? 'Opening Stripe…' : `Continue to payment${chosen ? ` — ${chosen.label}` : ''}`}
+        </Button>
+        <p className="text-xs text-muted-foreground">
+          Opens Stripe&rsquo;s secure checkout. Nothing changes until you pay there.
+        </p>
+      </div>
     </div>
   );
 }

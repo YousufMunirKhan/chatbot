@@ -6,6 +6,7 @@ import { Select } from '@/components/ui/select';
 import { FormField } from '@/components/ui/form-field';
 import { FormMessage } from '@/components/ui/form-message';
 import { SubmitButton } from '@/components/ui/submit-button';
+import { FIELD_GRID } from './form-layout';
 import { RefreshDashboardShell } from '@/components/refresh-dashboard-shell';
 import { updateProfileAction, type ActionState } from '../actions';
 import type { CompanyProfile } from '../data';
@@ -20,7 +21,7 @@ export function ProfileForm({ company }: { company: CompanyProfile }) {
   return (
     <form action={action} className="space-y-4">
       <RefreshDashboardShell state={state} />
-      <div className="grid gap-4 sm:grid-cols-2">
+      <div className={FIELD_GRID}>
         <FormField label="Company name" htmlFor="name" required>
           <Input name="name" required defaultValue={company.name} />
         </FormField>

@@ -6,6 +6,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { FormField } from '@/components/ui/form-field';
 import { FormMessage } from '@/components/ui/form-message';
 import { SubmitButton } from '@/components/ui/submit-button';
+import { FIELD_GRID } from './form-layout';
 import { addManualLeadAction, type ActionState } from '../leads-actions';
 
 const initial: ActionState = {};
@@ -15,7 +16,7 @@ export function LeadForm() {
 
   return (
     <form action={action} className="space-y-4">
-      <div className="grid gap-4 sm:grid-cols-2">
+      <div className={FIELD_GRID}>
         <FormField label="Name" htmlFor="name" required>
           <Input name="name" required />
         </FormField>

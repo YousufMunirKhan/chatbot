@@ -21,6 +21,18 @@ import type { TwoFactorPanel } from '@/modules/company/security-data';
 
 const EMPTY: SecurityActionState = {};
 
+/**
+ * The focus ring every control in this product shows, for the four bare
+ * `<button>`s and `<summary>`s on this card that showed none at all.
+ *
+ * They are not `Button`s on purpose — they are quiet inline controls inside a
+ * paragraph of explanation — but "not a Button" was being read as "not
+ * focusable-looking", and this card is the one screen where a keyboard-only
+ * user has to get every step right in order.
+ */
+const RING =
+  'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2';
+
 function formatDay(value: string | null): string {
   if (!value) return '';
   return new Date(value).toLocaleDateString(undefined, {
@@ -40,32 +52,62 @@ function formatDay(value: string | null): string {
  * somebody to discover it later.
  */
 function RecoveryCodes({ codes }: { codes: string[] }) {
-  const [copied, setCopied] = useState(false);
+  const [copyState, setCopyState] = useState<'idle' | 'done' | 'failed'>('idle');
   return (
     <Alert tone="warning" title="Save these recovery codes now">
       <p>
         Each one signs you in once if you lose your phone. We cannot show them again — we only keep
         a scrambled copy — so put them somewhere you can reach without this account.
       </p>
-      <ul className="my-3 grid gap-1 font-mono text-sm sm:grid-cols-2">
+      {/* A floor, not a count. `sm:grid-cols-2` is a viewport query on a list
+          inside an alert inside a card, and these are fixed-width mono codes —
+          the question is whether two of THEM fit, which only the container can
+          answer. */}
+      <ul className="my-3 grid gap-1 font-mono text-sm [grid-template-columns:repeat(auto-fit,minmax(9rem,1fr))]">
         {codes.map((code) => (
           <li key={code} className="rounded border bg-background px-2 py-1 tracking-wider">
             {code}
           </li>
         ))}
       </ul>
-      <button
-        type="button"
-        className="text-sm font-medium underline underline-offset-4"
-        onClick={() => {
-          void navigator.clipboard
-            ?.writeText(codes.join('\n'))
-            .then(() => setCopied(true))
-            .catch(() => setCopied(false));
-        }}
-      >
-        {copied ? 'Copied to your clipboard' : 'Copy all ten'}
-      </button>
+      {/*
+        This is the one moment these codes exist, and the old control got both
+        halves of that wrong.
+
+        `.catch(() => setCopied(false))` set the state it was already in, so a
+        clipboard the browser refused — which is every insecure origin, and
+        Safari outside a user gesture — looked exactly like never having pressed
+        the button. Somebody would close the panel believing the codes were
+        saved. A refusal now says so, and says what to do instead.
+
+        And it was a bare `<button>` with an underline and no focus ring, on a
+        panel whose entire job is to be acted on once. Every other control in
+        the product shows focus; this one did not.
+      */}
+      <div className="flex flex-wrap items-center gap-3">
+        <button
+          type="button"
+          className={`rounded-md text-sm font-medium underline underline-offset-4 ${RING}`}
+          onClick={() => {
+            void navigator.clipboard
+              ?.writeText(codes.join('\n'))
+              .then(() => setCopyState('done'))
+              .catch(() => setCopyState('failed'));
+          }}
+        >
+          {/* Was "Copy all ten" against a list rendered from `codes.length`. */}
+          Copy all {codes.length}
+        </button>
+        {/* Announced as well as shown: the button's own label does not change,
+            so without a live region a screen-reader user gets nothing back. */}
+        <p role="status" aria-live="polite" className="text-sm empty:hidden">
+          {copyState === 'done'
+            ? 'Copied to your clipboard.'
+            : copyState === 'failed'
+              ? 'Your browser would not let us reach the clipboard — select the codes above and copy them yourself.'
+              : null}
+        </p>
+      </div>
     </Alert>
   );
 }
@@ -101,7 +143,13 @@ export function SecurityTwoFactorCard({ panel }: { panel: TwoFactorPanel }) {
 
   return (
     <Card>
-      <CardHeader className="flex flex-row items-center justify-between gap-3">
+      {/* `flex flex-row` without `space-y-0` left `CardHeader`'s own
+          `space-y-1.5` in place, which in a row is a 6px top margin on the
+          badge — visibly off the centre line `items-center` had just set. Every
+          header of this shape in the product had the same 6px error.
+          `flex-wrap`: at 375px the title here is a whole sentence, and an
+          unwrapped badge beside it was squeezed to two characters wide. */}
+      <CardHeader className="flex-row flex-wrap items-center justify-between gap-3 space-y-0">
         <CardTitle>Two-step sign-in</CardTitle>
         <Badge variant={panel.status === 'on' ? 'success' : panel.status === 'pending' ? 'warning' : 'secondary'}>
           {panel.status === 'on' ? 'On' : panel.status === 'pending' ? 'Half set up' : 'Off'}
@@ -153,15 +201,26 @@ export function SecurityTwoFactorCard({ panel }: { panel: TwoFactorPanel }) {
                     On this phone? Open your authenticator app
                   </a>
                 </p>
+                {/* A control that shows and hides something has to say which
+                    it is doing, and it has to show focus. This one did neither:
+                    `underline` was its entire styling, so a keyboard user
+                    tabbing to the one escape hatch for a phone that cannot scan
+                    got no indication they had reached it, and a screen reader
+                    was never told the secret had appeared. */}
                 <button
                   type="button"
-                  className="font-medium underline underline-offset-4"
+                  className={`rounded-md font-medium underline underline-offset-4 ${RING}`}
                   onClick={() => setShowSecret((value) => !value)}
+                  aria-expanded={showSecret}
+                  aria-controls="two-factor-secret"
                 >
                   {showSecret ? 'Hide the code to type in' : 'Cannot scan? Type it in instead'}
                 </button>
                 {showSecret ? (
-                  <p className="break-all rounded border bg-muted/40 px-2 py-1 font-mono text-xs tracking-wider">
+                  <p
+                    id="two-factor-secret"
+                    className="break-all rounded border bg-muted/40 px-2 py-1 font-mono text-xs tracking-wider"
+                  >
                     {panel.enrolment.secretForDisplay}
                   </p>
                 ) : null}
@@ -220,7 +279,13 @@ export function SecurityTwoFactorCard({ panel }: { panel: TwoFactorPanel }) {
 
             {panel.method === 'totp' ? (
               <details className="rounded-md border p-3">
-                <summary className="cursor-pointer text-sm font-medium">
+                {/* `<summary>` is focusable and the preflight strips its
+                    outline, so this was a control a keyboard could reach and
+                    could not see. `rounded-sm` keeps the ring off the panel's
+                    own corner. */}
+                <summary
+                  className={`cursor-pointer rounded-sm text-sm font-medium ${RING}`}
+                >
                   Generate new recovery codes
                 </summary>
                 <form action={regenAction} className="mt-3 space-y-3">
@@ -242,8 +307,11 @@ export function SecurityTwoFactorCard({ panel }: { panel: TwoFactorPanel }) {
                     />
                   </FormField>
                   <FormMessage state={regenState} okText="" />
+                  {/* "Generate ten new codes" was a number written into the
+                      copy. The count comes from the server; the button no
+                      longer promises a figure it does not know. */}
                   <SubmitButton variant="outline" pendingLabel="Generating…">
-                    Generate ten new codes
+                    Generate a new set
                   </SubmitButton>
                 </form>
               </details>
@@ -282,12 +350,21 @@ export function SecurityTwoFactorCard({ panel }: { panel: TwoFactorPanel }) {
                     </SubmitButton>
                   </form>
                 ) : (
+                  // This is the one control on the page that removes a
+                  // security protection, and it was the quietest thing on it —
+                  // muted grey, underlined, no focus ring, indistinguishable
+                  // from a help link. It stays understated (it only REVEALS the
+                  // confirm step, it does not disable anything), but it is now
+                  // reachable by keyboard with a visible ring, and it says that
+                  // a confirmation follows so nobody presses it expecting the
+                  // account to change.
                   <button
                     type="button"
-                    className="text-sm font-medium text-muted-foreground underline underline-offset-4"
+                    className={`rounded-md text-sm font-medium text-muted-foreground underline underline-offset-4 ${RING}`}
                     onClick={() => setShowDisable(true)}
+                    aria-expanded={false}
                   >
-                    Turn two-step sign-in off
+                    Turn two-step sign-in off…
                   </button>
                 )}
               </div>

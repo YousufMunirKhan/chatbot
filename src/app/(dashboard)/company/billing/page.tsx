@@ -1,6 +1,6 @@
 import Link from 'next/link';
 import { requireRole } from '@/lib/auth';
-import { ROLES } from '@/lib/constants';
+import { ROLES, SUBSCRIPTION_STATUS_LABELS, humanizeToken, labelFor } from '@/lib/constants';
 // The public pricing page and this page have to agree about tax, so there is
 // exactly one sentence about it and both import it. See the comment on
 // `VAT_STATEMENT` for what it is asserting and why that assertion is true.
@@ -10,6 +10,7 @@ import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { PageHeader } from '@/components/ui/page-header';
 import { Progress } from '@/components/ui/progress';
+import { SectionHeader } from '@/components/ui/section-header';
 import { getCompanyId, getCurrentCompany } from '@/modules/company/data';
 import { getReplyAllowanceUsage, getSubscription } from '@/lib/billing';
 import { listEntitlements, type FeatureEntitlement } from '@/lib/entitlements';
@@ -43,9 +44,18 @@ function gbpExact(cents: number) {
   return new Intl.NumberFormat('en-GB', { style: 'currency', currency: 'GBP' }).format(cents / 100);
 }
 
-function statusVariant(status: string | null): 'success' | 'warning' | 'secondary' {
+/**
+ * The badge tone for a subscription status.
+ *
+ * `past_due` and `incomplete` used to fall through to `secondary` — a neutral
+ * grey pill reading "past_due", directly above a red alert explaining that the
+ * payment failed and the account is about to be suspended. The badge and the
+ * alert have to agree about how bad it is.
+ */
+function statusVariant(status: string | null): 'success' | 'warning' | 'destructive' | 'secondary' {
   if (status === 'active') return 'success';
   if (status === 'trialing') return 'warning';
+  if (status === 'past_due' || status === 'incomplete') return 'destructive';
   return 'secondary';
 }
 
@@ -177,14 +187,35 @@ export default async function BillingPage({
       ) : null}
 
       <Card>
-        <CardHeader className="flex-row items-center justify-between">
+        {/*
+          `CardHeader` is `flex flex-col space-y-1.5`. Overriding only
+          `flex-row` left `space-y-1.5` in place, which in a row puts a 6px
+          margin-TOP on the badge — so the badge sat 6px below the centre line
+          `items-center` had just aligned it to. Every one of these headers in
+          the product had the same 6px error. `space-y-0` removes it, and
+          `flex-wrap` stops the badge being crushed against a title that is a
+          plan name, a price and a VAT note at 375px.
+        */}
+        <CardHeader className="flex-row flex-wrap items-center justify-between gap-3 space-y-0">
           <CardTitle>
-            {planDef?.label ?? plan ?? 'No plan'} - {gbp(price)}/mo{price > 0 ? ` ${VAT_SHORT}` : ''}
+            {/* Was a hyphen doing the job of an em dash between two unrelated
+                facts, which reads as a compound name ("Growth - £49/mo"). */}
+            {planDef?.label ?? plan ?? 'No plan'} — {gbp(price)}/mo
+            {price > 0 ? ` ${VAT_SHORT}` : ''}
           </CardTitle>
-          <Badge variant={statusVariant(status)}>{status ?? 'none'}</Badge>
+          {/* Printed the stored value — an owner read "past_due" and "trialing".
+              `SUBSCRIPTION_STATUS_LABELS` has said "Payment failed" and "On a
+              free trial" in `lib/constants` all along; this page was the one
+              place not asking it. */}
+          <Badge variant={statusVariant(status)}>
+            {labelFor(SUBSCRIPTION_STATUS_LABELS, status ?? 'none')}
+          </Badge>
         </CardHeader>
         <CardContent className="space-y-4">
-          <div className="grid gap-3 text-sm sm:grid-cols-2">
+          {/* A `<dl>`, because that is what eight term-and-value pairs are. The
+              grid is still `auto-fit` so it asks the CARD how many columns it
+              can afford rather than asking the window. */}
+          <dl className="grid gap-3 text-sm [grid-template-columns:repeat(auto-fit,minmax(16rem,1fr))]">
             <Row label="Free until" value={formatDate(freeUntil)} />
             <Row label="Monthly AI replies" value={lim(messageLimit)} />
             <Row label="Extra replies added" value={formatNumber(replyUsage.extraReplies)} />
@@ -204,7 +235,7 @@ export default async function BillingPage({
                 value={formatDate(renewal.currentPeriodEndIso)}
               />
             ) : null}
-          </div>
+          </dl>
 
           {renewal?.cancelAtPeriodEnd ? (
             <Alert tone="warning" title="This package is set to cancel">
@@ -278,14 +309,28 @@ export default async function BillingPage({
         </CardHeader>
         <CardContent className="space-y-6">
           <div className="space-y-3">
-            <p className="text-sm font-medium">Included</p>
+            {/* Was `<p className="text-sm font-medium">` — a paragraph styled to
+                look like a heading, which puts NOTHING in the document outline.
+                A screen-reader user navigating this page by heading heard "What
+                your package includes" and then, with no further landmark, a
+                single undifferentiated run of twenty features — the "Included"
+                and "Not on this package" division that a sighted reader gets for
+                free simply did not exist for them. `SectionHeader` renders a
+                real heading at the level the outline needs (the card title is
+                the `<h2>`, so these are `<h3>`) while looking exactly the same. */}
+            <SectionHeader level={3} size="eyebrow" title="Included" />
             {included.length === 0 ? (
               <p className="text-sm text-muted-foreground">
                 Your package covers website chat only. Everything below is available on a larger
                 package.
               </p>
             ) : (
-              <ul className="grid gap-3 sm:grid-cols-2">
+              // Each row is a label, a sentence of description and a badge on
+              // the same line. `sm:grid-cols-2` gave that ~280px from 640px
+              // upward, where the badge ("Not included") took a third of the
+              // row and the description wrapped to four lines. A floor, not a
+              // count.
+              <ul className="grid gap-3 [grid-template-columns:repeat(auto-fit,minmax(19rem,1fr))]">
                 {included.map((item) => (
                   <FeatureRow key={item.feature} item={item} />
                 ))}
@@ -295,8 +340,8 @@ export default async function BillingPage({
 
           {notIncluded.length > 0 ? (
             <div className="space-y-3 border-t pt-4">
-              <p className="text-sm font-medium">Not on this package</p>
-              <ul className="grid gap-3 sm:grid-cols-2">
+              <SectionHeader level={3} size="eyebrow" title="Not on this package" />
+              <ul className="grid gap-3 [grid-template-columns:repeat(auto-fit,minmax(19rem,1fr))]">
                 {notIncluded.map((item) => (
                   <FeatureRow key={item.feature} item={item} />
                 ))}
@@ -315,9 +360,16 @@ export default async function BillingPage({
           <CardTitle>AI reply usage this month</CardTitle>
         </CardHeader>
         <CardContent className="space-y-3">
-          <div className="flex items-end justify-between">
+          {/* `flex items-end justify-between` with no wrap: at 375px the card is
+              ~295px of content, and "AI replies used" plus "128,400 / 150,000"
+              at `text-2xl` is comfortably wider than that. The two ran into each
+              other and the figure — the only thing on this card anybody reads —
+              was the half that got clipped. `flex-wrap` drops the number onto
+              its own line instead, and `gap-x-4` keeps them apart when they do
+              share one. */}
+          <div className="flex flex-wrap items-end justify-between gap-x-4 gap-y-1">
             <span className="text-sm text-muted-foreground">AI replies used</span>
-            <span className="text-2xl font-semibold">
+            <span className="text-2xl font-semibold tabular-nums">
               {formatNumber(replyUsage.used)} /{' '}
               {totalAvailable == null ? 'Unlimited' : formatNumber(totalAvailable)}
             </span>
@@ -355,9 +407,17 @@ export default async function BillingPage({
           />
 
           <div className="space-y-2 border-t pt-4">
-            <p className="text-sm font-medium">Recent top-ups</p>
+            <SectionHeader
+              level={3}
+              size="eyebrow"
+              title="Recent top-ups"
+              description="Every automatic charge we have attempted, newest first."
+            />
             {autoTopUpAttempts.length === 0 ? (
-              <p className="text-sm text-muted-foreground">No top-up attempts yet.</p>
+              <p className="text-sm text-muted-foreground">
+                Nothing yet. Once automatic top-up is on and your balance runs low, each attempt is
+                listed here with whether it went through.
+              </p>
             ) : (
               <ul className="divide-y text-sm">
                 {autoTopUpAttempts.map((attempt) => (
@@ -371,8 +431,10 @@ export default async function BillingPage({
                         <p className="text-xs text-danger-fg">{attempt.error}</p>
                       ) : null}
                     </div>
+                    {/* `humanizeToken`, so a new Stripe status reads as
+                        "Requires action" rather than "requires_action". */}
                     <Badge variant={attempt.status === 'succeeded' ? 'success' : 'destructive'}>
-                      {attempt.status}
+                      {humanizeToken(attempt.status)}
                     </Badge>
                   </li>
                 ))}
@@ -383,7 +445,7 @@ export default async function BillingPage({
       </Card>
 
       <Card>
-        <CardHeader className="flex-row items-center justify-between gap-3">
+        <CardHeader className="flex-row flex-wrap items-center justify-between gap-3 space-y-0">
           <CardTitle>Invoices</CardTitle>
           {account.customerId ? (
             <BillingPortalButton variant="outline" size="sm">
@@ -449,11 +511,27 @@ function FeatureRow({ item }: { item: FeatureEntitlement }) {
   );
 }
 
+/**
+ * One "Renews on / 5 March 2026" pair in the plan summary.
+ *
+ * Two `<span>`s in a `flex justify-between` are two unrelated strings that
+ * happen to sit near each other: a screen reader reads eight labels and eight
+ * values as sixteen loose items, and there is nothing saying which value
+ * belongs to which label. `<dt>`/`<dd>` is the markup that says it, and it
+ * costs nothing — the wrapping `<dl>` is on the grid.
+ *
+ * `gap-x-4` and `min-w-0` on both halves because a flex item will not shrink
+ * below its longest unbreakable word: "Integration limit" against "Unlimited"
+ * is fine, but the pair sits in an `auto-fit` track that can be 256px, and
+ * without the floor removed the label was squeezed to one word per line.
+ * `last:border-0` was also wrong — these are grid items, so "last" is the last
+ * of eight, not the last of each column, and one arbitrary cell lost its rule.
+ */
 function Row({ label, value }: { label: string; value: string }) {
   return (
-    <div className="flex justify-between border-b pb-2 last:border-0">
-      <span className="text-muted-foreground">{label}</span>
-      <span className="font-medium">{value}</span>
+    <div className="flex flex-wrap justify-between gap-x-4 border-b pb-2">
+      <dt className="min-w-0 text-muted-foreground">{label}</dt>
+      <dd className="min-w-0 font-medium">{value}</dd>
     </div>
   );
 }

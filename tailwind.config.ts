@@ -13,6 +13,24 @@ const config: Config = {
       padding: '2rem',
       screens: { '2xl': '1400px' },
     },
+    // Tailwind's five defaults, restated so `xs` can be inserted IN ORDER.
+    // `theme.extend.screens` appends instead of sorting, which would emit the
+    // `xs:` media query after `2xl:` and let `xs:` quietly beat `sm:`/`md:` at
+    // every width above 400px. Defining the whole list is the only way to add a
+    // breakpoint below `sm` without that.
+    //
+    // READ THIS BEFORE USING IT: `xs:` asks about the VIEWPORT, exactly like
+    // `sm:`/`md:`/`lg:`. It is the right tool for a page shell and the wrong tool
+    // inside a card that can sit in a 360px column. For that, use `FieldGrid`
+    // (src/components/ui/field-grid.tsx), which measures the container.
+    screens: {
+      xs: '400px',
+      sm: '640px',
+      md: '768px',
+      lg: '1024px',
+      xl: '1280px',
+      '2xl': '1536px',
+    },
     extend: {
       colors: {
         // Brand (Module 22). `DEFAULT` used to be a fourth, unrelated hex
@@ -116,6 +134,16 @@ const config: Config = {
         lg: 'var(--radius)',
         md: 'calc(var(--radius) - 2px)',
         sm: 'calc(var(--radius) - 4px)',
+      },
+      // `aria-invalid` is NOT one of Tailwind's nine built-in `aria-*` variants
+      // (busy, checked, disabled, expanded, hidden, pressed, readonly, required,
+      // selected), so `aria-invalid:border-danger` silently produced no CSS.
+      // `FormField` injects `aria-invalid` on the control it wraps, which means
+      // every text control in the product announced its error to a screen reader
+      // and showed nothing to anyone looking at it. Registering it here is what
+      // lets `Input`/`Textarea`/`Select` carry the visible error state.
+      aria: {
+        invalid: 'invalid="true"',
       },
     },
   },

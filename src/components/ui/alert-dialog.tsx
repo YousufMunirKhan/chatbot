@@ -122,7 +122,9 @@ const AlertDialogTitle = React.forwardRef<
 >(({ className, ...props }, ref) => (
   <DialogPrimitive.Title
     ref={ref}
-    className={cn('text-lg font-semibold leading-none tracking-tight', className)}
+    // `leading-tight`, not `leading-none` (Module 24) — an alert dialog is
+    // `max-w-md` and its title states a consequence, so it wraps.
+    className={cn('text-lg font-semibold leading-tight tracking-tight', className)}
     {...props}
   />
 ));

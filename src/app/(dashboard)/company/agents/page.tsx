@@ -106,6 +106,10 @@ export default async function AgentsPage() {
     ? ROLES.AGENT
     : (roleOptions[0]?.value ?? ROLES.AGENT);
 
+  // Read out of the list already fetched above — no extra query. The presence
+  // card used to offer three identical buttons and never say which was on.
+  const myPresence = members.find((m) => m.userId === user.userId)?.presenceStatus ?? 'offline';
+
   return (
     <div className="mx-auto max-w-7xl space-y-6">
       <PageHeader
@@ -116,14 +120,21 @@ export default async function AgentsPage() {
       <Card>
         <CardHeader>
           <CardTitle>Sign-in link for your staff</CardTitle>
-          <p className="text-sm text-muted-foreground">
+          {/* Was a bare `<p className="text-sm text-muted-foreground">`, which is
+              `CardDescription` written out by hand — same result, one more place
+              the two can drift apart. */}
+          <CardDescription>
             Send this to anyone you have invited. They sign in once and land straight in the chat
             inbox — they never see billing, settings or your assistant&rsquo;s setup.
-          </p>
+          </CardDescription>
         </CardHeader>
         <CardContent className="space-y-3">
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
-            <code className="min-w-0 flex-1 overflow-auto rounded-md bg-muted px-3 py-2 text-sm">
+            {/* `overflow-x-auto` and not `overflow-auto`: this is a single line
+                of text that must never introduce a vertical scrollbar, and it
+                must never widen the page — the URL carries a company slug and
+                is long on a phone. */}
+            <code className="min-w-0 flex-1 overflow-x-auto whitespace-nowrap rounded-md bg-muted px-3 py-2 text-sm">
               {agentUrl}
             </code>
             <div className="flex shrink-0 gap-2">
@@ -200,9 +211,15 @@ export default async function AgentsPage() {
                             {labelFor(PRESENCE_LABELS, m.presenceStatus ?? 'offline')}
                           </Badge>
                         </TableCell>
-                        <TableCell className="text-end align-top">
+                        <TableCell className="align-top">
                           {isSelf ? null : (
-                            <div className="space-y-2">
+                            // `items-end` and `flex-col`, not a stack of block
+                            // elements: the two controls are different widths
+                            // and left-aligned they read as a ragged column.
+                            // `ConfirmSubmit` grows to three controls when it
+                            // arms, so the wrapper has to be allowed to wrap
+                            // rather than force the column wider.
+                            <div className="flex flex-col items-end gap-2">
                               <AgentAccessForm
                                 membershipId={m.membershipId}
                                 personLabel={m.fullName || m.email || 'this person'}
@@ -332,18 +349,40 @@ export default async function AgentsPage() {
               </CardDescription>
             </CardHeader>
             <CardContent>
+              {/* Three buttons that all looked identical, with nothing anywhere
+                  saying which one was already true. An owner pressed one, the
+                  page re-rendered looking exactly the same, and the only way to
+                  find out whether it had worked was to scroll up and read their
+                  own row in the table. The current status is now marked on the
+                  control itself, and `aria-pressed` says the same thing to a
+                  screen reader. */}
               <fieldset className="space-y-2">
                 <legend className="text-sm font-medium">Set my status to</legend>
                 <div className="flex flex-wrap gap-2">
-                  {(['online', 'away', 'offline'] as const).map((status) => (
-                    <form key={status} action={setAgentPresenceAction}>
-                      <input type="hidden" name="status" value={status} />
-                      <Button type="submit" variant="outline" size="sm">
-                        {labelFor(PRESENCE_LABELS, status)}
-                      </Button>
-                    </form>
-                  ))}
+                  {(['online', 'away', 'offline'] as const).map((status) => {
+                    const current = myPresence === status;
+                    return (
+                      <form key={status} action={setAgentPresenceAction}>
+                        <input type="hidden" name="status" value={status} />
+                        <Button
+                          type="submit"
+                          variant={current ? 'default' : 'outline'}
+                          size="sm"
+                          aria-pressed={current}
+                        >
+                          {labelFor(PRESENCE_LABELS, status)}
+                        </Button>
+                      </form>
+                    );
+                  })}
                 </div>
+                <p className="text-xs text-muted-foreground">
+                  You are currently{' '}
+                  <span className="font-medium text-foreground">
+                    {labelFor(PRESENCE_LABELS, myPresence)}
+                  </span>
+                  .
+                </p>
               </fieldset>
             </CardContent>
           </Card>

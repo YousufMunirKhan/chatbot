@@ -3,7 +3,9 @@ import { notFound } from 'next/navigation';
 import { requireRole } from '@/lib/auth';
 import { ROLES } from '@/lib/constants';
 import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
+import { EmptyState } from '@/components/ui/empty-state';
 import { PageHeader } from '@/components/ui/page-header';
 import { cn } from '@/lib/utils';
 import { formatAbsoluteTime, formatRelativeTime } from '@/lib/relative-time';
@@ -131,7 +133,12 @@ function MessageBubble({ message, now }: { message: InboxMessage; now: Date }) {
             {formatRelativeTime(message.createdAt, now)}
           </time>
         </p>
-        <p className="whitespace-pre-wrap leading-relaxed">{displayMessage(message.content)}</p>
+        {/* `break-words`: a customer pasting a long tracking URL or an order
+            reference with no spaces in it pushed the bubble past its 80% cap
+            and, in the sticky-composer layout, out of the card entirely. */}
+        <p className="whitespace-pre-wrap break-words leading-relaxed">
+          {displayMessage(message.content)}
+        </p>
       </div>
     </div>
   );
@@ -199,16 +206,24 @@ export default async function ConversationPage({
           <CardContent className="max-h-[60vh] flex-1 space-y-3 overflow-y-auto p-4 lg:max-h-none">
             {convo.hasEarlierMessages ? (
               <div className="flex justify-center">
-                <Link
-                  href={`/company/inbox/${convo.id}?msgs=${convo.messages.length + 100}`}
-                  className="rounded-full border px-3 py-1 text-xs text-muted-foreground hover:bg-muted"
-                >
-                  Load earlier messages ({convo.totalMessages - convo.messages.length} more)
-                </Link>
+                {/* The `Button` primitive rather than a hand-rolled pill: this
+                    was the only control in the product wearing `rounded-full`
+                    with a border, and it sat two sizes below every other
+                    control on the screen. */}
+                <Button asChild size="sm" variant="outline">
+                  <Link href={`/company/inbox/${convo.id}?msgs=${convo.messages.length + 100}`}>
+                    Load earlier messages ({convo.totalMessages - convo.messages.length} more)
+                  </Link>
+                </Button>
               </div>
             ) : null}
             {convo.messages.length === 0 ? (
-              <p className="text-sm text-muted-foreground">No messages yet.</p>
+              // A designed state, not a stray sentence: an empty transcript is
+              // real — a visitor who opened the chat and typed nothing.
+              <EmptyState
+                title="Nothing has been said yet"
+                body="This chat was opened but no message was sent. Anything either side writes will appear here."
+              />
             ) : (
               convo.messages.map((m) => <MessageBubble key={m.id} message={m} now={now} />)
             )}
@@ -235,10 +250,17 @@ export default async function ConversationPage({
         {convo.csatComment ? (
           <Card>
             <CardContent className="p-4">
+              {/* The comment came with a score and the panel never showed it,
+                  so an agent read "the coffee was cold" with no idea whether
+                  the chat had been marked 1 or 4. The header carries the score
+                  only when it is bad enough to be an exception; here it is
+                  context for the words underneath. */}
               <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
-                What the customer said
+                {typeof convo.csatRating === 'number'
+                  ? `They rated this chat ${convo.csatRating} out of 5`
+                  : 'What the customer said'}
               </p>
-              <p className="mt-1 text-sm">{convo.csatComment}</p>
+              <p className="mt-1 whitespace-pre-wrap break-words text-sm">{convo.csatComment}</p>
             </CardContent>
           </Card>
         ) : null}

@@ -43,13 +43,45 @@ const MODE_LABELS: Array<{ value: string; label: string }> = [
  */
 export function ChannelRowTools({ row }: { row: ChannelIdentityRow }) {
   const [open, setOpen] = useState(false);
+  const panelId = `channel-tools-${row.id}`;
+  const name = row.displayName ?? row.channelLabel;
   return (
     <div className="w-full">
-      <Button type="button" size="sm" variant="ghost" onClick={() => setOpen((v) => !v)}>
+      {/*
+        A button that shows and hides a panel has to SAY so. Without
+        `aria-expanded` a screen-reader user hears "Settings & test, button",
+        presses it, and is told nothing at all — the panel appears below the
+        focus point and there is no announcement that anything happened.
+        `aria-controls` names what it opened; the label names which connected
+        account it belongs to, because a page with six channels otherwise
+        offers six buttons all called "Settings & test".
+      */}
+      <Button
+        type="button"
+        size="sm"
+        variant="ghost"
+        onClick={() => setOpen((v) => !v)}
+        aria-expanded={open}
+        aria-controls={panelId}
+      >
         {open ? 'Hide settings' : 'Settings & test'}
+        <span className="sr-only"> for {name}</span>
       </Button>
+      {/*
+        `md:grid-cols-2` was a VIEWPORT query on a panel nested three boxes
+        deep: page padding, then a `max-w-6xl` card, then a list row. At 768px
+        — exactly where the rule switches on — the dashboard sidebar is already
+        showing, so the row is about 450px and each of these two columns was
+        ~210px holding a `<select>` whose longest option is "Private DM + public
+        acknowledgement". A native select cannot truncate; it cut its own text
+        off mid-word. The floor asks the row how much room there really is, and
+        gives the two forms one column each only when both can be used.
+      */}
       {open ? (
-        <div className="mt-3 grid gap-6 rounded-md border bg-muted/20 p-4 md:grid-cols-2">
+        <div
+          id={panelId}
+          className="mt-3 grid gap-6 rounded-md border bg-muted/20 p-4 [grid-template-columns:repeat(auto-fit,minmax(18rem,1fr))]"
+        >
           {row.supportsComments ? <CommentSettings row={row} /> : null}
           <TestMessage row={row} />
         </div>
@@ -64,25 +96,43 @@ function CommentSettings({ row }: { row: ChannelIdentityRow }) {
   return (
     <form action={action} className="space-y-3">
       <input type="hidden" name="id" value={row.id} />
-      <p className="text-sm font-medium">Public comments</p>
-      <FormField
-        label="When someone comments on a post"
-        htmlFor={`commentReply-${row.id}`}
-        hint="A private answer keeps the public thread tidy; the acknowledgement tells other readers it was handled."
-      >
-        <Select name="commentReply" value={mode} onChange={(e) => setMode(e.target.value)}>
-          {MODE_LABELS.map((m) => (
-            <option key={m.value} value={m.value}>
-              {m.label}
-            </option>
-          ))}
-        </Select>
-      </FormField>
-      {mode === 'private_with_ack' ? (
-        <FormField label="Public acknowledgement" htmlFor={`commentAck-${row.id}`}>
-          <Input name="commentAck" defaultValue={row.commentAck} maxLength={500} />
+      {/*
+        `<p className="text-sm font-medium">` looked like a heading and was not
+        one — it named this group of controls to a sighted reader and to nobody
+        else. A `<legend>` gives the group a real accessible name, which is what
+        a run of related fields wants; a heading would be wrong here anyway,
+        because the same two words repeat once per connected channel and a
+        screen-reader user navigating by heading would land on six identical
+        "Public comments" with nothing to tell them apart.
+      */}
+      <fieldset className="space-y-3">
+        <legend className="mb-3 text-sm font-medium">
+          Public comments
+          <span className="sr-only"> on {row.displayName ?? row.channelLabel}</span>
+        </legend>
+        <FormField
+          label="When someone comments on a post"
+          htmlFor={`commentReply-${row.id}`}
+          hint="A private answer keeps the public thread tidy; the acknowledgement tells other readers it was handled."
+        >
+          <Select name="commentReply" value={mode} onChange={(e) => setMode(e.target.value)}>
+            {MODE_LABELS.map((m) => (
+              <option key={m.value} value={m.value}>
+                {m.label}
+              </option>
+            ))}
+          </Select>
         </FormField>
-      ) : null}
+        {mode === 'private_with_ack' ? (
+          <FormField
+            label="Public acknowledgement"
+            htmlFor={`commentAck-${row.id}`}
+            hint="The one line posted in the open thread while the real answer goes by private message."
+          >
+            <Input name="commentAck" defaultValue={row.commentAck} maxLength={500} />
+          </FormField>
+        ) : null}
+      </fieldset>
       <FormMessage state={state} okText={state.message ?? 'Comment settings saved.'} />
       <SubmitButton size="sm">Save comment settings</SubmitButton>
     </form>
@@ -94,22 +144,31 @@ function TestMessage({ row }: { row: ChannelIdentityRow }) {
   return (
     <form action={action} className="space-y-3">
       <input type="hidden" name="id" value={row.id} />
-      <p className="text-sm font-medium">Send a test message</p>
-      <FormField
-        label="Send to"
-        htmlFor={`to-${row.id}`}
-        hint={TEST_HINTS[row.channel] ?? 'The recipient id for this channel.'}
-        required
-      >
-        <Input name="to" required maxLength={300} />
-      </FormField>
-      <FormField label="Message" htmlFor={`text-${row.id}`}>
-        <Input
-          name="text"
-          maxLength={1000}
-          defaultValue="Test message from your AI assistant — this channel is connected."
-        />
-      </FormField>
+      <fieldset className="space-y-3">
+        <legend className="mb-3 text-sm font-medium">
+          Send a test message
+          <span className="sr-only"> from {row.displayName ?? row.channelLabel}</span>
+        </legend>
+        <FormField
+          label="Send to"
+          htmlFor={`to-${row.id}`}
+          hint={TEST_HINTS[row.channel] ?? 'The recipient id for this channel.'}
+          required
+        >
+          <Input name="to" required maxLength={300} />
+        </FormField>
+        <FormField
+          label="Message"
+          htmlFor={`text-${row.id}`}
+          hint="This really is sent, and it really is charged. Send it to your own number."
+        >
+          <Input
+            name="text"
+            maxLength={1000}
+            defaultValue="Test message from your AI assistant — this channel is connected."
+          />
+        </FormField>
+      </fieldset>
       <FormMessage state={state} okText={state.message ?? 'Sent.'} />
       <SubmitButton size="sm" pendingLabel="Sending…">
         Send test

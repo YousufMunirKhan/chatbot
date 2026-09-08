@@ -7,6 +7,7 @@ import {
   WHATSAPP_TIER_LABELS,
   labelFor,
 } from '@/lib/constants';
+import { Alert } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -116,7 +117,12 @@ export default async function WhatsAppPage() {
             />
           ) : (
             <>
-              <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+              {/* Four facts, each a label plus a value plus (twice) a sentence.
+                  `lg:grid-cols-4` gave each one about 215px at 1024px, where
+                  "You can message first" wrapped to three lines above a value
+                  that wrapped to two. `auto-fit` at a 13rem floor drops to two
+                  columns before that happens, and to one on a phone. */}
+              <div className="grid gap-4 [grid-template-columns:repeat(auto-fit,minmax(13rem,1fr))]">
                 <div className="rounded-md border p-3">
                   <p className="text-xs text-muted-foreground">Number</p>
                   <p className="mt-1 font-medium">
@@ -155,16 +161,22 @@ export default async function WhatsAppPage() {
                 </div>
               </div>
 
+              {/* This is a failure — the four figures above it may be stale —
+                  and it was drawn as a dashed grey box in muted text, which is
+                  the product's convention for "nothing here yet". `Alert
+                  tone="warning"` is the convention for "something is wrong",
+                  and it is what every other page uses for this. */}
               {status?.error ? (
-                <p className="rounded-md border border-dashed p-3 text-sm text-muted-foreground">
-                  We could not read your live status from Meta just now, so the figures above may be
-                  out of date. This usually means the access token saved on the Messaging apps page
-                  has expired or is missing the permission called{' '}
-                  <code className="rounded bg-muted px-1">whatsapp_business_management</code>.{' '}
+                <Alert tone="warning" title="Live status could not be read from Meta">
+                  <p>
+                    The figures above may be out of date. This usually means the access token
+                    saved on the Messaging apps page has expired, or is missing the permission
+                    called <code className="rounded bg-background/60 px-1">whatsapp_business_management</code>.
+                  </p>
                   {/* Meta's own error text is kept, but demoted: useful to whoever
                       set the number up, meaningless to everyone else. */}
-                  <span className="text-xs">(Meta said: {status.error})</span>
-                </p>
+                  <p className="mt-1 text-xs opacity-80">Meta said: {status.error}</p>
+                </Alert>
               ) : null}
 
               <div className="max-w-md border-t pt-4">
@@ -190,7 +202,11 @@ export default async function WhatsAppPage() {
           </div>
 
           <div>
-            <p className="text-sm font-medium">Match up your products</p>
+            {/* Was a bold `<p>` doing a heading's job, so this section did not
+                exist in the document outline at all — a screen-reader user
+                jumping by heading went straight from "Sell from a product list"
+                to the next card. */}
+            <h3 className="text-base font-semibold">Match up your products</h3>
             <p className="mb-3 mt-1 text-sm text-muted-foreground">
               Each product needs the same id here as it has in your Facebook catalogue, so WhatsApp
               knows which card to show. If you are not sure, your SKU is usually the right answer.
@@ -230,12 +246,20 @@ export default async function WhatsAppPage() {
                               that is usually the right answer; with no SKU it
                               says what to type rather than naming the field
                               again in machine words. */}
+                          {/* `h-8` was a fourth control height invented here —
+                              32px, against the 36px `Button size="sm"` sitting
+                              directly beside it, so the input and its own Save
+                              button were visibly out of line on every row. The
+                              scale has exactly two heights and both controls
+                              have both; `size="sm"` is the one that matches a
+                              small button. */}
                           <Input
+                            size="sm"
                             name="retailerId"
                             defaultValue={p.retailerId ?? ''}
                             maxLength={100}
                             placeholder={p.sku ?? 'Same id as in Facebook'}
-                            className="h-8 max-w-[200px]"
+                            className="max-w-[200px]"
                             aria-label={`Id in your Facebook catalogue for ${p.title}`}
                           />
                           {/* One Save button per row, so it names the row. */}
@@ -294,8 +318,13 @@ export default async function WhatsAppPage() {
                         <input type="hidden" name="guide" value={guide.key} />
                         <input type="hidden" name="stepKey" value={step.key} />
                         <input type="hidden" name="done" value={(!isDone).toString()} />
+                        {/* Twelve identical "Mark done" buttons down the page,
+                            each announced to a screen reader as just "Mark
+                            done". The step name makes each one distinct without
+                            adding anything a sighted reader has to look at. */}
                         <Button type="submit" size="sm" variant={isDone ? 'ghost' : 'outline'}>
                           {isDone ? 'Undo' : 'Mark done'}
+                          <span className="sr-only">: {step.title}</span>
                         </Button>
                       </form>
                     </li>

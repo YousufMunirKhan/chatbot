@@ -56,6 +56,45 @@ bordered `rounded-lg` cards. Three levels:
 
 If you are reaching for a shadow to separate two blocks, use a border or a gap.
 
+## Control size scale
+
+Two heights, defined once in `control-styles.ts` and shared by every control.
+Before Module 24 there were four heights across three files and a filter bar
+could not be made to line up.
+
+| Size      | Height | `Button` | `Input` | `Select` | Use                          |
+| --------- | -----: | :------: | :-----: | :------: | ---------------------------- |
+| `default` |   40px |   yes    |   yes   |   yes    | Forms                        |
+| `sm`      |   36px |   yes    |   yes   |   yes    | Toolbars, filter bars        |
+| `lg`      |   44px |   yes    |    —    |    —     | Page-level call to action    |
+
+Square icon buttons follow the same rhythm — `icon` 40px, `icon-sm` 36px,
+`icon-xs` 32px — and all three clear the 24px WCAG 2.5.8 target minimum. **An
+icon-only button has no accessible name: always pass `aria-label`.**
+
+`Textarea` has no size variant on purpose. The scale exists to line a control up
+with the button beside it in a row, and a multi-line box is never in that row.
+
+## Layout: the breakpoints lie
+
+**`sm:` `md:` `lg:` `xl:` measure the VIEWPORT.** They report the width of the
+window and say nothing about the box your component is in. A form laid out
+`lg:grid-cols-4` inside a 500px column gave each field 110px on a full-width
+screen and a `<select>` clipped its own text mid-word.
+
+About a third of this dashboard is two-column, so about a third of it has a
+narrow column that every `lg:` inside it will lie about.
+
+- **A grid of fields → `FieldGrid`.** It is
+  `repeat(auto-fit, minmax(min(100%, 16rem), 1fr))`, which asks the container.
+- **Two halves that should stack when cramped → `flex flex-wrap` with a
+  `basis-*` on each half.** Flexbox wraps against the parent, not the window.
+- **A page-level shell question → `md:` is right.** Whether the sidebar is on
+  screen genuinely is a viewport question.
+
+`xs:` (400px) exists for the gap between one phone column and 640px. It is still
+a viewport breakpoint and still lies about containers.
+
 ## Radius
 
 `--radius: 0.5rem` anchors the scale, and Tailwind derives `md` (`-2px`) and
@@ -122,8 +161,17 @@ brand colour. It is a deliberate multi-stop blue→teal→green ramp; leave it a
 ## Accessibility conventions
 
 - **Every control gets a label.** `FormField` renders one and wires
-  `aria-describedby` / `aria-invalid` to the child automatically. Placeholders
-  are not labels.
+  `aria-describedby` / `aria-invalid` / `aria-required` to the child
+  automatically. Placeholders are not labels.
+- **An error must be visible as well as announced.** `FormField`'s `error` sets
+  `aria-invalid`, and `Input` / `Select` / `Textarea` paint a red border off it.
+  Until Module 24 the Tailwind variant did not exist, so a failed field
+  announced correctly and looked completely normal.
+- **Colour is never the only signal.** A done step is green AND ticked AND says
+  "Done" (`Stepper`); a current one carries `aria-current="step"`.
+- **Every focusable thing shows focus.** If you wrap a component in a `<Link>` or
+  a `<button>`, the ring has to move with it — a linked `StatTile` had none at
+  all, because the ring lived on the card's children.
 - **Every async result gets a live region.** `FormMessage` carries
   `role="status" aria-live="polite"` for success and `role="alert"` for failure.
   Without it a server action completes and a screen-reader user is told nothing.
@@ -137,29 +185,62 @@ brand colour. It is a deliberate multi-stop blue→teal→green ramp; leave it a
 
 ## Components
 
-| Component      | Server-safe | Notes                                                     |
-| -------------- | :---------: | --------------------------------------------------------- |
-| `Alert`        |     yes     | Standing notice. Tones `info`/`success`/`warning`/`danger`. |
-| `Badge`        |     yes     | Adds `info`. All tones on triplets.                        |
-| `Button`       |     yes     | Unchanged.                                                 |
-| `Card`         |     yes     | `CardTitle` → heading with `level`; `CardDescription` → `<p>`. |
-| `EmptyState`   |     yes     | Drops into a `CardContent`.                                |
-| `FormField`    |     yes     | Label + control + hint + error, wired.                     |
-| `FormMessage`  |     yes     | The live region for action results.                        |
-| `Input`        |     yes     | Unchanged.                                                 |
-| `Label`        |     yes     | Adds `required`.                                           |
-| `PageHeader`   |     yes     | `title`, `description`, `backTo`, `actions`.               |
-| `Progress`     |     yes     | Clamps centrally. `role="progressbar"`.                    |
-| `Select`       |     yes     | Native `<select>`. Sizes `default` (h-10) / `sm` (h-9).    |
-| `Skeleton`     |     yes     | `aria-hidden`; set `aria-busy` on the container.           |
-| `StatTile`     |     yes     | `label`, `value`, `hint`, `href`, `tone`, `delta`.         |
-| `SubmitButton` |  **no**     | `'use client'` — needs `useFormStatus`.                    |
-| `Table`        |     yes     | `TableHead` is `text-start`.                               |
-| `Textarea`     |     yes     | Unchanged.                                                 |
+| Component         | Server-safe | Notes                                                     |
+| ----------------- | :---------: | --------------------------------------------------------- |
+| `Alert`           |     yes     | Standing notice. Tones `info`/`success`/`warning`/`danger`. |
+| `Badge`           |     yes     | Adds `info`. All tones on triplets.                        |
+| `Button`          |     yes     | Sizes share `Input`'s scale. `icon` / `icon-sm` / `icon-xs`. |
+| `Card`            |     yes     | `CardTitle` → heading with `level`; `CardDescription` → `<p>`. |
+| `CopyField`       |  **no**     | A value + a copy control. Reports a failed copy.           |
+| `DescriptionList` |     yes     | `<dl>`. `inline` metadata run, or `rows`.                  |
+| `EmptyState`      |     yes     | Drops into a `CardContent`.                                |
+| `FieldGrid`       |     yes     | Responsive on the CONTAINER, not the viewport.             |
+| `FormField`       |     yes     | Label + control + hint + error, wired. Sets `aria-invalid`. |
+| `FormMessage`     |     yes     | The live region for action results.                        |
+| `InfoHint`        |  **no**     | Click-to-open note. Not portalled — see its file.          |
+| `Input`           |     yes     | Sizes `default` (40px) / `sm` (36px). Paints `aria-invalid`. |
+| `Label`           |     yes     | Adds `required`. `block`, wrap-safe leading.               |
+| `PageHeader`      |     yes     | `title`, `description`, `backTo`, `actions`.               |
+| `PasswordInput`   |  **no**     | The composition pattern to copy. Read the file.            |
+| `Progress`        |     yes     | Clamps centrally. `role="progressbar"`.                    |
+| `SectionHeader`   |     yes     | A heading inside a page. `size` and `level` are separate.  |
+| `Select`          |     yes     | Native `<select>`. Cannot truncate — mind the column width. |
+| `Skeleton`        |     yes     | `aria-hidden`; set `aria-busy` on the container.           |
+| `StatTile`        |     yes     | `label`, `value`, `hint`, `href`, `tone`, `delta`.         |
+| `Stepper`         |     yes     | `rail` (progress) or `list` (checklist). For onboarding.   |
+| `SubmitButton`    |  **no**     | `'use client'` — needs `useFormStatus`.                    |
+| `Table`           |     yes     | `TableHead` is `text-start`. The wrapper is load-bearing.  |
+| `Textarea`        |     yes     | `resize-y`. Paints `aria-invalid`.                         |
+| `ThemeToggle`     |  **no**     | `labels="never"` when it sits in a narrow column.          |
 
-`SubmitButton` is the only client component here. It still works inside a
-server-rendered `<form action={serverAction}>` — the form stays a server
-component and only the button hydrates.
+Overlays — `Dialog`, `AlertDialog`, `Sheet`, `Popover`, `Tabs` — are all client
+components, because a focus trap is. `TabLinks` is the server half of tabs and is
+the default choice; see `tabs.tsx`.
+
+The server-safe components still work inside a server-rendered
+`<form action={serverAction}>`: the form stays a server component and only the
+client pieces (`SubmitButton`, `CopyField`) hydrate.
+
+### Composition traps
+
+Read the file before wrapping one of these in another box.
+
+- **`Input` inside a bordered wrapper → two radii.** `Input` carries its own
+  `rounded-md`. Putting it inside a bordered `rounded-xl` row is what broke the
+  password field, and it only showed once a browser autofilled it. `PasswordInput`
+  is the fixed pattern: a `relative` wrapper with no box of its own, the trailing
+  control `absolute inset-y-px end-px`, room reserved with `pe-*`.
+- **`CardContent` bakes `pt-0`,** which assumes a `CardHeader` above it. A card
+  with no header wants `<CardContent className="pt-6">`.
+- **`Card` inside `Card` → two borders.** Use `rounded-md border bg-muted/30` for
+  a panel inside a card.
+- **`Card` in a grid needs `min-w-0`** on the track, or one long unbroken string
+  widens the column and the page scrolls sideways.
+- **`Select` cannot truncate.** A native select cuts its text mid-word at the
+  control's edge; `truncate` does nothing to it. Lay the form out with
+  `FieldGrid` and keep option labels short.
+- **`Button` never wraps.** A long label overflows a narrow container instead.
+  Keep labels short and let the container wrap the buttons.
 
 ### Why `Select` is native
 

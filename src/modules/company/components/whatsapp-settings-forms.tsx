@@ -7,6 +7,7 @@ import { Select } from '@/components/ui/select';
 import { FormField } from '@/components/ui/form-field';
 import { FormMessage } from '@/components/ui/form-message';
 import { SubmitButton } from '@/components/ui/submit-button';
+import { CHECKBOX } from './form-layout';
 import {
   saveCatalogSettingsAction,
   saveWabaIdAction,
@@ -75,7 +76,7 @@ export function CatalogSettingsForm({
           name="isActive"
           value="true"
           defaultChecked={isActive}
-          className="h-4 w-4 rounded border-input"
+          className={CHECKBOX}
         />
         <span>Let the assistant send product cards</span>
       </label>
@@ -101,10 +102,18 @@ export function SubscriberForm() {
   }, [state.ok]);
 
   return (
+    // `sm:grid-cols-[1fr_auto_auto]` sized two of the three tracks to their
+    // CONTENT — and the content of track two is a field whose hint is a full
+    // sentence ("With the country code and a leading +, exactly as it is saved
+    // on their phone."). An `auto` track takes that sentence's max-content
+    // width, so from 640px up the hint decided the layout: the phone box grew
+    // to fit a line of help text and the channel select in `1fr` was squeezed
+    // to whatever was left. `auto-fit` with a floor asks the CARD instead, and
+    // every field gets at least a width it can be used at.
     <form
       ref={ref}
       action={action}
-      className="grid gap-4 sm:grid-cols-[1fr_auto_auto] sm:items-end"
+      className="grid items-end gap-4 [grid-template-columns:repeat(auto-fit,minmax(15rem,1fr))]"
     >
       {/* Channel comes first now: it decides what the box beside it wants. */}
       <FormField label="Reach them on" htmlFor="channel">
@@ -140,20 +149,22 @@ export function SubscriberForm() {
       </FormField>
       <div className="space-y-3">
         <label className="flex items-center gap-2 text-sm">
-          <input
-            type="checkbox"
-            name="optedIn"
-            value="true"
-            defaultChecked
-            className="h-4 w-4 rounded border-input"
-          />
+          {/* `rounded border-input` did nothing at all: the browser is still
+              painting this control itself, so its own border and radius win.
+              `CHECKBOX` is the shared class, and `accent-primary` is the one
+              property that genuinely recolours a native box. */}
+          <input type="checkbox" name="optedIn" value="true" defaultChecked className={CHECKBOX} />
           <span>They agreed to be messaged</span>
         </label>
         <SubmitButton size="sm" pendingLabel="Saving…">
           Add contact
         </SubmitButton>
       </div>
-      <div className="sm:col-span-3">
+      {/* `sm:col-span-3` named a column count this grid no longer has — and an
+          item asking to span three columns of a one-column `auto-fit` grid makes
+          the browser invent the missing tracks, which is how a row overflows its
+          card. `1 / -1` is "first line to last", correct at any column count. */}
+      <div className="[grid-column:1/-1]">
         <FormMessage state={state} okText="Contact saved." />
       </div>
     </form>

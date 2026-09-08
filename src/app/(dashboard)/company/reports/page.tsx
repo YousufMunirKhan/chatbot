@@ -1,12 +1,16 @@
 import { requireRole } from '@/lib/auth';
+import { ConfirmSubmit } from '@/components/confirm-submit';
 import { InfoHint } from '@/components/ui/info-hint';
 import { CHANNEL_LABELS, ROLES, humanizeToken, labelFor } from '@/lib/constants';
 import { companyLabel } from '@/lib/labels';
 import { Alert } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { formatDate } from '@/lib/format';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { EmptyState } from '@/components/ui/empty-state';
+import { FormField } from '@/components/ui/form-field';
+import { Input } from '@/components/ui/input';
 import { PageHeader } from '@/components/ui/page-header';
 import { StatTile } from '@/components/ui/stat-tile';
 import {
@@ -199,10 +203,14 @@ function Heatmap({ data }: { data: HourHeatmap }) {
           ))}
         </div>
       </div>
+      {/* A grid of 168 translucent squares says nothing until someone is told
+          what "darker" means. The peak line under it was doing the whole job. */}
       <p className="text-xs text-muted-foreground">
+        The darker a square, the more conversations started in that hour.{' '}
         {data.peak
-          ? `Busiest: ${describeHeatmapCell(data.peak.day, data.peak.hour)} with ${data.peak.count} conversations. Times are UTC.`
-          : 'Times are UTC.'}
+          ? `Busiest: ${describeHeatmapCell(data.peak.day, data.peak.hour)} with ${data.peak.count} conversations. `
+          : ''}
+        Times are UTC.
       </p>
     </div>
   );
@@ -234,23 +242,37 @@ async function OverviewPanel({ range }: { range: ReportRange }) {
 
   return (
     <div className="space-y-6">
-      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+      {/*
+        The four labels here name the same four numbers Home names, in the same
+        words. "CSAT" is an acronym no shop owner has met — Home calls it
+        Customer rating; "Leads captured" contradicts the whole product, which
+        renamed leads to Enquiries down to the sidebar row; and "Handled by AI"
+        was a third name for the thing Home calls "Answered on its own" and
+        Usage calls "Handled without you".
+      */}
+      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4 [&>*]:min-w-0">
         <StatTile
           label="Conversations"
           value={snapshot.totals.conversations}
           hint={`${snapshot.totals.messages} messages`}
         />
         <StatTile
-          label="Handled by AI"
+          label="Answered on its own"
           value={`${snapshot.totals.automationRate}%`}
           hint={`${snapshot.totals.escalated} needed a person`}
           tone={snapshot.totals.automationRate >= 70 ? 'success' : 'default'}
         />
-        <StatTile label="Leads captured" value={snapshot.totals.leads} href="/company/leads" />
+        <StatTile label="Enquiries captured" value={snapshot.totals.leads} href="/company/leads" />
         <StatTile
-          label="CSAT"
+          label="Customer rating"
           value={snapshot.totals.csatAverage === null ? '—' : `${snapshot.totals.csatAverage} / 5`}
-          hint={`${snapshot.totals.csatResponses} ratings`}
+          // A dash with "0 ratings" under it reads as a number that failed to
+          // load. Say which of the two it is.
+          hint={
+            snapshot.totals.csatResponses === 0
+              ? 'Nobody rated a chat in this period'
+              : `${snapshot.totals.csatResponses} ratings`
+          }
           tone={
             snapshot.totals.csatAverage === null
               ? 'default'
@@ -269,14 +291,27 @@ async function OverviewPanel({ range }: { range: ReportRange }) {
           <CardDescription>Conversations started per day.</CardDescription>
         </CardHeader>
         <CardContent>
-          <Sparkline
-            values={snapshot.daily.map((d) => d.conversations)}
-            label="Conversations per day"
-          />
-          <div className="mt-1 flex justify-between text-xs text-muted-foreground">
-            <span>{snapshot.daily[0]?.date}</span>
-            <span>{snapshot.daily[snapshot.daily.length - 1]?.date}</span>
-          </div>
+          {/* `Sparkline` renders nothing under two points, and this card then
+              showed an empty box with two dates under it and no explanation.
+              And those dates were raw day keys — `2026-08-08` — the one place
+              in the product not using `formatDate`. */}
+          {snapshot.daily.length < 2 ? (
+            <EmptyState
+              title="Not enough days to draw a line"
+              body="A trend needs at least two days in the window. Choose a longer period above and the shape of your week appears here."
+            />
+          ) : (
+            <>
+              <Sparkline
+                values={snapshot.daily.map((d) => d.conversations)}
+                label="Conversations per day"
+              />
+              <div className="mt-1 flex flex-wrap justify-between gap-2 text-xs text-muted-foreground">
+                <span>{formatDate(snapshot.daily[0]?.date)}</span>
+                <span>{formatDate(snapshot.daily[snapshot.daily.length - 1]?.date)}</span>
+              </div>
+            </>
+          )}
         </CardContent>
       </Card>
 
@@ -340,13 +375,13 @@ async function OverviewPanel({ range }: { range: ReportRange }) {
                   <TableHead>Conversations</TableHead>
                   <TableHead>Messages</TableHead>
                   <TableHead>
-                    Handled by AI
-                    <InfoHint label="Handled by AI">
+                    Answered on its own
+                    <InfoHint label="Answered on its own">
                       Conversations on this channel that finished without ever needing one of your
                       team.
                     </InfoHint>
                   </TableHead>
-                  <TableHead>Leads</TableHead>
+                  <TableHead>Enquiries</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -504,7 +539,7 @@ async function TeamPanel({ range }: { range: ReportRange }) {
                   <TableHead>Conversations</TableHead>
                   <TableHead>Replies</TableHead>
                   <TableHead>Median first reply</TableHead>
-                  <TableHead>CSAT</TableHead>
+                  <TableHead>Customer rating</TableHead>
                   <TableHead>Open now</TableHead>
                 </TableRow>
               </TableHeader>
@@ -564,7 +599,7 @@ async function CustomersPanel({ range }: { range: ReportRange }) {
     <div className="space-y-6">
       <Card>
         <CardHeader>
-          <CardTitle>Lead funnel</CardTitle>
+          <CardTitle>From first hello to a sale</CardTitle>
           <CardDescription>Where people drop out between saying hello and buying.</CardDescription>
         </CardHeader>
         <CardContent className="space-y-3">
@@ -674,21 +709,24 @@ async function CustomersPanel({ range }: { range: ReportRange }) {
 
       <Card>
         <CardHeader>
-          <CardTitle>Leads by status</CardTitle>
-          <CardDescription>Your pipeline as it stands today.</CardDescription>
+          <CardTitle>Enquiries by stage</CardTitle>
+          <CardDescription>
+            Where each enquiry has got to, as it stands today. The stages are the ones you set on
+            the Enquiries list.
+          </CardDescription>
         </CardHeader>
         <CardContent className="p-0">
           {report.leadsByStatus.length === 0 ? (
             <EmptyState
-              title="No leads in this period"
-              body="Captured contact details appear here as they arrive."
+              title="No enquiries in this period"
+              body="Whenever someone leaves their name and a way to reach them, they are counted here under whichever stage you have moved them to."
             />
           ) : (
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>Status</TableHead>
-                  <TableHead>Leads</TableHead>
+                  <TableHead>Stage</TableHead>
+                  <TableHead>Enquiries</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -793,19 +831,30 @@ async function AssistantPanel({ range }: { range: ReportRange }) {
           value={report.averageMessagesToResolution ?? '—'}
           hint={`${report.resolvedConversations} closed conversations`}
         />
+        {/* The pair of them is the point — the same rating, split by whether a
+            person ever joined in — so they are named as a pair rather than as
+            two readings of an acronym. */}
         <StatTile
-          label="CSAT — AI only"
+          label="Rating — assistant alone"
           value={report.csat.aiOnly.average === null ? '—' : `${report.csat.aiOnly.average} / 5`}
-          hint={`${report.csat.aiOnly.responses} ratings`}
+          hint={
+            report.csat.aiOnly.responses === 0
+              ? 'No chats the assistant finished alone were rated'
+              : `${report.csat.aiOnly.responses} ratings`
+          }
         />
         <StatTile
-          label="CSAT — human helped"
+          label="Rating — after your team stepped in"
           value={
             report.csat.humanTouched.average === null
               ? '—'
               : `${report.csat.humanTouched.average} / 5`
           }
-          hint={`${report.csat.humanTouched.responses} ratings`}
+          hint={
+            report.csat.humanTouched.responses === 0
+              ? 'No chats your team joined were rated'
+              : `${report.csat.humanTouched.responses} ratings`
+          }
         />
       </div>
 
@@ -1220,7 +1269,11 @@ async function ScheduledPanel({ editId }: { editId?: string }) {
                       <Badge variant="outline">{s.rangeLabel}</Badge>
                     </TableCell>
                     <TableCell className="text-sm">{s.cadence}</TableCell>
-                    <TableCell className="text-xs text-muted-foreground">
+                    {/* Capped and allowed to break: five addresses on one line
+                        stretched this column until the whole table scrolled,
+                        and an email is the one string that never wraps on its
+                        own. */}
+                    <TableCell className="max-w-[14rem] break-words text-xs text-muted-foreground">
                       {s.recipients.join(', ')}
                     </TableCell>
                     <TableCell className="text-sm">
@@ -1241,28 +1294,57 @@ async function ScheduledPanel({ editId }: { editId?: string }) {
                         buttons: each posts to a different server action, and
                         forms cannot be nested.
                       */}
+                      {/* Every button here reads identically in every row, so
+                          each carries an `aria-label` naming its schedule —
+                          the same rule the order and booking status buttons
+                          follow. Delete is the only irreversible one on the
+                          page and was a bare submit: one stray click and a
+                          schedule the owner set up months ago was gone with no
+                          confirmation and no undo. `ConfirmSubmit` is what the
+                          rest of the product uses for that. */}
                       <div className="flex flex-wrap items-center gap-2">
                         <Button asChild size="sm" variant="outline">
-                          <a href={`/company/reports?tab=scheduled&edit=${s.id}`}>Edit</a>
+                          <a
+                            href={`/company/reports?tab=scheduled&edit=${s.id}`}
+                            aria-label={`Edit the schedule ${s.name}`}
+                          >
+                            Edit
+                          </a>
                         </Button>
                         <form action={sendReportNowAction}>
                           <input type="hidden" name="id" value={s.id} />
-                          <Button type="submit" size="sm" variant="outline">
-                            Send now
+                          <Button
+                            type="submit"
+                            size="sm"
+                            variant="outline"
+                            aria-label={`Send a copy of ${s.name} now`}
+                          >
+                            Send a copy now
                           </Button>
                         </form>
                         <form action={toggleReportScheduleAction}>
                           <input type="hidden" name="id" value={s.id} />
                           <input type="hidden" name="active" value={s.isActive ? 'false' : 'true'} />
-                          <Button type="submit" size="sm" variant="outline">
+                          <Button
+                            type="submit"
+                            size="sm"
+                            variant="outline"
+                            aria-label={
+                              s.isActive
+                                ? `Pause the schedule ${s.name}`
+                                : `Resume the schedule ${s.name}`
+                            }
+                          >
                             {s.isActive ? 'Pause' : 'Resume'}
                           </Button>
                         </form>
                         <form action={deleteReportScheduleAction}>
                           <input type="hidden" name="id" value={s.id} />
-                          <Button type="submit" size="sm" variant="outline">
-                            Delete
-                          </Button>
+                          <ConfirmSubmit
+                            label="Delete"
+                            idleVariant="outline"
+                            question={`“${s.name}” stops arriving for ${s.recipients.length === 1 ? 'its recipient' : 'all its recipients'}. What it has already sent is kept.`}
+                          />
                         </form>
                       </div>
                     </TableCell>
@@ -1274,8 +1356,8 @@ async function ScheduledPanel({ editId }: { editId?: string }) {
         </CardContent>
         {view.schedules.length > 0 ? (
           <Note>
-            “Send now” does not use up the next scheduled send — it is a test copy, and the result
-            appears in Recent sends below. Deleting a schedule keeps its delivery history.
+            “Send a copy now” does not use up the next scheduled send — it is a test copy, and the
+            result appears in Recent sends below. Deleting a schedule keeps its delivery history.
           </Note>
         ) : null}
       </Card>
@@ -1291,7 +1373,7 @@ async function ScheduledPanel({ editId }: { editId?: string }) {
           {view.deliveries.length === 0 ? (
             <EmptyState
               title="Nothing has been sent yet"
-              body="Once a schedule runs — or you press “Send now” — every attempt is recorded here."
+              body="Once a schedule runs — or you press “Send a copy now” — every attempt is recorded here."
             />
           ) : (
             <Table>
@@ -1369,44 +1451,43 @@ function RangePicker({ tab, range, todayKey }: { tab: TabKey; range: ReportRange
         ))}
       </div>
 
+      {/*
+        `FormField` + `Input`, not two hand-rolled `<label>`/`<input>` pairs.
+        The old markup restated a subset of `Input`'s classes — `h-9 rounded-md
+        border border-input bg-background px-3 text-sm` — and therefore had no
+        focus ring, no disabled state and no ring offset, so the only two typed
+        controls on the reports page were the only two in the product a keyboard
+        user could not see themselves land on.
+
+        The explanation moved out of the flex row and into a block underneath.
+        As a flex item it was competing with the fields for the same line, so at
+        768px it squeezed into a two-word-wide column beside them.
+      */}
       <form
         action="/company/reports"
         method="get"
-        className="flex flex-wrap items-end gap-3 rounded-md border bg-muted/30 p-3"
+        className="space-y-3 rounded-md border bg-muted/30 p-3"
       >
         <input type="hidden" name="tab" value={tab} />
         <input type="hidden" name="range" value="custom" />
-        <div className="space-y-1">
-          <label htmlFor="range-from" className="block text-xs font-medium">
-            From
-          </label>
-          <input
-            id="range-from"
-            name="from"
-            type="date"
-            defaultValue={from}
-            max={todayKey}
-            required
-            className="h-9 rounded-md border border-input bg-background px-3 text-sm"
-          />
+        <div className="flex flex-wrap items-end gap-3">
+          {/* Full width on a phone — two date pickers side by side at 375px
+              left each of them narrower than the calendar glyph inside it. */}
+          <FormField label="From" htmlFor="range-from" required className="w-full sm:w-44">
+            <Input name="from" type="date" size="sm" defaultValue={from} max={todayKey} required />
+          </FormField>
+          <FormField label="To" htmlFor="range-to" required className="w-full sm:w-44">
+            <Input name="to" type="date" size="sm" defaultValue={to} max={todayKey} required />
+          </FormField>
+          <Button
+            type="submit"
+            size="sm"
+            className="w-full sm:w-auto"
+            variant={range.key === 'custom' ? 'default' : 'outline'}
+          >
+            Use these dates
+          </Button>
         </div>
-        <div className="space-y-1">
-          <label htmlFor="range-to" className="block text-xs font-medium">
-            To
-          </label>
-          <input
-            id="range-to"
-            name="to"
-            type="date"
-            defaultValue={to}
-            max={todayKey}
-            required
-            className="h-9 rounded-md border border-input bg-background px-3 text-sm"
-          />
-        </div>
-        <Button type="submit" size="sm" variant={range.key === 'custom' ? 'default' : 'outline'}>
-          Use these dates
-        </Button>
         <p className="text-xs text-muted-foreground">
           Up to {MAX_RANGE_DAYS} days. Longer than that and the report would have to read more of
           your history than it can finish in one page load, so it is trimmed to the most recent{' '}
@@ -1457,7 +1538,9 @@ export default async function ReportsPage({
         description="Where your chats come from, how many your assistant finished without you, who on your team is carrying them, and what any of it earned."
         actions={
           tab === 'scheduled' ? null : (
-            <Button asChild size="sm" variant="outline">
+            /* Default size, like the Export button on Enquiries: the same
+               control was 36px here and 40px there. */
+            <Button asChild variant="outline">
               <a href={`/api/company/reports/export?${exportParams.toString()}`}>
                 Export this tab (CSV)
               </a>

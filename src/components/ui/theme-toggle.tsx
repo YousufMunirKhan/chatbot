@@ -74,7 +74,32 @@ const OPTIONS: { value: ThemeOption; label: string; icon: React.ReactNode }[] = 
   },
 ];
 
-export function ThemeToggle({ className }: { className?: string }) {
+export interface ThemeToggleProps {
+  className?: string;
+  /**
+   * Whether the words "Light / Dark / System" show beside the icons.
+   *
+   * `auto` (the default, and what this always did) reveals them at the `lg`
+   * viewport breakpoint. That is only correct where this actually sits today —
+   * the dashboard header, which is as wide as the window. **`lg:` measures the
+   * VIEWPORT, not the parent**, so dropping the toggle into a settings card in a
+   * 360px column on a 1440px screen makes it declare it has room for three
+   * labelled options and overflow the card. Pass `never` there, or `always` in a
+   * preferences panel where the icons alone are too terse.
+   *
+   * The labels are never removed from the accessible name — `never` renders them
+   * `sr-only`, exactly as `auto` does below `lg`.
+   */
+  labels?: 'auto' | 'always' | 'never';
+}
+
+const LABEL_VISIBILITY: Record<NonNullable<ThemeToggleProps['labels']>, string> = {
+  auto: 'sr-only lg:not-sr-only',
+  always: '',
+  never: 'sr-only',
+};
+
+export function ThemeToggle({ className, labels = 'auto' }: ThemeToggleProps) {
   const { theme, resolvedTheme, setTheme } = useTheme();
   const [mounted, setMounted] = React.useState(false);
   // The live region stays empty until the user actually changes something.
@@ -140,7 +165,7 @@ export function ThemeToggle({ className }: { className?: string }) {
                 >
                   {option.icon}
                 </svg>
-                <span className="sr-only lg:not-sr-only">{option.label}</span>
+                <span className={LABEL_VISIBILITY[labels]}>{option.label}</span>
               </label>
             </div>
           );

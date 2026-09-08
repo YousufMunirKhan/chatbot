@@ -290,7 +290,7 @@ export default async function PricingPage() {
       </section>
 
       {/* ------------------------------------------------------------------ */}
-      <section className="mx-auto max-w-6xl px-5 py-14 sm:px-8" aria-labelledby="packages">
+      <section className="mx-auto max-w-6xl scroll-mt-16 px-5 py-14 sm:px-8" aria-labelledby="packages">
         <h2 id="packages" className="text-3xl font-bold tracking-tight">
           Packages
         </h2>
@@ -325,7 +325,7 @@ export default async function PricingPage() {
       </section>
 
       {/* ------------------------------------------------------------------ */}
-      <section className="border-y bg-muted/30" aria-labelledby="compare-packages">
+      <section className="scroll-mt-16 border-y bg-muted/30" aria-labelledby="compare-packages">
         <div className="mx-auto max-w-6xl px-5 py-14 sm:px-8">
           <h2 id="compare-packages" className="text-3xl font-bold tracking-tight">
             What each package includes
@@ -335,15 +335,25 @@ export default async function PricingPage() {
             catalogue.
           </p>
 
+          <p className="mt-4 text-sm text-muted-foreground md:hidden">
+            The table scrolls sideways — drag it, or swipe.
+          </p>
           {/* Wide table, so it scrolls inside its own box rather than pushing
-              the page sideways on a phone. */}
-          <div className="mt-8 overflow-x-auto rounded-lg border bg-card">
+              the page sideways on a phone. `tabIndex` and the region role are
+              WCAG 2.1.1: a scroll container that only a mouse or a finger can
+              move is content a keyboard user cannot reach. */}
+          <div
+            className="mt-4 overflow-x-auto rounded-lg border bg-card focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+            tabIndex={0}
+            role="region"
+            aria-label="What each package includes"
+          >
             <table className="w-full min-w-[46rem] border-collapse text-sm">
               <caption className="sr-only">
                 Features and monthly allowances included with each package
               </caption>
               <thead>
-                <tr className="border-b bg-muted/50 text-left">
+                <tr className="border-b bg-muted/50 text-start">
                   <th scope="col" className="p-3 font-semibold">
                     Feature
                   </th>
@@ -390,7 +400,7 @@ export default async function PricingPage() {
                     `PLAN_FEATURES` array in the same order. */}
                 {(plans[0]?.features ?? []).map((row, index) => (
                   <tr key={row.feature} className="border-b last:border-0">
-                    <th scope="row" className="p-3 text-left font-normal">
+                    <th scope="row" className="p-3 text-start font-normal">
                       <span className="font-medium">{row.label}</span>
                       <span className="mt-0.5 block text-xs text-muted-foreground">
                         {row.description}
@@ -413,7 +423,7 @@ export default async function PricingPage() {
       </section>
 
       {/* ------------------------------------------------------------------ */}
-      <section className="mx-auto max-w-6xl px-5 py-14 sm:px-8" aria-labelledby="vs-free">
+      <section className="mx-auto max-w-6xl scroll-mt-16 px-5 py-14 sm:px-8" aria-labelledby="vs-free">
         <h2 id="vs-free" className="text-3xl font-bold tracking-tight">
           You are probably using something free right now
         </h2>
@@ -447,7 +457,7 @@ export default async function PricingPage() {
       </section>
 
       {/* ------------------------------------------------------------------ */}
-      <section className="border-y bg-muted/30" aria-labelledby="vs-others">
+      <section className="scroll-mt-16 border-y bg-muted/30" aria-labelledby="vs-others">
         <div className="mx-auto max-w-6xl px-5 py-14 sm:px-8">
           <h2 id="vs-others" className="text-3xl font-bold tracking-tight">
             What everyone else charges
@@ -458,13 +468,21 @@ export default async function PricingPage() {
             vendor&rsquo;s own: your bank converts them and adds its fee.
           </p>
 
-          <div className="mt-8 overflow-x-auto rounded-lg border bg-card">
+          <p className="mt-4 text-sm text-muted-foreground md:hidden">
+            The table scrolls sideways — drag it, or swipe.
+          </p>
+          <div
+            className="mt-4 overflow-x-auto rounded-lg border bg-card focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+            tabIndex={0}
+            role="region"
+            aria-label="Published monthly pricing for comparable products"
+          >
             <table className="w-full min-w-[44rem] border-collapse text-sm">
               <caption className="sr-only">
                 Published monthly pricing for comparable products, September 2026
               </caption>
               <thead>
-                <tr className="border-b bg-muted/50 text-left">
+                <tr className="border-b bg-muted/50 text-start">
                   <th scope="col" className="p-3 font-semibold">
                     Product
                   </th>
@@ -479,9 +497,9 @@ export default async function PricingPage() {
               <tbody>
                 {entry ? (
                   <tr className="border-b bg-primary/5">
-                    <th scope="row" className="p-3 text-left font-semibold">
+                    <th scope="row" className="p-3 text-start font-semibold">
                       Switch &amp; Save
-                      <Badge variant="info" className="ml-2 align-middle">
+                      <Badge variant="info" className="ms-2 align-middle">
                         This is us
                       </Badge>
                     </th>
@@ -496,7 +514,7 @@ export default async function PricingPage() {
                 ) : null}
                 {COMPETITORS.map((row) => (
                   <tr key={row.name} className="border-b last:border-0">
-                    <th scope="row" className="p-3 text-left font-medium">
+                    <th scope="row" className="p-3 text-start font-medium">
                       {row.name}
                     </th>
                     <td className="p-3">{row.price}</td>
@@ -516,7 +534,7 @@ export default async function PricingPage() {
 
           <div className="mt-8">
             <h3 className="text-xl font-semibold tracking-tight">Where we lose</h3>
-            <div className="mt-4 grid gap-4 md:grid-cols-3">
+            <div className="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
               {HONEST_GAPS.map(([title, body]) => (
                 <div key={title} className="rounded-lg border border-warning-border bg-warning-bg p-5">
                   <p className="font-semibold text-warning-fg">{title}</p>
@@ -529,7 +547,7 @@ export default async function PricingPage() {
       </section>
 
       {/* ------------------------------------------------------------------ */}
-      <section className="mx-auto max-w-6xl px-5 py-14 sm:px-8" aria-labelledby="where-data-lives">
+      <section className="mx-auto max-w-6xl scroll-mt-16 px-5 py-14 sm:px-8" aria-labelledby="where-data-lives">
         <div className="grid gap-8 lg:grid-cols-[0.9fr_1.1fr]">
           <div>
             <h2 id="where-data-lives" className="text-3xl font-bold tracking-tight">
@@ -575,7 +593,7 @@ export default async function PricingPage() {
       </section>
 
       {/* ------------------------------------------------------------------ */}
-      <section className="border-t bg-muted/30" aria-labelledby="faq">
+      <section className="scroll-mt-16 border-t bg-muted/30" aria-labelledby="faq">
         <div className="mx-auto max-w-4xl px-5 py-14 sm:px-8">
           <h2 id="faq" className="text-3xl font-bold tracking-tight">
             Questions people actually ask
@@ -681,7 +699,11 @@ function PlanCard({ plan, highlighted }: { plan: PublicPlan; highlighted: boolea
         )}
       </div>
 
-      <div className="mt-5 pt-1">
+      {/* `mt-auto` is what makes four cards of different lengths line their
+          buttons up. Without it the "Most chosen" card, which carries the most
+          feature rows, put its button 60px below its neighbours' — the one
+          control on the page a buyer is looking for, in four different places. */}
+      <div className="mt-auto pt-5">
         <Button asChild className="w-full" variant={highlighted ? 'default' : 'outline'}>
           <Link href="/signup">{free ? 'Start free' : `Choose ${plan.label}`}</Link>
         </Button>
@@ -710,7 +732,7 @@ function MatrixNumberRow({
 }) {
   return (
     <tr className="border-b">
-      <th scope="row" className="p-3 text-left font-medium">
+      <th scope="row" className="p-3 text-start font-medium">
         {label}
       </th>
       {plans.map((plan) => (

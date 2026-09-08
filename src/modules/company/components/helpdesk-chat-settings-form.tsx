@@ -81,7 +81,7 @@ export function HelpdeskChatSettingsForm({ settings }: { settings: HelpdeskChatS
         </FormField>
       </div>
       <FormMessage state={state} />
-      <SubmitButton pendingLabel="Saving...">Save chat rules</SubmitButton>
+      <SubmitButton pendingLabel="Saving…">Save chat rules</SubmitButton>
     </form>
   );
 }

@@ -7,6 +7,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { FormField } from '@/components/ui/form-field';
 import { FormMessage } from '@/components/ui/form-message';
 import { SubmitButton } from '@/components/ui/submit-button';
+import { FIELD_GRID } from './form-layout';
 import { saveCampaignAction, type ActionState } from '../campaigns-actions';
 
 const initial: ActionState = {};
@@ -42,7 +43,7 @@ export function CampaignForm() {
           placeholder="Have a question about pricing? I can help."
         />
       </FormField>
-      <div className="grid gap-4 sm:grid-cols-2">
+      <div className={FIELD_GRID}>
         <FormField
           label="Only on pages whose address contains"
           htmlFor="matchUrl"

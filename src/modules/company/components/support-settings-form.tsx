@@ -1,8 +1,9 @@
 'use client';
 
 import Link from 'next/link';
-import { useFormState, useFormStatus } from 'react-dom';
-import { Button } from '@/components/ui/button';
+import { useFormState } from 'react-dom';
+import { SubmitButton } from '@/components/ui/submit-button';
+import { FIELD_GRID } from './form-layout';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { updateSupportSettingsAction, type ActionState } from '../settings-actions';
@@ -32,12 +33,7 @@ const DAY_LABELS: Record<number, string> = {
 };
 
 function Save() {
-  const { pending } = useFormStatus();
-  return (
-    <Button type="submit" disabled={pending}>
-      {pending ? 'Saving…' : 'Save these inbox rules'}
-    </Button>
-  );
+  return <SubmitButton pendingLabel="Saving…">Save these inbox rules</SubmitButton>;
 }
 
 export function SupportSettingsForm({ settings }: { settings: SupportSettings }) {
@@ -212,7 +208,7 @@ export function SupportSettingsForm({ settings }: { settings: SupportSettings })
                 </label>
               ))}
             </div>
-            <div className="grid gap-3 sm:grid-cols-2">
+            <div className={FIELD_GRID}>
               <FormField label="You open at" htmlFor="start">
                 <Input name="start" type="time" defaultValue={bh.start} />
               </FormField>

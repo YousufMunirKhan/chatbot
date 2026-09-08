@@ -33,15 +33,35 @@ import type { Direction } from './use-direction';
  * panel.
  */
 
+/**
+ * `overflow-hidden` on the PANEL, and the scrolling moved to an inner wrapper
+ * (Module 24).
+ *
+ * The panel used to be the scroll container itself, with the × positioned
+ * `absolute end-4 top-4` inside it. An absolutely positioned child of a scroll
+ * container is placed in that container's unscrolled coordinates, so it scrolls
+ * away with the content: open the mobile navigation on a phone, scroll to the
+ * bottom of a long menu, and the close control is somewhere above the top of the
+ * drawer. Escape and the scrim still worked, which is exactly why it was easy to
+ * miss — the visible way out was the broken one.
+ *
+ * `min-h-0` on the wrapper is what makes this work in a flex column: a flex item
+ * will not shrink below its content's height without it, so the wrapper would
+ * grow past the panel and the panel — now `overflow-hidden` — would clip the
+ * bottom of the menu instead of scrolling it.
+ */
 const sheetVariants = cva(
-  'ui-panel fixed z-50 flex flex-col overflow-y-auto bg-card text-card-foreground shadow-lg focus-visible:outline-none',
+  'ui-panel fixed z-50 flex flex-col overflow-hidden bg-card text-card-foreground shadow-lg focus-visible:outline-none',
   {
     variants: {
       side: {
-        start: 'inset-y-0 start-0 h-full w-3/4 max-w-sm border-e',
-        end: 'inset-y-0 end-0 h-full w-3/4 max-w-sm border-s',
-        top: 'inset-x-0 top-0 max-h-[85vh] w-full border-b',
-        bottom: 'inset-x-0 bottom-0 max-h-[85vh] w-full border-t',
+        // `w-[85%]` rather than `w-3/4` for the edge drawers: at 320px, three
+        // quarters is 240px, and a navigation label plus its focus ring inside
+        // 240px minus padding is where the group headings started wrapping.
+        start: 'inset-y-0 start-0 h-full w-[85%] max-w-sm border-e',
+        end: 'inset-y-0 end-0 h-full w-[85%] max-w-sm border-s',
+        top: 'inset-x-0 top-0 max-h-[85dvh] w-full border-b',
+        bottom: 'inset-x-0 bottom-0 max-h-[85dvh] w-full border-t',
       },
     },
     defaultVariants: { side: 'end' },
@@ -75,29 +95,48 @@ export interface SheetContentProps
   /** Set false when the drawer supplies its own close control. */
   showClose?: boolean;
   closeLabel?: string;
+  /**
+   * Classes for the inner scrolling wrapper rather than the panel.
+   *
+   * Use it for how the content is arranged — `gap-*`, `divide-y`, an extra
+   * `items-*`. Width, background, border and PADDING belong on `className`,
+   * i.e. on the panel: the panel no longer scrolls, so padding put there is a
+   * fixed frame the content scrolls inside, and the drawer's edges keep their
+   * breathing room at every scroll position.
+   */
+  bodyClassName?: string;
 }
 
 const SheetContent = React.forwardRef<
   React.ElementRef<typeof DialogPrimitive.Content>,
   SheetContentProps
->(({ className, children, side = 'end', showClose = true, closeLabel, ...props }, ref) => {
-  const { dir } = useOverlayDirection();
-  return (
-    <DialogPrimitive.Portal>
-      <DialogOverlay />
-      <DialogPrimitive.Content
-        ref={ref}
-        dir={dir}
-        data-side={side}
-        className={cn(sheetVariants({ side }), className)}
-        {...props}
-      >
-        {children}
-        {showClose ? <OverlayCloseButton label={closeLabel} /> : null}
-      </DialogPrimitive.Content>
-    </DialogPrimitive.Portal>
-  );
-});
+>(
+  (
+    { className, bodyClassName, children, side = 'end', showClose = true, closeLabel, ...props },
+    ref,
+  ) => {
+    const { dir } = useOverlayDirection();
+    return (
+      <DialogPrimitive.Portal>
+        <DialogOverlay />
+        <DialogPrimitive.Content
+          ref={ref}
+          dir={dir}
+          data-side={side}
+          className={cn(sheetVariants({ side }), className)}
+          {...props}
+        >
+          {/* The scroll container. The × below is a sibling of it, not a child,
+              which is the whole fix: it stays pinned to the panel. */}
+          <div className={cn('flex min-h-0 flex-1 flex-col overflow-y-auto', bodyClassName)}>
+            {children}
+          </div>
+          {showClose ? <OverlayCloseButton label={closeLabel} /> : null}
+        </DialogPrimitive.Content>
+      </DialogPrimitive.Portal>
+    );
+  },
+);
 SheetContent.displayName = 'SheetContent';
 
 const SheetHeader = ({ className, ...props }: React.HTMLAttributes<HTMLDivElement>) => (

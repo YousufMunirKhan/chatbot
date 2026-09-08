@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { EmptyState } from '@/components/ui/empty-state';
+import { Label } from '@/components/ui/label';
 import { PageHeader } from '@/components/ui/page-header';
 import { formatRelativeTime, formatAbsoluteTime } from '@/lib/relative-time';
 import { listLeadsPaged, type LeadRow } from '@/modules/company/leads-data';
@@ -107,7 +108,9 @@ function LeadCard({ lead }: { lead: LeadRow }) {
       <div className="min-w-0 space-y-2">
         <div className="flex flex-wrap items-start justify-between gap-2">
           <div className="min-w-0">
-            <p className="font-medium">{lead.name || 'Someone who left no name'}</p>
+            {/* `text-sm`, the body default: the same person's name renders at
+                the same size in the inbox, on Bookings and on Orders. */}
+            <p className="text-sm font-medium">{lead.name || 'Someone who left no name'}</p>
             <p className="text-xs text-muted-foreground" title={formatAbsoluteTime(lead.createdAt)}>
               {formatRelativeTime(lead.createdAt)}
               {lead.enquiryType ? ` · ${lead.enquiryType}` : ''}
@@ -143,10 +146,12 @@ function LeadCard({ lead }: { lead: LeadRow }) {
 
         <ContactActions lead={lead} />
 
-        <div>
-          <label className="mb-1 block text-xs text-muted-foreground" htmlFor={`stage-${lead.id}`}>
+        <div className="space-y-1.5">
+          {/* The `Label` primitive, not a bare `<label>`: same wiring, and the
+              per-row field labels on Bookings and Orders now read identically. */}
+          <Label htmlFor={`stage-${lead.id}`} className="block text-xs text-muted-foreground">
             Where this has got to
-          </label>
+          </Label>
           <LeadStatusSelect leadId={lead.id} status={lead.status} selectId={`stage-${lead.id}`} />
         </div>
       </div>

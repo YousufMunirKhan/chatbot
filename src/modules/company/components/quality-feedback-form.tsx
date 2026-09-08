@@ -101,7 +101,7 @@ export function QualityFeedbackForm({ qualityLogId }: { qualityLogId: string }) 
             <input type="checkbox" name="createKnowledge" defaultChecked className="h-4 w-4" />
             Create the editable fix and index it for AI search
           </label>
-          <SubmitButton size="sm" pendingLabel="Saving...">
+          <SubmitButton size="sm" pendingLabel="Saving…">
             Save fix and index
           </SubmitButton>
           {fixType !== 'knowledge' && fixType !== 'faq' ? (

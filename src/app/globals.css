@@ -221,6 +221,48 @@
   body {
     @apply bg-background text-foreground;
   }
+
+  /* -------------------------------------------------------------------------
+     Browser autofill (Module 24).
+
+     This is the same class of bug that broke the password field: a control that
+     looks correct while it is empty and stops being correct the moment a real
+     browser touches it. Chrome, Edge and Safari paint an autofilled field with
+     their OWN background — a pale yellow or a pale blue — and that colour is not
+     a token, does not know about dark mode, and beats every class on the
+     element because it is a UA style on a pseudo-class.
+
+     In dark mode the result is a near-white field in the middle of a dark form,
+     and because the UA only overrides the background and not the text colour,
+     the value inside it can come out white-on-white.
+
+     There is no property that resets it. The inset box-shadow is the standard
+     workaround: it paints over the UA background inside the border, follows the
+     element's own border-radius, and is a real declaration we control, so it
+     resolves per theme. `-webkit-text-fill-color` is what beats the UA's own
+     text colour, since plain `color` does not.
+
+     The absurd `transition` delay is the second half of it: Chrome animates its
+     autofill background in, and an animation cannot be cancelled by a shadow.
+     Delaying the transition past any plausible session means the animation never
+     starts.
+     ------------------------------------------------------------------------- */
+  input:-webkit-autofill,
+  input:-webkit-autofill:hover,
+  input:-webkit-autofill:focus,
+  input:-webkit-autofill:active,
+  textarea:-webkit-autofill,
+  textarea:-webkit-autofill:hover,
+  textarea:-webkit-autofill:focus,
+  select:-webkit-autofill,
+  select:-webkit-autofill:hover,
+  select:-webkit-autofill:focus {
+    -webkit-text-fill-color: hsl(var(--foreground));
+    -webkit-box-shadow: 0 0 0 1000px hsl(var(--background)) inset;
+    box-shadow: 0 0 0 1000px hsl(var(--background)) inset;
+    caret-color: hsl(var(--foreground));
+    transition: background-color 100000s ease-in-out 0s;
+  }
 }
 
 @layer utilities {
@@ -342,5 +384,24 @@
   .ui-popover[data-state] {
     animation-duration: 0.01ms;
     animation-iteration-count: 1;
+  }
+
+  /* `Skeleton` uses `animate-pulse`, which is `infinite` (Module 24). The
+     overlay rules above only cover animations that end; this one never does, so
+     a reduced-motion user sat in front of a page of boxes breathing at them for
+     as long as the load took. The grey block on its own still reads as "not here
+     yet" — and `aria-busy` on the container is what actually announces it. */
+  .animate-pulse {
+    animation: none;
+  }
+
+  /* The width transition on `Progress` and every `transition-colors` hover.
+     Scoped to elements that opt into a transition, so nothing that relies on a
+     transition *event* to fire is broken — 0.01ms still fires. */
+  .transition-all,
+  .transition-colors,
+  .transition-transform,
+  .transition-\[width\] {
+    transition-duration: 0.01ms !important;
   }
 }

@@ -8,6 +8,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { FormField } from '@/components/ui/form-field';
 import { FormMessage } from '@/components/ui/form-message';
 import { SubmitButton } from '@/components/ui/submit-button';
+import { FIELD_GRID } from './form-layout';
 import { addEvalQuestionAction, type ActionState } from '../eval-actions';
 
 const initial: ActionState = {};
@@ -25,7 +26,7 @@ export function EvalForm({ bots }: { bots: { id: string; name: string }[] }) {
           placeholder="What are your business hours?"
         />
       </FormField>
-      <div className="grid gap-4 sm:grid-cols-2">
+      <div className={FIELD_GRID}>
         <FormField label="Assistant" htmlFor="botId">
           <Select name="botId" defaultValue="">
             <option value="">All assistants</option>

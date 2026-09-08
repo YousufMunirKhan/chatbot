@@ -47,20 +47,40 @@ export function StatTile({
   className,
 }: StatTileProps) {
   const body = (
-    <Card className={cn(href && 'transition-colors hover:bg-muted/50', className)}>
+    // `h-full` so a row of tiles is one height when one of them has a two-line
+    // label and its neighbours do not. A grid stretches its items by default;
+    // wrapping the tile in a `<Link>` broke that, because the stretched element
+    // was then the link and the Card inside it shrank to its own content.
+    <Card className={cn('h-full', href && 'transition-colors hover:bg-muted/50', className)}>
       <CardContent className="p-4">
-        <p className="text-xs uppercase tracking-wider text-muted-foreground">{label}</p>
-        <div className="mt-1 flex flex-wrap items-baseline gap-2">
-          <span className={cn('text-2xl font-semibold', TONES[tone])}>{value}</span>
+        {/* `break-words` on both, and `tabular-nums` on the value: these are
+            numbers rendered at `text-2xl` inside grid tracks that get down to
+            about 150px on a phone, and a formatted count like "1,284,003" has
+            no break opportunity in it. Without this the value pushes the tile
+            wider than its track and the page scrolls sideways. */}
+        <p className="break-words text-xs uppercase tracking-wider text-muted-foreground">
+          {label}
+        </p>
+        <div className="mt-1 flex min-w-0 flex-wrap items-baseline gap-2">
+          <span className={cn('break-words text-2xl font-semibold tabular-nums', TONES[tone])}>
+            {value}
+          </span>
           {delta ? <span className="text-xs font-medium">{delta}</span> : null}
         </div>
-        {hint ? <p className="mt-1 text-xs text-muted-foreground">{hint}</p> : null}
+        {hint ? <p className="mt-1 break-words text-xs text-muted-foreground">{hint}</p> : null}
       </CardContent>
     </Card>
   );
 
   return href ? (
-    <Link href={href} className="block">
+    // The linked tile had NO focus indicator: the ring lives on `Card`'s
+    // children, not on the `<Link>` wrapping it, so a keyboard user tabbing
+    // through a stat grid saw the page do nothing at all. `rounded-lg` matches
+    // the card underneath so the ring traces the shape you can see.
+    <Link
+      href={href}
+      className="block h-full rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+    >
       {body}
     </Link>
   ) : (

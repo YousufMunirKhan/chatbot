@@ -5,8 +5,10 @@ import { useFormState } from 'react-dom';
 import { Input } from '@/components/ui/input';
 import { Select } from '@/components/ui/select';
 import { FormField } from '@/components/ui/form-field';
+import { cn } from '@/lib/utils';
 import { FormMessage } from '@/components/ui/form-message';
 import { SubmitButton } from '@/components/ui/submit-button';
+import { FIELD_GRID, FULL_ROW } from './form-layout';
 import { createSubAccountAction, type ActionState } from '../agency-actions';
 
 const initial: ActionState = {};
@@ -20,7 +22,7 @@ export function SubAccountForm() {
   }, [state.ok]);
 
   return (
-    <form ref={ref} action={action} className="grid gap-4 sm:grid-cols-2">
+    <form ref={ref} action={action} className={FIELD_GRID}>
       <FormField label="Business name" htmlFor="name" required>
         <Input id="name" name="name" required maxLength={120} />
       </FormField>
@@ -57,7 +59,7 @@ export function SubAccountForm() {
           <option value="pro">Pro</option>
         </Select>
       </FormField>
-      <div className="space-y-3 sm:col-span-2">
+      <div className={cn('space-y-3', FULL_ROW)}>
         <FormMessage state={state} okText="Sub-account created." />
         <SubmitButton pendingLabel="Creating…">Create sub-account</SubmitButton>
       </div>

@@ -163,12 +163,17 @@ const NodeCard = memo(function NodeCard({
             onPointerDown={(event) => onHandlePointerDown(event, node.id, handle.id)}
             style={{ marginRight: -8 }}
             className={`h-3 w-3 shrink-0 cursor-crosshair rounded-full border-2 border-background ${
+              // Raw palette values (`emerald-500`, `rose-500`, `slate-400`) for
+              // what are exactly the yes / no / neither states the semantic
+              // solids already name. `--success`, `--danger` and
+              // `--muted-foreground` are defined in both themes; the palette
+              // ones were tuned against a light canvas only.
               handle.tone === 'true'
-                ? 'bg-emerald-500'
+                ? 'bg-success'
                 : handle.tone === 'false'
-                  ? 'bg-rose-500'
+                  ? 'bg-danger'
                   : handle.tone === 'fallback'
-                    ? 'bg-slate-400'
+                    ? 'bg-muted-foreground'
                     : 'bg-primary'
             }`}
           />
@@ -851,186 +856,206 @@ export function FlowBuilder({ flow, flowOptions, agents, intents, analytics }: F
         </div>
       ) : null}
 
-      <div className="flex min-h-0 flex-1">
-        {/* Palette ---------------------------------------------------------- */}
-        <aside className="w-52 shrink-0 overflow-y-auto border-e p-3">
-          <p className="mb-2 text-xs text-muted-foreground">
-            Click a block to add it after the selected one.
-          </p>
-          {PALETTE.map((group) => (
-            <div key={group.group} className="mb-3">
-              <p className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
-                {group.group}
-              </p>
-              <div className="space-y-1">
-                {group.items.map((item) => (
-                  <button
-                    key={item.type}
-                    type="button"
-                    title={item.hint}
-                    onClick={() => addNode(item.type)}
-                    className="w-full rounded-md border bg-background px-2 py-1.5 text-start text-xs hover:bg-accent hover:text-accent-foreground"
-                  >
-                    {item.label}
-                  </button>
-                ))}
-              </div>
-            </div>
-          ))}
-        </aside>
+      {/*
+        THE PAGE MUST NOT SCROLL SIDEWAYS; THE BUILDER MAY.
+        --------------------------------------------------
+        This row holds three panes, two of them fixed and non-shrinking: a 208px
+        palette and a 352px inspector. That is 560px of hard minimum before the
+        canvas gets a single pixel — so at 375px, and at every width up to about
+        620px, the row was wider than the dashboard's content area and the whole
+        PAGE gained a horizontal scrollbar. Every other screen went with it: the
+        sidebar, the header, the lot.
 
-        {/* Canvas ----------------------------------------------------------- */}
-        <div
-          ref={viewportRef}
-          onPointerDown={startPan}
-          className="relative min-w-0 flex-1 cursor-grab touch-none overflow-hidden bg-muted/30 active:cursor-grabbing"
-          style={{
-            backgroundImage: 'radial-gradient(circle, hsl(var(--border)) 1px, transparent 1px)',
-            backgroundSize: '22px 22px',
-          }}
-        >
-          <div ref={contentRef} className="absolute left-0 top-0 origin-top-left">
-            <EdgeLayer
-              graph={graph}
-              selectedEdgeId={selection?.kind === 'edge' ? selection.id : null}
-              onSelectEdge={selectEdge}
-              registerPath={registerPath}
-              registerTemp={registerTemp}
-            />
-            {graph.nodes.map((node) => (
-              <NodeCard
-                key={node.id}
-                node={node}
-                selected={selection?.kind === 'node' && selection.id === node.id}
-                entered={enteredByNode.get(node.id)}
-                registerEl={registerEl}
-                onCardPointerDown={onCardPointerDown}
-                onHandlePointerDown={onHandlePointerDown}
-              />
-            ))}
-          </div>
-
-          {graph.nodes.length === 0 ? (
-            <p className="pointer-events-none absolute inset-0 flex items-center justify-center text-sm text-muted-foreground">
-              Add a block from the palette to begin.
+        Wide content scrolls inside its own container. The row now sits in an
+        `overflow-x-auto` box with a `min-w` that keeps the canvas usable
+        (52rem − 208px − 352px ≈ 272px of drawing area), so on a phone you pan
+        the builder sideways and the page itself stays put. Every coordinate in
+        this file comes from `getBoundingClientRect()`, which is viewport-
+        relative and already accounts for an ancestor's scroll, so dragging,
+        panning and connecting are unaffected.
+      */}
+      <div className="min-h-0 flex-1 overflow-x-auto">
+        <div className="flex h-full min-w-[52rem]">
+          {/* Palette ---------------------------------------------------------- */}
+          <aside className="w-52 shrink-0 overflow-y-auto border-e p-3">
+            <p className="mb-2 text-xs text-muted-foreground">
+              Click a block to add it after the selected one.
             </p>
-          ) : null}
-
-          <p className="pointer-events-none absolute bottom-2 left-3 text-[11px] text-muted-foreground">
-            Drag the background to pan · scroll to zoom · Delete removes the selection · Ctrl+Z undo
-            · Ctrl+S save
-          </p>
-        </div>
-
-        {/* Right panel ------------------------------------------------------ */}
-        <aside className="flex w-[22rem] shrink-0 flex-col border-s">
-          <div className="flex shrink-0 border-b text-xs">
-            {(
-              [
-                ['block', 'Block'],
-                ['triggers', 'Triggers'],
-                ['test', 'Test'],
-                ['history', 'History'],
-              ] as Array<[Tab, string]>
-            ).map(([key, label]) => (
-              <button
-                key={key}
-                type="button"
-                onClick={() => setTab(key)}
-                aria-current={tab === key}
-                className={`flex-1 px-2 py-2 font-medium ${
-                  tab === key
-                    ? 'border-b-2 border-primary text-foreground'
-                    : 'text-muted-foreground hover:text-foreground'
-                }`}
-              >
-                {label}
-              </button>
-            ))}
-          </div>
-
-          <div className="min-h-0 flex-1 overflow-y-auto">
-            {tab === 'block' ? (
-              <>
-                {selection?.kind === 'edge' ? (
-                  <div className="space-y-2 p-4 text-sm">
-                    <p className="font-medium">Connection selected</p>
-                    <p className="text-muted-foreground">
-                      Press Delete, or use the button below, to remove this connection.
-                    </p>
-                    <Button
+            {PALETTE.map((group) => (
+              <div key={group.group} className="mb-3">
+                <p className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+                  {group.group}
+                </p>
+                <div className="space-y-1">
+                  {group.items.map((item) => (
+                    <button
+                      key={item.type}
                       type="button"
-                      size="sm"
-                      variant="ghost"
-                      className="text-danger-fg"
-                      onClick={deleteSelection}
+                      title={item.hint}
+                      onClick={() => addNode(item.type)}
+                      className="w-full rounded-md border bg-background px-2 py-1.5 text-start text-xs hover:bg-accent hover:text-accent-foreground"
                     >
-                      Delete connection
-                    </Button>
-                  </div>
-                ) : (
-                  <FlowInspector
-                    node={selectedNode}
-                    onChange={onNodeDataChange}
-                    onDelete={deleteNode}
-                    flowOptions={flowOptions.filter((f) => f.id !== flow.id)}
-                    agents={agents}
-                  />
-                )}
-                {problems.length > 0 ? (
-                  <div className="border-t p-4">
-                    <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                      Before you publish
-                    </p>
-                    <ul className="mt-2 space-y-1 text-xs text-muted-foreground">
-                      {problems.map((problem, i) => (
-                        <li key={i}>
-                          {problem.nodeId ? (
-                            <button
-                              type="button"
-                              className="text-start underline decoration-dotted"
-                              onClick={() => setSelection({ kind: 'node', id: problem.nodeId! })}
-                            >
-                              {problem.message}
-                            </button>
-                          ) : (
-                            problem.message
-                          )}
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
-                ) : null}
-              </>
-            ) : null}
-
-            {tab === 'triggers' ? (
-              <>
-                <FlowSettings flow={flow} />
-                <FlowTriggersPanel flowId={flow.id} triggers={flow.triggers} intents={intents} />
-              </>
-            ) : null}
-
-            {tab === 'test' ? (
-              <div className="h-full">
-                <FlowSimulator graph={graph} />
+                      {item.label}
+                    </button>
+                  ))}
+                </div>
               </div>
+            ))}
+          </aside>
+
+          {/* Canvas ----------------------------------------------------------- */}
+          <div
+            ref={viewportRef}
+            onPointerDown={startPan}
+            className="relative min-w-0 flex-1 cursor-grab touch-none overflow-hidden bg-muted/30 active:cursor-grabbing"
+            style={{
+              backgroundImage: 'radial-gradient(circle, hsl(var(--border)) 1px, transparent 1px)',
+              backgroundSize: '22px 22px',
+            }}
+          >
+            <div ref={contentRef} className="absolute left-0 top-0 origin-top-left">
+              <EdgeLayer
+                graph={graph}
+                selectedEdgeId={selection?.kind === 'edge' ? selection.id : null}
+                onSelectEdge={selectEdge}
+                registerPath={registerPath}
+                registerTemp={registerTemp}
+              />
+              {graph.nodes.map((node) => (
+                <NodeCard
+                  key={node.id}
+                  node={node}
+                  selected={selection?.kind === 'node' && selection.id === node.id}
+                  entered={enteredByNode.get(node.id)}
+                  registerEl={registerEl}
+                  onCardPointerDown={onCardPointerDown}
+                  onHandlePointerDown={onHandlePointerDown}
+                />
+              ))}
+            </div>
+
+            {graph.nodes.length === 0 ? (
+              <p className="pointer-events-none absolute inset-0 flex items-center justify-center text-sm text-muted-foreground">
+                Add a block from the palette to begin.
+              </p>
             ) : null}
 
-            {tab === 'history' ? (
-              <FlowHistory
-                flow={flow}
-                analytics={analytics}
-                onRestored={(restored) => {
-                  // Goes through `commit`, so a restore lands in the local undo
-                  // stack like any other edit.
-                  commit(restored);
-                  setSelection(null);
-                }}
-              />
-            ) : null}
+            <p className="pointer-events-none absolute bottom-2 left-3 text-[11px] text-muted-foreground">
+              Drag the background to pan · scroll to zoom · Delete removes the selection · Ctrl+Z
+              undo · Ctrl+S save
+            </p>
           </div>
-        </aside>
+
+          {/* Right panel ------------------------------------------------------ */}
+          <aside className="flex w-[22rem] shrink-0 flex-col border-s">
+            <div className="flex shrink-0 border-b text-xs">
+              {(
+                [
+                  ['block', 'Block'],
+                  ['triggers', 'Triggers'],
+                  ['test', 'Test'],
+                  ['history', 'History'],
+                ] as Array<[Tab, string]>
+              ).map(([key, label]) => (
+                <button
+                  key={key}
+                  type="button"
+                  onClick={() => setTab(key)}
+                  aria-current={tab === key}
+                  className={`flex-1 px-2 py-2 font-medium ${
+                    tab === key
+                      ? 'border-b-2 border-primary text-foreground'
+                      : 'text-muted-foreground hover:text-foreground'
+                  }`}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+
+            <div className="min-h-0 flex-1 overflow-y-auto">
+              {tab === 'block' ? (
+                <>
+                  {selection?.kind === 'edge' ? (
+                    <div className="space-y-2 p-4 text-sm">
+                      <p className="font-medium">Connection selected</p>
+                      <p className="text-muted-foreground">
+                        Press Delete, or use the button below, to remove this connection.
+                      </p>
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="ghost"
+                        className="text-danger-fg"
+                        onClick={deleteSelection}
+                      >
+                        Delete connection
+                      </Button>
+                    </div>
+                  ) : (
+                    <FlowInspector
+                      node={selectedNode}
+                      onChange={onNodeDataChange}
+                      onDelete={deleteNode}
+                      flowOptions={flowOptions.filter((f) => f.id !== flow.id)}
+                      agents={agents}
+                    />
+                  )}
+                  {problems.length > 0 ? (
+                    <div className="border-t p-4">
+                      <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                        Before you publish
+                      </p>
+                      <ul className="mt-2 space-y-1 text-xs text-muted-foreground">
+                        {problems.map((problem, i) => (
+                          <li key={i}>
+                            {problem.nodeId ? (
+                              <button
+                                type="button"
+                                className="text-start underline decoration-dotted"
+                                onClick={() => setSelection({ kind: 'node', id: problem.nodeId! })}
+                              >
+                                {problem.message}
+                              </button>
+                            ) : (
+                              problem.message
+                            )}
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  ) : null}
+                </>
+              ) : null}
+
+              {tab === 'triggers' ? (
+                <>
+                  <FlowSettings flow={flow} />
+                  <FlowTriggersPanel flowId={flow.id} triggers={flow.triggers} intents={intents} />
+                </>
+              ) : null}
+
+              {tab === 'test' ? (
+                <div className="h-full">
+                  <FlowSimulator graph={graph} />
+                </div>
+              ) : null}
+
+              {tab === 'history' ? (
+                <FlowHistory
+                  flow={flow}
+                  analytics={analytics}
+                  onRestored={(restored) => {
+                    // Goes through `commit`, so a restore lands in the local undo
+                    // stack like any other edit.
+                    commit(restored);
+                    setSelection(null);
+                  }}
+                />
+              ) : null}
+            </div>
+          </aside>
+        </div>
       </div>
     </div>
   );

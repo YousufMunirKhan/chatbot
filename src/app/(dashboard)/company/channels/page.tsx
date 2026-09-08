@@ -69,7 +69,20 @@ export default async function ChannelsPage({
             social accounts.
           </CardDescription>
         </CardHeader>
-        <CardContent className="grid gap-6 md:grid-cols-2">
+        {/*
+          `[&>*]:min-w-0` is the whole reason this card stopped widening the
+          page. A grid item's default `min-width` is `auto`, which means "at
+          least as wide as my longest unbreakable child" — and the right column
+          holds nine webhook URLs. Each `truncate` on a list item was doing
+          nothing, because the column had already been sized to fit the longest
+          one untruncated, which pushed the card past the viewport and gave the
+          whole dashboard a horizontal scrollbar.
+
+          `lg:` and not `md:`: at 768px this was two ~340px columns holding a
+          twelve-field form beside a list of URLs. The form is the task; it gets
+          the width until there is genuinely room for both.
+        */}
+        <CardContent className="grid gap-6 lg:grid-cols-2 [&>*]:min-w-0">
           <ChannelForm bots={botOptions} channels={descriptors} />
 
           <div className="space-y-4">
@@ -90,14 +103,23 @@ export default async function ChannelsPage({
                 Paste the matching address into that app&apos;s developer settings. It is what lets a message
                 someone sends you reach your assistant.
               </p>
-              <ul className="space-y-1 text-muted-foreground">
+              {/* A definition list, because that is what it is: a term (the app)
+                  and its value (the address). Stacked rather than run together
+                  on one line — at 375px the old single line truncated the URL to
+                  "https://…" and truncating the one part you have to copy is
+                  worse than not showing it. Each address scrolls inside itself. */}
+              <dl className="space-y-2">
                 {descriptors.map((d) => (
-                  <li key={d.key} className="truncate">
-                    <span className="font-medium text-foreground">{d.label}:</span>{' '}
-                    <code className="rounded bg-background px-1">{d.webhookUrl}</code>
-                  </li>
+                  <div key={d.key} className="min-w-0">
+                    <dt className="text-xs font-medium">{d.label}</dt>
+                    <dd className="min-w-0">
+                      <code className="block overflow-x-auto whitespace-nowrap rounded bg-background px-2 py-1 text-xs text-muted-foreground">
+                        {d.webhookUrl}
+                      </code>
+                    </dd>
+                  </div>
                 ))}
-              </ul>
+              </dl>
               <p className="text-muted-foreground">
                 Facebook, Instagram and WhatsApp also ask for a &ldquo;verify token&rdquo; when you paste the
                 address — that is the code shown next to each connected app in the list below, and you copy it
@@ -110,7 +132,24 @@ export default async function ChannelsPage({
 
       <WhatsAppSetupGuide />
 
+      {/* This card had no heading at all — a bare bordered box holding either an
+          empty state or a list of connected accounts, with nothing naming it.
+          The count belongs in the title too: "you have three connected" is the
+          first thing you come to this page to find out. */}
       <Card>
+        <CardHeader>
+          <CardTitle>
+            Connected apps
+            {identities.length > 0 ? (
+              <span className="ms-2 text-sm font-normal text-muted-foreground">
+                {identities.length}
+              </span>
+            ) : null}
+          </CardTitle>
+          <CardDescription>
+            Every app your assistant currently answers on, and the details each one needs.
+          </CardDescription>
+        </CardHeader>
         <CardContent className="p-0">
           {identities.length === 0 ? (
             // Module 1 — the connect form is on this page, so link straight to it.
@@ -170,18 +209,23 @@ export default async function ChannelsPage({
                       ) : null}
                       <p className="text-xs text-muted-foreground">Connected {formatDate(c.createdAt)}</p>
                     </div>
-                    <div className="flex gap-2">
+                    {/* `flex-wrap`: `ConfirmSubmit` expands from one button to a
+                        sentence plus two buttons when it arms, and without wrap
+                        that overflowed the row at every width below a laptop. */}
+                    <div className="flex flex-wrap items-start gap-2">
                       <form action={toggle}>
                         <input type="hidden" name="id" value={c.id} />
                         <input type="hidden" name="active" value={(!c.isActive).toString()} />
                         <Button type="submit" size="sm" variant="outline">
                           {c.isActive ? 'Pause' : 'Activate'}
+                          <span className="sr-only"> {c.displayName ?? c.channelLabel}</span>
                         </Button>
                       </form>
                       <form action={remove}>
                         <input type="hidden" name="id" value={c.id} />
                         <ConfirmSubmit
-                          label="Delete"
+                          label="Disconnect"
+                          confirmLabel="Yes, disconnect"
                           question="Messages sent to this app stop reaching your inbox, and your assistant stops replying there."
                         />
                       </form>

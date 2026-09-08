@@ -1,9 +1,36 @@
 import * as React from 'react';
 import { cn } from '@/lib/utils';
 
+/**
+ * Table (Module 22; scroll container corrected, Module 24).
+ *
+ * ## The wrapper is the reason the page does not scroll sideways
+ *
+ * A `<table>` will not shrink below the widest word in its widest cell, so a
+ * table with six columns and a webhook URL in one of them is simply wider than a
+ * phone. The wrapper is what absorbs that: the table scrolls inside its own box
+ * and the page body stays put. **Never remove it, and never put a table in a
+ * layout that cannot let it be narrow** (a grid track without `min-w-0` will
+ * widen to the table's content instead, and then the whole page scrolls).
+ *
+ * `overflow-x-auto`, not `overflow-auto`: the vertical half of `auto` was doing
+ * nothing — there is no height limit here — but it did make the wrapper a
+ * scroll container on both axes, which clips anything a cell tries to render
+ * outside its bounds. `InfoHint`'s panel in a `TableHead` is the live example.
+ *
+ * ## What is deliberately not here
+ *
+ * No `tabIndex={0}` on the wrapper. A keyboard-only user genuinely cannot scroll
+ * a region that contains no focusable element (WCAG 2.1.1), and the usual fix is
+ * to make the scroller itself focusable — but that adds a tab stop to all 35
+ * tables in the product, including the ~30 that never overflow, and every one of
+ * them would then announce as an unnamed group. The narrow fix belongs on the
+ * few tables that are genuinely wide, with a real `aria-label`, not on all of
+ * them by default. Listed in `docs/UI_SIMPLIFICATION.md` as known-open.
+ */
 const Table = React.forwardRef<HTMLTableElement, React.HTMLAttributes<HTMLTableElement>>(
   ({ className, ...props }, ref) => (
-    <div className="relative w-full overflow-auto">
+    <div className="relative w-full overflow-x-auto">
       <table ref={ref} className={cn('w-full caption-bottom text-sm', className)} {...props} />
     </div>
   ),

@@ -1,4 +1,5 @@
 import { redirect } from 'next/navigation';
+import { AuthShell, AuthLink } from '../auth-shell';
 import { getSessionUser, homePathFor } from '@/lib/auth';
 import { getUserTwoFactorState } from '@/lib/auth/two-factor';
 import { TwoFactorChallengeForm } from './two-factor-challenge-form';
@@ -11,6 +12,11 @@ export const metadata = { title: 'Two-step sign-in' };
  * Deliberately outside the dashboard's protected prefixes: the session check
  * that sends people here would otherwise send them here again, and they would
  * never see the box. `skipTwoFactorCheck` is the same reason.
+ *
+ * It used to render its own `max-w-sm` card on `bg-muted/30` — a fourth card
+ * width and a second page ground, arrived at halfway through signing in, which
+ * read as having been bounced to a different site at the worst possible moment.
+ * Same shell as the form it just came from.
  */
 export default async function TwoFactorChallengePage() {
   const user = await getSessionUser({ skipTwoFactorCheck: true });
@@ -24,16 +30,12 @@ export default async function TwoFactorChallengePage() {
   if (state.method !== 'totp') redirect('/login/2fa');
 
   return (
-    <main className="flex min-h-screen items-center justify-center bg-muted/30 p-8">
-      <div className="w-full max-w-sm space-y-6 rounded-lg border bg-background p-6 shadow-sm">
-        <div className="space-y-1 text-center">
-          <h1 className="text-xl font-semibold">One more step</h1>
-          <p className="text-sm text-muted-foreground">
-            Open your authenticator app and enter the code it shows for {user.email}.
-          </p>
-        </div>
-        <TwoFactorChallengeForm />
-      </div>
-    </main>
+    <AuthShell
+      title="One more step"
+      description={`Open your authenticator app and enter the code it shows for ${user.email}.`}
+      footer={<AuthLink href="/login">Back to sign in</AuthLink>}
+    >
+      <TwoFactorChallengeForm />
+    </AuthShell>
   );
 }

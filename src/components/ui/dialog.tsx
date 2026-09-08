@@ -224,7 +224,10 @@ const DialogTitle = React.forwardRef<
 >(({ className, srOnly, ...props }, ref) => (
   <DialogPrimitive.Title
     ref={ref}
-    className={cn(srOnly ? 'sr-only' : 'text-lg font-semibold leading-none tracking-tight', className)}
+    // `leading-tight`, not `leading-none`: a dialog is `max-w-lg` with a
+    // `pe-8` gutter for the close button, so a title of any length wraps, and
+    // `leading-none` overlapped the two lines (Module 24).
+    className={cn(srOnly ? 'sr-only' : 'text-lg font-semibold leading-tight tracking-tight', className)}
     {...props}
   />
 ));

@@ -2,6 +2,7 @@ import Link from 'next/link';
 import { requireRole } from '@/lib/auth';
 import { ROLES, WHATSAPP_TEMPLATE_STATUS_LABELS, humanizeToken, labelFor } from '@/lib/constants';
 import { companyLabel } from '@/lib/labels';
+import { Alert } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -88,17 +89,21 @@ export default async function WhatsAppTemplatesPage() {
         }
       />
 
+      {/* An untitled card holding one grey sentence read as an aside; it is
+          actually the reason two of this page's three buttons are disabled.
+          `Alert tone="warning"` says that, and the link now says what to go and
+          do rather than naming a field. */}
       {!canSubmitToMeta ? (
-        <Card>
-          <CardContent className="py-4 text-sm text-muted-foreground">
-            Templates can be drafted now, but submitting or syncing needs a connected number with an
-            access token and a{' '}
-            <Link href="/company/whatsapp" className="text-primary hover:underline">
-              WABA id
+        <Alert tone="warning" title="You can write templates, but not send them for approval yet">
+          <p>
+            Submitting and syncing need a connected WhatsApp number with an access token and a
+            WABA id.{' '}
+            <Link href="/company/whatsapp" className="font-medium underline underline-offset-4">
+              Finish setting up your number
             </Link>
             .
-          </CardContent>
-        </Card>
+          </p>
+        </Alert>
       ) : null}
 
       <Card id="new-template">
@@ -114,7 +119,22 @@ export default async function WhatsAppTemplatesPage() {
         </CardContent>
       </Card>
 
+      {/* Had no header — a bare bordered box that was either an empty state or
+          a list of templates, with nothing naming it or counting it. */}
       <Card>
+        <CardHeader>
+          <CardTitle>
+            Your templates
+            {templates.length > 0 ? (
+              <span className="ms-2 text-sm font-normal text-muted-foreground">
+                {templates.length}
+              </span>
+            ) : null}
+          </CardTitle>
+          <CardDescription>
+            Newest first. Only the ones WhatsApp has approved can be used in a broadcast.
+          </CardDescription>
+        </CardHeader>
         <CardContent className="p-0">
           {templates.length === 0 ? (
             <EmptyState
@@ -168,7 +188,13 @@ export default async function WhatsAppTemplatesPage() {
                       Created {formatDate(t.createdAt)}
                     </p>
                   </div>
-                  <div className="flex gap-2">
+                  {/* `flex-wrap`, because `ConfirmSubmit` grows from one button
+                      to a sentence and two buttons when it arms — unwrapped,
+                      that pushed the row past the card at every width below a
+                      laptop. Both controls also name their own row: a page of
+                      twelve templates otherwise offers a screen-reader user
+                      twelve buttons all called "Delete". */}
+                  <div className="flex flex-wrap items-start gap-2">
                     {t.status === 'draft' || t.status === 'rejected' ? (
                       <form action={submit}>
                         <input type="hidden" name="id" value={t.id} />
@@ -178,7 +204,8 @@ export default async function WhatsAppTemplatesPage() {
                           variant="outline"
                           disabled={!canSubmitToMeta}
                         >
-                          Submit to Meta
+                          Send for approval
+                          <span className="sr-only">: {t.name}</span>
                         </Button>
                       </form>
                     ) : null}
@@ -186,7 +213,8 @@ export default async function WhatsAppTemplatesPage() {
                       <input type="hidden" name="id" value={t.id} />
                       <ConfirmSubmit
                         label="Delete"
-                        question="The template is removed from Meta too and can no longer be sent."
+                        confirmLabel="Yes, delete it"
+                        question={`"${t.name}" is removed from Meta too and can no longer be sent.`}
                       />
                     </form>
                   </div>

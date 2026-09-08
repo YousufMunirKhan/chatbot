@@ -132,13 +132,25 @@ export function AgencyBrandingForm({ branding }: { branding: AgencyBranding }) {
             {logoUrl ? (
               // A plain <img>: the logo is an arbitrary customer-supplied host,
               // and next/image would need every one of them in remotePatterns.
+              //
+              // `bg-brand-plate`, not `bg-white/90`. The product already has a
+              // token for exactly this — the white plate that sits under a
+              // customer-supplied logo PNG, white in both themes on purpose,
+              // used by the sidebar, the auth shell and the marketing header.
+              // This was the fourth place inventing its own version of it.
               // eslint-disable-next-line @next/next/no-img-element
               <img
                 src={logoUrl}
                 alt=""
-                className="h-8 w-auto max-w-[10rem] rounded bg-white/90 object-contain p-1"
+                className="h-8 w-auto max-w-[10rem] rounded bg-brand-plate object-contain p-1"
               />
             ) : (
+              // Left as translucent white on purpose, and NOT switched to a
+              // token: this chip sits on `previewColor`, an arbitrary colour the
+              // agency picked, not on any theme surface. `--brand-plate` takes
+              // no opacity modifier (it is a bare `hsl(var(…))` in the Tailwind
+              // config, with no `<alpha-value>` slot), so asking for 20% of it
+              // would silently emit nothing.
               <span className="rounded bg-white/20 px-2 py-1 text-xs uppercase tracking-wider">
                 No logo
               </span>

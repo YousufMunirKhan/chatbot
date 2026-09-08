@@ -39,7 +39,13 @@ export function Badge({
   return (
     <span
       className={cn(
-        'inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-medium',
+        // `align-middle`: an `inline-flex` badge sits on the text baseline, so
+        // inside a sentence or a table cell its pill rides ~3px low against the
+        // words either side of it.
+        // `max-w-full` + `break-words`: a badge is `inline-flex`, which does not
+        // shrink below its content. A long status carried straight past the edge
+        // of a narrow table cell instead of wrapping inside it.
+        'inline-flex max-w-full items-center break-words rounded-full border px-2.5 py-0.5 align-middle text-xs font-medium leading-tight',
         VARIANTS[variant],
         className,
       )}

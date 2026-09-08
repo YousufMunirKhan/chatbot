@@ -9,6 +9,9 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { FormField } from '@/components/ui/form-field';
+import { FormMessage } from '@/components/ui/form-message';
+import { SubmitButton } from '@/components/ui/submit-button';
+import { FIELD_GRID } from './form-layout';
 import { humanizeToken } from '@/lib/constants';
 import type { HelpdeskConnectorDocumentRow } from '../helpdesk-data';
 import {
@@ -21,11 +24,10 @@ import type { ActionState } from '../actions';
 const initial: ActionState = {};
 
 function SaveButton() {
-  const { pending } = useFormStatus();
   return (
-    <Button type="submit" size="sm" variant="outline" disabled={pending}>
-      {pending ? 'Saving...' : 'Save edits'}
-    </Button>
+    <SubmitButton size="sm" variant="outline" pendingLabel="Saving…">
+      Save edits
+    </SubmitButton>
   );
 }
 
@@ -128,7 +130,7 @@ export function HelpdeskDocumentReview({
               <input type="hidden" name="documentId" value={doc.id} />
               <ReviewActionButton
                 icon={<CheckCircle2 className="h-4 w-4" />}
-                pendingLabel="Saving..."
+                pendingLabel="Saving…"
               >
                 Approve and save
               </ReviewActionButton>
@@ -137,7 +139,7 @@ export function HelpdeskDocumentReview({
               <input type="hidden" name="documentId" value={doc.id} />
               <ReviewActionButton
                 icon={<XCircle className="h-4 w-4" />}
-                pendingLabel="Ignoring..."
+                pendingLabel="Ignoring…"
                 variant="outline"
               >
                 Do not use this screen
@@ -245,7 +247,7 @@ export function HelpdeskDocumentReview({
             {/* All six ids are scoped to the document: several of these cards
                 render on one page, and duplicate ids would point every label at
                 the first card's control. */}
-            <div className="grid gap-3 sm:grid-cols-2">
+            <div className={FIELD_GRID}>
               <FormField label="Part of your system" htmlFor={`module-${doc.id}`}>
                 <Input name="module" defaultValue={doc.module} />
               </FormField>
@@ -285,8 +287,7 @@ export function HelpdeskDocumentReview({
                 placeholder="Checked with Sara, wording agreed"
               />
             </FormField>
-            {state.error ? <p className="text-sm text-destructive">{state.error}</p> : null}
-            {state.ok ? <p className="text-sm text-emerald-600">Draft saved.</p> : null}
+            <FormMessage state={state} okText="Draft saved." />
             <SaveButton />
           </form>
         </div>

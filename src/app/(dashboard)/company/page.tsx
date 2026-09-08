@@ -138,7 +138,11 @@ function LeadAttention({ item, dict }: { item: AttentionItem; dict: Dictionary }
   return (
     <Card>
       <CardContent className="space-y-4 p-6">
-        <h2 className="text-xl font-semibold">{attentionTitle(dict, item)}</h2>
+        {/* `text-lg`, the dashboard's sub-heading size. `text-xl` is reserved
+            for the marketing pages, and this heading was the only thing in the
+            company panel using it — so the most important line on the busiest
+            screen was set in a size that appears nowhere else in the product. */}
+        <h2 className="text-lg font-semibold">{attentionTitle(dict, item)}</h2>
         <p className="text-sm text-muted-foreground">
           {t(dict, `home.attention.${item.key}.body`)}
         </p>
@@ -473,7 +477,7 @@ export default async function CompanyOverview() {
                push, so the inbox is a link and the page stops talking. */
             <Card>
               <CardContent className="space-y-2 p-6">
-                <h2 className="text-xl font-semibold">{t(dict, 'home.clear.title')}</h2>
+                <h2 className="text-lg font-semibold">{t(dict, 'home.clear.title')}</h2>
                 <p className="text-sm text-muted-foreground">
                   {t(dict, 'home.clear.body')}{' '}
                   <Link href="/company/inbox" className="underline underline-offset-4">

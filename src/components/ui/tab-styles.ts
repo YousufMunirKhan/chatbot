@@ -8,12 +8,29 @@
  * stops the two drifting apart.
  */
 
-/** The scrolling rail. `border-b` under it is what the markers sit on. */
-export const TAB_LIST =
-  'flex min-w-max items-stretch gap-1 border-b';
+/**
+ * The rail. `border-b` under it is what the selection markers sit on.
+ *
+ * `w-max min-w-full`, not `min-w-max` (Module 24). `min-w-max` sizes the list to
+ * its content and nothing else, so on a screen with two or three tabs the
+ * underline stopped dead after the last one — the rule looked like it had been
+ * cut off rather than like a rail the tabs sit on, and it was a different length
+ * on every screen. `min-w-full` takes it to the full width of the scroller,
+ * `w-max` still lets it grow past that so a long rail scrolls instead of
+ * wrapping. Both are needed: `w-max` alone collapses to content, `min-w-full`
+ * alone would let a long rail wrap onto two lines.
+ */
+export const TAB_LIST = 'flex w-max min-w-full items-stretch gap-1 border-b';
 
-/** Wrap `TAB_LIST` in this so a long rail scrolls instead of wrapping. */
-export const TAB_SCROLLER = 'overflow-x-auto';
+/**
+ * Wrap `TAB_LIST` in this so a long rail scrolls instead of wrapping.
+ *
+ * `overscroll-x-contain` stops a horizontal flick that reaches the end of the
+ * rail from being handed to the page behind it, which on a trackpad reads as a
+ * browser Back gesture — an unrecoverable navigation triggered by scrolling a
+ * row of tabs.
+ */
+export const TAB_SCROLLER = 'overflow-x-auto overscroll-x-contain';
 
 /**
  * A single tab. `text-start` and `ms-2` on the badge rather than `text-left` /

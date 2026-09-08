@@ -8,6 +8,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { FormField } from '@/components/ui/form-field';
 import { FormMessage } from '@/components/ui/form-message';
 import { SubmitButton } from '@/components/ui/submit-button';
+import { FIELD_GRID } from './form-layout';
 import { MAX_KNOWLEDGE_DOC_CHARS, approximatePages } from '@/lib/knowledge/limits';
 import { updateDocumentAction, type ActionState } from '../knowledge-actions';
 
@@ -40,7 +41,7 @@ export function KnowledgeDocumentForm({
     <form action={action} className="space-y-4">
       <input type="hidden" name="documentId" value={doc.id} />
 
-      <div className="grid gap-4 sm:grid-cols-2">
+      <div className={FIELD_GRID}>
         <FormField label="Title" htmlFor="documentTitle" required>
           <Input id="documentTitle" name="title" required defaultValue={doc.title} />
         </FormField>

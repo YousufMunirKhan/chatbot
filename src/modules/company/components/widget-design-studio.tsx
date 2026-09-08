@@ -11,9 +11,11 @@ import { Textarea } from '@/components/ui/textarea';
 import { FormField } from '@/components/ui/form-field';
 import { FormMessage } from '@/components/ui/form-message';
 import { SubmitButton } from '@/components/ui/submit-button';
+import { cn } from '@/lib/utils';
 import type { BotRow, CompanyProfile } from '../data';
 import { updateWidgetDesignAction, type WidgetDesignActionState } from '../widget-design-actions';
 import { WidgetEmbedInstructions } from './widget-embed-instructions';
+import { CHECKBOX, CHOICE_CARD, CHOICE_GRID, FIELD_GRID, TOGGLE_GRID } from './form-layout';
 
 type PreviewMode = 'desktop' | 'mobile';
 type PreviewBg = 'light' | 'dark' | 'brand';
@@ -353,7 +355,23 @@ export function WidgetDesignStudio({
     <form action={formAction} className="space-y-6">
       <input type="hidden" name="botId" value={bot.id} />
 
-      <div className="grid gap-6 xl:grid-cols-[minmax(360px,440px)_1fr]">
+      {/*
+        THE SETTINGS RAIL IS ~440px WIDE. EVERY FIELD IN IT WAS `sm:grid-cols-2`.
+        ----------------------------------------------------------------------
+        `sm:` is a VIEWPORT query and it is fully switched on at 640px; this
+        split only exists from `xl:`, i.e. 1280px. So `sm:grid-cols-2` inside
+        this column never meant "two columns when there is room" — it meant two
+        columns of about 198px, always, on every desktop, holding `<select>`s
+        with options like "Pill with label" and hints like "The fixed corner of
+        the visitor's browser window. Arabic (right-to-left) chats still open in
+        this same corner", which wrapped to six lines under a 198px box.
+
+        Every one of those grids is now `FIELD_GRID`, which resolves against
+        THIS column: one field per row at 440px, and two only if the rail ever
+        gets wide enough to give each of them 16rem. Same class, correct in both
+        cases — which is the property the `sm:` version never had.
+      */}
+      <div className="grid gap-6 xl:grid-cols-[minmax(360px,440px)_1fr] [&>*]:min-w-0">
         <div className="space-y-4">
           <section className="rounded-md border bg-card p-4">
             <div className="mb-4 flex items-center justify-between gap-3">
@@ -395,7 +413,7 @@ export function WidgetDesignStudio({
                 </div>
               </fieldset>
 
-              <div className="grid gap-3 sm:grid-cols-2">
+              <div className={FIELD_GRID}>
                 <FormField label="Widget title" htmlFor="title">
                   <Input name="title" value={title} onChange={(e) => setTitle(e.target.value)} />
                 </FormField>
@@ -427,7 +445,7 @@ export function WidgetDesignStudio({
 
           <section className="rounded-md border bg-card p-4">
             <h2 className="mb-4 text-base font-semibold">Colors and header</h2>
-            <div className="grid gap-3 sm:grid-cols-2">
+            <div className={FIELD_GRID}>
               {/* These two are composite — a colour swatch plus a hex box, both
                   driving the same value. `FormField` wires exactly one control
                   (it clones its single child), so it would put the id on the
@@ -513,7 +531,7 @@ export function WidgetDesignStudio({
 
           <section className="rounded-md border bg-card p-4">
             <h2 className="mb-4 text-base font-semibold">Launcher and avatar</h2>
-            <div className="grid gap-3 sm:grid-cols-2">
+            <div className={FIELD_GRID}>
               <FormField
                 label="Launcher label"
                 htmlFor="launcherLabel"
@@ -659,7 +677,7 @@ export function WidgetDesignStudio({
 
           <section className="rounded-md border bg-card p-4">
             <h2 className="mb-4 text-base font-semibold">Behavior and layout</h2>
-            <div className="grid gap-3 sm:grid-cols-2">
+            <div className={FIELD_GRID}>
               <FormField label="Window size" htmlFor="windowSize">
                 <Select
                   name="windowSize"
@@ -787,24 +805,24 @@ export function WidgetDesignStudio({
                 />
               </FormField>
             </div>
-            <div className="mt-3 grid gap-2 sm:grid-cols-2">
-              <label className="flex items-center gap-2 rounded-md border p-2.5 text-sm">
+            <div className={cn(CHOICE_GRID, 'mt-3')}>
+              <label className={CHOICE_CARD}>
                 <input
                   type="checkbox"
                   name="autoOpenDesktop"
                   checked={autoOpenDesktop}
                   onChange={(e) => setAutoOpenDesktop(e.target.checked)}
-                  className="h-4 w-4"
+                  className={CHECKBOX}
                 />
                 Auto-open on desktop
               </label>
-              <label className="flex items-center gap-2 rounded-md border p-2.5 text-sm">
+              <label className={CHOICE_CARD}>
                 <input
                   type="checkbox"
                   name="autoOpenMobile"
                   checked={autoOpenMobile}
                   onChange={(e) => setAutoOpenMobile(e.target.checked)}
-                  className="h-4 w-4"
+                  className={CHECKBOX}
                 />
                 Auto-open on mobile
               </label>
@@ -813,37 +831,37 @@ export function WidgetDesignStudio({
                   nothing. Same for the glow sub-option below. Both keep a hidden
                   input so the setting survives being switched off and on. */}
               {autoOpenDesktop || autoOpenMobile ? (
-                <label className="flex items-center gap-2 rounded-md border p-2.5 text-sm">
+                <label className={CHOICE_CARD}>
                   <input
                     type="checkbox"
                     name="autoOpenOnce"
                     checked={autoOpenOnce}
                     onChange={(e) => setAutoOpenOnce(e.target.checked)}
-                    className="h-4 w-4"
+                    className={CHECKBOX}
                   />
                   Open by itself only the first time someone visits
                 </label>
               ) : (
                 <input type="hidden" name="autoOpenOnce" value={autoOpenOnce ? 'on' : ''} />
               )}
-              <label className="flex items-center gap-2 rounded-md border p-2.5 text-sm">
+              <label className={CHOICE_CARD}>
                 <input
                   type="checkbox"
                   name="launcherGlow"
                   checked={launcherGlow}
                   onChange={(e) => setLauncherGlow(e.target.checked)}
-                  className="h-4 w-4"
+                  className={CHECKBOX}
                 />
                 Make the chat button glow until it is opened
               </label>
               {launcherGlow ? (
-                <label className="flex items-center gap-2 rounded-md border p-2.5 text-sm">
+                <label className={CHOICE_CARD}>
                   <input
                     type="checkbox"
                     name="launcherGlowMobileOnly"
                     checked={launcherGlowMobileOnly}
                     onChange={(e) => setLauncherGlowMobileOnly(e.target.checked)}
-                    className="h-4 w-4"
+                    className={CHECKBOX}
                   />
                   Only glow on phones
                 </label>
@@ -854,23 +872,23 @@ export function WidgetDesignStudio({
                   value={launcherGlowMobileOnly ? 'on' : ''}
                 />
               )}
-              <label className="flex items-center gap-2 rounded-md border p-2.5 text-sm">
+              <label className={CHOICE_CARD}>
                 <input
                   type="checkbox"
                   name="showOnMobile"
                   checked={showOnMobile}
                   onChange={(e) => setShowOnMobile(e.target.checked)}
-                  className="h-4 w-4"
+                  className={CHECKBOX}
                 />
                 Show on mobile
               </label>
-              <label className="flex items-center gap-2 rounded-md border p-2.5 text-sm">
+              <label className={CHOICE_CARD}>
                 <input
                   type="checkbox"
                   name="showOnDesktop"
                   checked={showOnDesktop}
                   onChange={(e) => setShowOnDesktop(e.target.checked)}
-                  className="h-4 w-4"
+                  className={CHECKBOX}
                 />
                 Show on desktop
               </label>
@@ -946,13 +964,13 @@ export function WidgetDesignStudio({
               Scores show in the Inbox and Analytics.
             </p>
             <div className="grid gap-3">
-              <label className="flex items-center gap-2 rounded-md border p-2.5 text-sm">
+              <label className={CHOICE_CARD}>
                 <input
                   type="checkbox"
                   name="csatEnabled"
                   checked={csatEnabled}
                   onChange={(e) => setCsatEnabled(e.target.checked)}
-                  className="h-4 w-4"
+                  className={CHECKBOX}
                 />
                 Ask for a rating after the conversation
               </label>
@@ -962,13 +980,13 @@ export function WidgetDesignStudio({
                   visitor would read. */}
               {csatEnabled ? (
                 <>
-                  <label className="flex items-center gap-2 rounded-md border p-2.5 text-sm">
+                  <label className={CHOICE_CARD}>
                     <input
                       type="checkbox"
                       name="csatCommentEnabled"
                       checked={csatCommentEnabled}
                       onChange={(e) => setCsatCommentEnabled(e.target.checked)}
-                      className="h-4 w-4"
+                      className={CHECKBOX}
                     />
                     Let them add a comment as well as the stars
                   </label>
@@ -1023,62 +1041,62 @@ export function WidgetDesignStudio({
             </p>
 
             <div className="grid gap-3">
-              <label className="flex items-center gap-2 rounded-md border p-2.5 text-sm">
+              <label className={CHOICE_CARD}>
                 <input
                   type="checkbox"
                   checked={contact.prechatEnabled}
                   onChange={(e) => patchContact({ prechatEnabled: e.target.checked })}
-                  className="h-4 w-4"
+                  className={CHECKBOX}
                 />
                 Ask for contact details before the conversation starts
               </label>
 
               {contact.prechatEnabled ? (
                 <>
-                  <div className="grid gap-2 sm:grid-cols-3">
-                    <label className="flex items-center gap-2 rounded-md border p-2.5 text-sm">
+                  <div className={TOGGLE_GRID}>
+                    <label className={CHOICE_CARD}>
                       <input
                         type="checkbox"
                         checked={contact.prechatAskName}
                         onChange={(e) => patchContact({ prechatAskName: e.target.checked })}
-                        className="h-4 w-4"
+                        className={CHECKBOX}
                       />
                       Name
                     </label>
-                    <label className="flex items-center gap-2 rounded-md border p-2.5 text-sm">
+                    <label className={CHOICE_CARD}>
                       <input
                         type="checkbox"
                         checked={contact.prechatAskEmail}
                         onChange={(e) => patchContact({ prechatAskEmail: e.target.checked })}
-                        className="h-4 w-4"
+                        className={CHECKBOX}
                       />
                       Email
                     </label>
-                    <label className="flex items-center gap-2 rounded-md border p-2.5 text-sm">
+                    <label className={CHOICE_CARD}>
                       <input
                         type="checkbox"
                         checked={contact.prechatAskPhone}
                         onChange={(e) => patchContact({ prechatAskPhone: e.target.checked })}
-                        className="h-4 w-4"
+                        className={CHECKBOX}
                       />
                       Phone
                     </label>
                   </div>
-                  <label className="flex items-center gap-2 rounded-md border p-2.5 text-sm">
+                  <label className={CHOICE_CARD}>
                     <input
                       type="checkbox"
                       checked={contact.prechatRequired}
                       onChange={(e) => patchContact({ prechatRequired: e.target.checked })}
-                      className="h-4 w-4"
+                      className={CHECKBOX}
                     />
                     They must fill it in before they can type
                   </label>
-                  <label className="flex items-center gap-2 rounded-md border p-2.5 text-sm">
+                  <label className={CHOICE_CARD}>
                     <input
                       type="checkbox"
                       checked={contact.prechatAllowSkip}
                       onChange={(e) => patchContact({ prechatAllowSkip: e.target.checked })}
-                      className="h-4 w-4"
+                      className={CHECKBOX}
                     />
                     Show a Skip link as well
                   </label>
@@ -1114,12 +1132,12 @@ export function WidgetDesignStudio({
                 </>
               ) : null}
 
-              <label className="flex items-center gap-2 rounded-md border p-2.5 text-sm">
+              <label className={CHOICE_CARD}>
                 <input
                   type="checkbox"
                   checked={contact.offlineEnabled}
                   onChange={(e) => patchContact({ offlineEnabled: e.target.checked })}
-                  className="h-4 w-4"
+                  className={CHECKBOX}
                 />
                 Say you are closed outside your opening hours
               </label>
@@ -1144,12 +1162,12 @@ export function WidgetDesignStudio({
                       onChange={(e) => patchContact({ offlineMessage: e.target.value })}
                     />
                   </FormField>
-                  <label className="flex items-center gap-2 rounded-md border p-2.5 text-sm">
+                  <label className={CHOICE_CARD}>
                     <input
                       type="checkbox"
                       checked={contact.offlineFormEnabled}
                       onChange={(e) => patchContact({ offlineFormEnabled: e.target.checked })}
-                      className="h-4 w-4"
+                      className={CHECKBOX}
                     />
                     Offer to take a message
                   </label>
@@ -1167,7 +1185,7 @@ export function WidgetDesignStudio({
 
               <div className="flex flex-wrap items-center gap-3">
                 <Button type="button" size="sm" onClick={saveContact} disabled={contactSaving}>
-                  {contactSaving ? 'Saving...' : 'Save contact settings'}
+                  {contactSaving ? 'Saving…' : 'Save contact settings'}
                 </Button>
                 <FormMessage state={contactState} okText="Saved. Live widget updated." />
               </div>
@@ -1225,7 +1243,16 @@ export function WidgetDesignStudio({
                   the preview has to stay put when the dashboard shell flips to RTL. */}
               <div
                 className={`absolute ${position === 'left' ? 'left-5' : 'right-5'} bottom-5 overflow-hidden rounded-[22px] bg-white shadow-2xl ring-1 ring-slate-200 ${
-                  previewMode === 'mobile' ? 'h-[500px] w-[300px]' : 'h-[440px] w-[380px]'
+                  // `w-[380px]` flat. Stacked on a phone this preview panel is
+                  // about 343px wide, so the mock was 37px wider than the frame
+                  // it sits in — and the frame is `overflow-hidden`, so the
+                  // right-hand edge of the widget (including its close button)
+                  // was simply cut off on every phone. `min()` keeps the design
+                  // size wherever there is room and falls back to whatever the
+                  // frame can give, minus the 20px inset it is pinned at.
+                  previewMode === 'mobile'
+                    ? 'h-[500px] w-[min(300px,calc(100%-2.5rem))]'
+                    : 'h-[440px] w-[min(380px,calc(100%-2.5rem))]'
                 }`}
               >
                 <div
@@ -1369,7 +1396,7 @@ export function WidgetDesignStudio({
           </section>
 
           <div className="flex flex-wrap items-center gap-3">
-            <SubmitButton pendingLabel="Saving...">Save and update live widget</SubmitButton>
+            <SubmitButton pendingLabel="Saving…">Save and update live widget</SubmitButton>
             <FormMessage state={state} okText="Saved. Live widget config updated." />
           </div>
         </div>

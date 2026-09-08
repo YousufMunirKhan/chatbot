@@ -1,4 +1,5 @@
 import { headers } from 'next/headers';
+import { Alert } from '@/components/ui/alert';
 import { BrandedLogin } from './branded-login';
 import { DEFAULT_BRANDING, getAgencyByDomain } from '@/lib/agency';
 
@@ -51,14 +52,18 @@ export default async function LoginPage() {
 
   let form: React.ReactNode;
   if (missingSupabase) {
+    // `border-amber-200 bg-amber-50 text-amber-950` was three raw palette
+    // values, none of which is defined in dark mode — on a dark screen this
+    // notice was near-black text on a near-white plate. The warning triplet is
+    // defined in both themes and contrast-checked against its own surface.
     form = (
-      <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-950">
-        <p className="font-semibold">Supabase is not configured on this server.</p>
-        <p className="mt-2">
-          Add <span className="font-mono">NEXT_PUBLIC_SUPABASE_URL</span> and{' '}
-          <span className="font-mono">NEXT_PUBLIC_SUPABASE_ANON_KEY</span> to the live environment, then restart the app.
+      <Alert tone="warning" title="Supabase is not configured on this server.">
+        <p>
+          Add <code className="font-mono">NEXT_PUBLIC_SUPABASE_URL</code> and{' '}
+          <code className="font-mono">NEXT_PUBLIC_SUPABASE_ANON_KEY</code> to the live environment,
+          then restart the app.
         </p>
-      </div>
+      </Alert>
     );
   } else {
     const { LoginForm } = await import('./login-form');

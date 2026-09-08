@@ -13,7 +13,10 @@ import {
   Wrench,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { FormMessage } from '@/components/ui/form-message';
+import { cn } from '@/lib/utils';
 import { testAssistantAction, type TestAssistantState } from '../test-assistant-actions';
+import { CHOICE_GRID } from './form-layout';
 
 const initial: TestAssistantState = {};
 
@@ -55,6 +58,12 @@ export function HelpdeskChatPreview({
 
   return (
     <section className="grid gap-6 lg:grid-cols-[minmax(320px,0.95fr)_1.05fr] [&>*]:min-w-0">
+      {/* DELIBERATELY FIXED-LIGHT. This whole panel is a picture of the staff
+          chat as it looks inside the customer's own software — its white, its
+          slate greys and its violet belong to the thing being depicted, not to
+          this dashboard, and must not follow the dashboard's theme. Same
+          exception as the sidebar gradient. Nothing here is interactive except
+          the ask box at the bottom. */}
       <div className="overflow-hidden rounded-lg border bg-white shadow-sm">
         <div className="flex items-center justify-between border-b px-5 py-4">
           <div className="inline-flex rounded-full bg-slate-100 p-1 text-sm font-medium">
@@ -168,56 +177,66 @@ export function HelpdeskChatPreview({
         </div>
       </div>
 
+      {/*
+        EVERYTHING FROM HERE IS DASHBOARD CHROME, NOT THE MOCK.
+        The panel on the left is a deliberate fixed-light picture of the staff
+        chat as it appears inside the customer's own software, with that
+        product's violet — the same exception the sidebar gradient takes. This
+        column is not: it is an explanatory card and the assistant's answer,
+        read by the owner in whichever theme they chose. It was painted in the
+        mock's colours anyway (`bg-white`, `text-slate-950`, `text-slate-600`,
+        `border-red-200`), so in dark mode half of this screen stayed white.
+      */}
       <div className="space-y-4">
-        <div className="rounded-lg border bg-white p-5 shadow-sm">
+        <div className="rounded-lg border bg-card p-5 shadow-sm">
           <div className="flex items-center gap-3">
-            <div className="grid h-10 w-10 place-items-center rounded-lg bg-violet-50 text-[#5b3ff4]">
+            <div className="grid h-10 w-10 place-items-center rounded-lg bg-primary/10 text-primary">
               <Sparkles className="h-5 w-5" />
             </div>
             <div>
-              <h2 className="text-lg font-semibold text-slate-950">Internal helpdesk brain</h2>
-              <p className="text-sm text-slate-600">
+              <h2 className="text-lg font-semibold">Internal helpdesk brain</h2>
+              <p className="text-sm text-muted-foreground">
                 Built for staff inside your software, not as a public website bubble.
               </p>
             </div>
           </div>
-          <div className="mt-5 grid gap-3 sm:grid-cols-2">
+          <div className={cn(CHOICE_GRID, 'mt-5 gap-3')}>
             <div className="rounded-md border p-3">
-              <Search className="h-4 w-4 text-[#5b3ff4]" />
+              <Search className="h-4 w-4 text-primary" />
               <p className="mt-2 text-sm font-medium">Reads reviewed docs</p>
-              <p className="mt-1 text-xs text-slate-500">
+              <p className="mt-1 text-xs text-muted-foreground">
                 Menus, screens, steps, fields, errors, and SOPs become searchable answers.
               </p>
             </div>
             <div className="rounded-md border p-3">
-              <Wrench className="h-4 w-4 text-[#5b3ff4]" />
+              <Wrench className="h-4 w-4 text-primary" />
               <p className="mt-2 text-sm font-medium">Runs approved actions</p>
-              <p className="mt-1 text-xs text-slate-500">
+              <p className="mt-1 text-xs text-muted-foreground">
                 Only enabled connector actions are callable, with confirmation for risky updates.
               </p>
             </div>
             <div className="rounded-md border p-3">
-              <Boxes className="h-4 w-4 text-[#5b3ff4]" />
+              <Boxes className="h-4 w-4 text-primary" />
               <p className="mt-2 text-sm font-medium">Keeps live data local</p>
-              <p className="mt-1 text-xs text-slate-500">
+              <p className="mt-1 text-xs text-muted-foreground">
                 Stock, reports, customers, and invoices are read through the customer connector.
               </p>
             </div>
             <div className="rounded-md border p-3">
-              <Clock3 className="h-4 w-4 text-[#5b3ff4]" />
+              <Clock3 className="h-4 w-4 text-primary" />
               <p className="mt-2 text-sm font-medium">Polls for work</p>
-              <p className="mt-1 text-xs text-slate-500">
+              <p className="mt-1 text-xs text-muted-foreground">
                 The connector claims queued events, executes locally, then posts the result back.
               </p>
             </div>
           </div>
         </div>
 
-        {state.error ? (
-          <div className="rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-700">
-            {state.error}
-          </div>
-        ) : null}
+        {/* Raw `red-200/50/700` — undefined in dark mode, and a bare div with
+            no live region, so a failed answer appeared silently. `FormMessage`
+            is the announced version and `Alert` would not be: this is the
+            result of pressing the button, not a standing notice. */}
+        <FormMessage state={{ error: state.error }} className="text-sm" />
         {state.answer ? (
           <div className="rounded-lg border bg-white p-5 shadow-sm">
             <p className="text-xs font-semibold uppercase tracking-wider text-slate-500">

@@ -8,6 +8,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { FormField } from '@/components/ui/form-field';
 import { FormMessage } from '@/components/ui/form-message';
 import { SubmitButton } from '@/components/ui/submit-button';
+import { FIELD_GRID } from './form-layout';
 import { updatePromptConfigAction, type ActionState } from '../actions';
 import type { PromptConfig } from '@/lib/ai/prompts/assemble';
 
@@ -60,7 +61,7 @@ export function PromptConfigForm({
         </p>
       </div>
 
-      <div className="grid gap-4 sm:grid-cols-2">
+      <div className={FIELD_GRID}>
         <FormField
           label="Trade or industry"
           htmlFor="industry"

@@ -12,6 +12,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { FormField } from '@/components/ui/form-field';
 import { FormMessage } from '@/components/ui/form-message';
 import { SubmitButton } from '@/components/ui/submit-button';
+import { FIELD_GRID, FORM_SECTION_TITLE } from './form-layout';
 import {
   KNOWLEDGE_UPLOAD_ACCEPT,
   MAX_CRAWL_PAGES,
@@ -158,14 +159,14 @@ function FileUploadForm({ bots }: { bots: { id: string; name: string }[] }) {
       noValidate
     >
       <div>
-        <h3 className="font-medium">Upload a knowledge file</h3>
+        <h3 className={FORM_SECTION_TITLE}>Upload a file</h3>
         <p className="mt-1 text-sm text-muted-foreground">
           PDF, DOCX, TXT, Markdown, or CSV, up to {formatBytes(MAX_KNOWLEDGE_FILE_BYTES)} and{' '}
           {MAX_KNOWLEDGE_PDF_PAGES} PDF pages each. Text is extracted here and only the cleaned text
           is indexed. If a file is longer than we index, we say so instead of shortening it quietly.
         </p>
       </div>
-      <div className="grid gap-4 sm:grid-cols-2">
+      <div className={FIELD_GRID}>
         <FormField label="File" htmlFor="file">
           <Input id="file" name="file" type="file" accept={KNOWLEDGE_UPLOAD_ACCEPT} disabled={busy} />
         </FormField>
@@ -201,7 +202,7 @@ function FileUploadForm({ bots }: { bots: { id: string; name: string }[] }) {
       ) : null}
 
       <Button type="submit" disabled={busy} aria-busy={busy}>
-        {busy ? 'Uploading…' : 'Upload and index file'}
+        {busy ? 'Uploading…' : 'Upload this file'}
       </Button>
     </form>
   );
@@ -249,14 +250,14 @@ export function KnowledgeForm({
 
       <form action={urlAction} className="space-y-4">
         <div>
-          <h3 className="font-medium">Import one web page</h3>
+          <h3 className={FORM_SECTION_TITLE}>Import one web page</h3>
           <p className="mt-1 text-sm text-muted-foreground">
             One page, kept as its own document. Importing the same address again updates that
             document instead of adding a second copy of it. To read a whole site, use the website
             import — it reads up to {MAX_CRAWL_PAGES} pages.
           </p>
         </div>
-        <div className="grid gap-4 sm:grid-cols-2">
+        <div className={FIELD_GRID}>
           <FormField label="Website page URL" htmlFor="url">
             <Input id="url" name="url" type="url" placeholder="https://example.com/faq" />
           </FormField>
@@ -269,11 +270,21 @@ export function KnowledgeForm({
         </div>
         <FormMessage state={urlState} okText="Imported and indexed." />
         <ResultNotice state={urlState} />
-        <SubmitButton pendingLabel="Importing...">Import page</SubmitButton>
+        <SubmitButton pendingLabel="Importing…">Import page</SubmitButton>
       </form>
 
       <form action={action} className="space-y-4 border-t pt-6">
-        <div className="grid gap-4 sm:grid-cols-2">
+        {/* The only one of the three ways to add knowledge that had no heading
+            at all — it began with a bare "Title" box under a horizontal rule,
+            so it read as more of the web-page import above it. */}
+        <div>
+          <h3 className={FORM_SECTION_TITLE}>Type or paste it in</h3>
+          <p className="mt-1 text-sm text-muted-foreground">
+            For a policy or an answer you have not written down anywhere else. It becomes its own
+            document, exactly as you type it.
+          </p>
+        </div>
+        <div className={FIELD_GRID}>
           <FormField label="Title" htmlFor="title" required>
             <Input id="title" name="title" required placeholder="e.g. Refund policy" />
           </FormField>
@@ -297,7 +308,7 @@ export function KnowledgeForm({
         </FormField>
         <FormMessage state={state} okText="Added. Your assistant can now use this." />
         <ResultNotice state={state} />
-        <SubmitButton pendingLabel="Adding...">Add to knowledge base</SubmitButton>
+        <SubmitButton pendingLabel="Adding…">Add to knowledge base</SubmitButton>
       </form>
     </div>
   );

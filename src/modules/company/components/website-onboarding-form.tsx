@@ -34,7 +34,7 @@ export function WebsiteOnboardingForm() {
             required
           />
         </FormField>
-        <SubmitButton pendingLabel="Importing website...">Import website</SubmitButton>
+        <SubmitButton pendingLabel="Importing website…">Import website</SubmitButton>
       </form>
 
       <div className="rounded-md border bg-muted/30 p-3 text-xs text-muted-foreground">

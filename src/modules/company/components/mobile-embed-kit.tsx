@@ -1,7 +1,8 @@
 'use client';
 
 import { useState } from 'react';
-import { useFormState, useFormStatus } from 'react-dom';
+import { useFormState } from 'react-dom';
+import { SubmitButton } from '@/components/ui/submit-button';
 import { Alert } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { ConfirmSubmit } from '@/components/confirm-submit';
@@ -55,11 +56,10 @@ function Snippet({ code, label }: { code: string; label: string }) {
 }
 
 function RevealButton({ hasSecret }: { hasSecret: boolean }) {
-  const { pending } = useFormStatus();
   return (
-    <Button type="submit" variant="outline" size="sm" disabled={pending}>
-      {pending ? 'Working…' : hasSecret ? 'Show signing secret' : 'Create signing secret'}
-    </Button>
+    <SubmitButton variant="outline" size="sm" pendingLabel="Working…">
+      {hasSecret ? 'Show signing secret' : 'Create signing secret'}
+    </SubmitButton>
   );
 }
 
@@ -107,13 +107,24 @@ export function MobileEmbedKit({ bots }: { bots: MobileEmbedBot[] }) {
   return (
     <div className="space-y-4">
       {bots.length > 1 ? (
-        <div className="flex flex-wrap gap-2">
+        // A row of buttons where one is "on" is a group, and it has to say so.
+        // Colour alone carried the selection: `variant="default"` against
+        // `"outline"` tells a sighted user which assistant these snippets are
+        // for and tells a screen-reader user nothing at all — every button
+        // announced identically, so there was no way to know which one was
+        // already chosen or that choosing changed the code below.
+        <div
+          role="group"
+          aria-label="Which assistant these snippets are for"
+          className="flex flex-wrap gap-2"
+        >
           {bots.map((candidate, index) => (
             <Button
               key={candidate.botId}
               type="button"
               size="sm"
               variant={index === selected ? 'default' : 'outline'}
+              aria-pressed={index === selected}
               onClick={() => setSelected(index)}
             >
               {candidate.name}

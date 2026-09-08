@@ -2,7 +2,7 @@ import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { EmptyState } from '@/components/ui/empty-state';
-import { InfoBanner } from '@/components/info-banner';
+import { Alert } from '@/components/ui/alert';
 import { PageHeader } from '@/components/ui/page-header';
 import { requireRole } from '@/lib/auth';
 import {
@@ -186,17 +186,31 @@ export default async function CompanySettingsPage() {
         )}
       />
 
+      {/*
+        TWO KINDS OF THING ON ONE PAGE, NOW SAID OUT LOUD
+        -------------------------------------------------
+        Everything above the rule is a DIRECTORY — twelve links to elsewhere.
+        Everything below it is work you do HERE: how long chats are kept, the
+        privacy requests waiting on you, and your export. They were stacked in
+        one undifferentiated column of `space-y-6`, so the four cards at the
+        bottom read as four more directory entries that happened to be bigger,
+        and the pending-requests card — the only thing on this page with a
+        deadline attached to it — was the tenth block down with no signal that
+        anybody was waiting.
+      */}
       {SETTINGS_GROUPS.map((group) => (
         <section key={group.key} className="space-y-3">
           <h2 className="text-sm font-semibold">
             {tOr(dict, `settings.group.${group.key}`, group.title)}
           </h2>
-          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          {/* `lg:grid-cols-3` measured the viewport; these tiles carry a label
+              and a full sentence, so they need a floor, not a count. */}
+          <div className="grid gap-4 [grid-template-columns:repeat(auto-fit,minmax(15rem,1fr))]">
             {group.links.map((link) => (
               <Link
                 key={link.href}
                 href={link.href}
-                className="rounded-lg border bg-card p-4 hover:bg-muted/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                className="rounded-lg border bg-card p-4 transition-colors hover:bg-muted/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
               >
                 <p className="text-sm font-medium">
                   {tOr(dict, `settings.section.${link.key}.label`, link.label)}
@@ -209,6 +223,19 @@ export default async function CompanySettingsPage() {
           </div>
         </section>
       ))}
+
+      <div className="space-y-3 border-t pt-6">
+        <h2 className="text-sm font-semibold">
+          {tOr(dict, 'settings.group.privacy', 'Your data and your customers’ data')}
+        </h2>
+        <p className="text-sm text-muted-foreground">
+          {tOr(
+            dict,
+            'settings.group.privacy_hint',
+            'These are done here rather than somewhere else, because they act on everything at once.',
+          )}
+        </p>
+      </div>
 
       <Card>
         <CardHeader>
@@ -232,7 +259,15 @@ export default async function CompanySettingsPage() {
 
       <Card>
         <CardHeader>
-          <CardTitle>{t(dict, 'settings.pending.title')}</CardTitle>
+          {/* The count was invisible until you read the list. A customer's
+              privacy request has a statutory clock on it, so "3" belongs in the
+              title, and the badge tone says whether anything is waiting. */}
+          <CardTitle className="flex flex-wrap items-center gap-2">
+            {t(dict, 'settings.pending.title')}
+            {openRequests.length > 0 ? (
+              <Badge variant="warning">{openRequests.length}</Badge>
+            ) : null}
+          </CardTitle>
           <CardDescription>{t(dict, 'settings.pending.description')}</CardDescription>
         </CardHeader>
         <CardContent>
@@ -263,7 +298,10 @@ export default async function CompanySettingsPage() {
                       {t(dict, 'settings.pending.requested', { date: formatDate(r.createdAt) })}
                     </p>
                   </div>
-                  <div className="flex gap-2">
+                  {/* `flex-wrap`: the erase path arms into a sentence, a
+                      type-to-confirm box and two buttons, which at any width
+                      below a laptop ran straight off the card. */}
+                  <div className="flex flex-wrap items-start gap-2">
                     <form action={processRequest}>
                       <input type="hidden" name="requestId" value={r.id} />
                       <input type="hidden" name="decision" value="execute" />
@@ -315,7 +353,13 @@ export default async function CompanySettingsPage() {
           <CardDescription>{t(dict, 'settings.security.description')}</CardDescription>
         </CardHeader>
         <CardContent>
-          <InfoBanner>
+          {/* Five statements about how the product protects this company's
+              data, drawn in amber because `InfoBanner` is hardwired to
+              `tone="warning"`. Amber is the product's "something is wrong"
+              colour; putting it round a list of guarantees says the opposite of
+              what the words say. `success` is what this card is: things that
+              are already true and in your favour. */}
+          <Alert tone="success">
             <ul className="list-disc space-y-1 ps-5">
               <li>{t(dict, 'settings.security.point.encryption')}</li>
               <li>{t(dict, 'settings.security.point.isolation')}</li>
@@ -323,7 +367,7 @@ export default async function CompanySettingsPage() {
               <li>{t(dict, 'settings.security.point.orders')}</li>
               <li>{t(dict, 'settings.security.point.cards')}</li>
             </ul>
-          </InfoBanner>
+          </Alert>
         </CardContent>
       </Card>
     </div>

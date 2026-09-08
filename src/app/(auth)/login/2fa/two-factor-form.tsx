@@ -1,28 +1,45 @@
 'use client';
 
-import { useFormState, useFormStatus } from 'react-dom';
-import { Button } from '@/components/ui/button';
+import { useFormState } from 'react-dom';
+import { FormField } from '@/components/ui/form-field';
+import { FormMessage } from '@/components/ui/form-message';
 import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
+import { SubmitButton } from '@/components/ui/submit-button';
 import { verifyTwoFactorAction, type TwoFactorState } from '../../actions';
 
 const initial: TwoFactorState = {};
 
-function Submit() {
-  const { pending } = useFormStatus();
-  return <Button type="submit" className="w-full" disabled={pending}>{pending ? 'Verifying...' : 'Verify'}</Button>;
-}
-
 export function TwoFactorForm() {
   const [state, action] = useFormState(verifyTwoFactorAction, initial);
+
   return (
     <form action={action} className="space-y-4">
-      <div className="space-y-2">
-        <Label htmlFor="code">Verification code</Label>
-        <Input id="code" name="code" inputMode="numeric" autoComplete="one-time-code" maxLength={6} required />
-      </div>
-      {state.error ? <p className="text-sm text-destructive">{state.error}</p> : null}
-      <Submit />
+      <FormField
+        label="Six-digit code"
+        htmlFor="code"
+        required
+        hint="From the email we just sent you. Check the spam folder if it has not arrived."
+      >
+        <Input
+          name="code"
+          inputMode="numeric"
+          autoComplete="one-time-code"
+          autoFocus
+          maxLength={6}
+          placeholder="123456"
+          required
+          className="text-center font-mono text-base tracking-[0.3em] tabular-nums"
+        />
+      </FormField>
+
+      {/* Was a bare `<p className="text-sm text-destructive">`: not a live
+          region, so a wrong code was rejected in total silence for anyone
+          using a screen reader. */}
+      <FormMessage state={state} okText="" />
+
+      <SubmitButton size="lg" className="w-full" pendingLabel="Checking…">
+        Continue
+      </SubmitButton>
     </form>
   );
 }

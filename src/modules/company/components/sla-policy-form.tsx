@@ -1,7 +1,8 @@
 'use client';
 
-import { useFormState, useFormStatus } from 'react-dom';
-import { Button } from '@/components/ui/button';
+import { useFormState } from 'react-dom';
+import { SubmitButton } from '@/components/ui/submit-button';
+import { FIELD_GRID } from './form-layout';
 import { FormField } from '@/components/ui/form-field';
 import { FormMessage } from '@/components/ui/form-message';
 import { Input } from '@/components/ui/input';
@@ -18,11 +19,10 @@ const PRIORITIES = [
 ];
 
 function Submit({ editing }: { editing: boolean }) {
-  const { pending } = useFormStatus();
   return (
-    <Button type="submit" disabled={pending}>
-      {pending ? 'Saving…' : editing ? 'Save policy' : 'Create policy'}
-    </Button>
+    <SubmitButton pendingLabel="Saving…">
+      {editing ? 'Save changes' : 'Create policy'}
+    </SubmitButton>
   );
 }
 
@@ -57,7 +57,7 @@ export function SlaPolicyForm({
         />
       </FormField>
 
-      <div className="grid gap-4 sm:grid-cols-2">
+      <div className={FIELD_GRID}>
         <FormField
           label="Only for chats marked"
           htmlFor="sla-priority"
@@ -96,7 +96,7 @@ export function SlaPolicyForm({
         </FormField>
       </div>
 
-      <div className="grid gap-4 sm:grid-cols-2">
+      <div className={FIELD_GRID}>
         {/* The other half of the pair described in support-settings-form.tsx.
             This column (`sla_policies.first_response_minutes`) is the one the
             clock, the warning and the escalation all read
@@ -135,7 +135,7 @@ export function SlaPolicyForm({
         </FormField>
       </div>
 
-      <div className="grid gap-4 sm:grid-cols-2">
+      <div className={FIELD_GRID}>
         <FormField
           label="Warn me this many minutes early"
           htmlFor="sla-warn"
@@ -170,7 +170,7 @@ export function SlaPolicyForm({
         </FormField>
       </div>
 
-      <div className="grid gap-4 sm:grid-cols-2">
+      <div className={FIELD_GRID}>
         <label className="flex items-center gap-2 text-sm">
           <input
             type="checkbox"

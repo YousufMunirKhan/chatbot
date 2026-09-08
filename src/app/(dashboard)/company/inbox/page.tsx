@@ -7,7 +7,7 @@ import { Card, CardContent } from '@/components/ui/card';
 import { EmptyState } from '@/components/ui/empty-state';
 import { PageHeader } from '@/components/ui/page-header';
 import { dayKey, formatAbsoluteTime, formatDayGroup, formatRelativeTime } from '@/lib/relative-time';
-import { t, type Dictionary } from '@/lib/i18n';
+import { t, tOr, type Dictionary } from '@/lib/i18n';
 import { getRequestDictionary } from '@/lib/i18n/server';
 import { getCompanyId } from '@/modules/company/data';
 import { InboxRealtime } from '@/modules/company/components/inbox-realtime';
@@ -60,6 +60,11 @@ function rowChips(c: ConversationRow, slaMinutes: number, dict: Dictionary, now:
   // First, because it explains why a row that looks like work is not: it is in
   // "Everything" or in a filtered view, put aside until a time someone chose.
   if (isSnoozed(c, now)) {
+    // NOTE: still hard-coded English, as are the two filter empty states below
+    // it. `tOr` cannot help here — it returns its fallback verbatim without
+    // interpolating, so a `{time}` placeholder would reach the badge as text.
+    // Closing this needs `inbox.chip.snoozed` in en.ts and ar.ts, which are
+    // another workstream's files this week.
     chips.push({ label: `Back in ${timeUntilLabel(c.snoozedUntil, now)}`, variant: 'secondary' });
   }
   if (isConversationOverdue(c, slaMinutes))
@@ -160,17 +165,30 @@ export default async function InboxPage({
             sitting in each queue. Switching queue carries the search and the
             filters with it, because "the same slice, different queue" is what
             the rail is for. */}
-        <nav aria-label={t(dict, 'inbox.queues.label')}>
-          <ul className="space-y-1">
+        {/* Below `lg` the rail is a horizontal scroller, not a stack. As a
+            column it put five rows and their counts between the page heading
+            and the first chat, so a 375px phone opened the inbox showing the
+            queue names and one and a half conversations. Same links, same
+            counts, same order — laid along the axis that has room.
+
+            The links had no focus style of their own, so keyboard users got the
+            browser's default outline, which a scroll container clips. The ring
+            is `inset` for that reason. */}
+        <nav
+          aria-label={t(dict, 'inbox.queues.label')}
+          className="overflow-x-auto pb-1 lg:overflow-visible lg:pb-0"
+        >
+          <ul className="flex min-w-max gap-1 lg:min-w-0 lg:flex-col">
             {INBOX_QUEUES.map(({ key }) => {
               const isActive = key === queue;
               return (
-                <li key={key}>
+                <li key={key} className="shrink-0">
                   <Link
                     href={inboxHref({ queue: key, search, filters })}
                     aria-current={isActive ? 'page' : undefined}
                     className={[
-                      'flex items-center justify-between gap-2 rounded-md px-3 py-2 text-sm',
+                      'flex items-center justify-between gap-2 whitespace-nowrap rounded-md px-3 py-2 text-sm',
+                      'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring',
                       isActive ? 'bg-muted font-medium' : 'text-muted-foreground hover:bg-muted/50',
                     ].join(' ')}
                   >
@@ -204,11 +222,13 @@ export default async function InboxPage({
                   // that matches what you asked for" are different facts and
                   // the second one has an obvious next move.
                   <EmptyState
-                    title="Nothing matches those filters"
+                    title={tOr(dict, 'inbox.empty.filtered.title', 'Nothing matches those filters')}
                     body={`${activeQueueLabel} has ${counts[queue]} chat${counts[queue] === 1 ? '' : 's'} in it, but none of them match the filters you set.`}
                     action={
                       <Button asChild size="sm" variant="outline">
-                        <Link href={inboxHref({ queue })}>Clear the filters</Link>
+                        <Link href={inboxHref({ queue })}>
+                          {tOr(dict, 'inbox.empty.filtered.cta', 'Clear the filters')}
+                        </Link>
                       </Button>
                     }
                   />
@@ -280,7 +300,15 @@ export default async function InboxPage({
                                   </Badge>
                                 ))}
                               </div>
-                              <p className="mt-1 line-clamp-2 break-words text-sm text-muted-foreground">
+                              {/* An unread row darkens its preview as well as
+                                  bolding the name: a single weight step on one
+                                  line is a signal you have to already know to
+                                  look for. */}
+                              <p
+                                className={`mt-1 line-clamp-2 break-words text-sm ${
+                                  unread ? 'text-foreground' : 'text-muted-foreground'
+                                }`}
+                              >
                                 {c.lastMessagePreview
                                   ? `${previewPrefix(c.lastMessageSender, dict)}${c.lastMessagePreview}`
                                   : t(dict, 'inbox.preview.none')}

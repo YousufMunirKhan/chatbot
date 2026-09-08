@@ -40,7 +40,7 @@ export function GenerateInsightsButton() {
         </p>
       ) : null}
       {error ? (
-        <p role="alert" className="text-xs text-destructive">
+        <p role="alert" className="text-xs text-danger-fg">
           {error}
         </p>
       ) : null}
