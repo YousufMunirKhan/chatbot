@@ -229,7 +229,18 @@ export function WebsitePrompt({
     );
   }
 
-  if (done || snoozed) return null;
+  // An import happened but no address was recorded, so there is nothing to
+  // resubmit. That gap is real: `importWebsiteOnboardingAction` writes
+  // `companies.website` at the END of the run, so a crawl that dies part-way
+  // leaves documents behind with no address — which is exactly what the 3072-
+  // dimension embedding failure did. Falling through to the ask below lets the
+  // owner supply it and finish the job. Returning null here, which is what the
+  // first version of this card did, left them with an import they could see on
+  // the knowledge tab and no way to complete or repeat it.
+  //
+  // A business with no website at all (`done`, no import) still gets nothing —
+  // there is no site to read and no question worth asking.
+  if ((done && !lastReadAt) || snoozed) return null;
 
   return (
     <Card>
